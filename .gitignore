@@ -1,0 +1,9 @@
+.*
+
+build/
+*.conf
+*.o
+*.vim
+
+!.gitignore
+!.gitattributes

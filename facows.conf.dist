@@ -1,0 +1,12 @@
+# Example configure file.
+# Please delete ".dist", like "facows.conf.dist" -> "facows.conf"
+# Default position "/etc/facows/facows.conf"
+
+PORT 443
+DOMAIN "example.com"
+
+WEB_ROOT "/var/www/facows"
+WEB_LOG "/var/log/facows"
+
+SSL_CERT "/etc/ssl/certs/cert.pem"
+SSL_KEY "/etc/ssl/private/key.pem"
