@@ -82,6 +82,9 @@ int facows_parse_conf(char *path, struct Configure *config) {
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];
 	while (fgets(file_buf, sizeof(file_buf), conf_file)) {
+		if (file_buf[0] == '#') {
+			continue;
+		}
 		for (int i=0; i<sizeof(key)/sizeof(key[0]); i++) {
 			if (strstr(file_buf, key[i]) != NULL) {
 				switch (i) {

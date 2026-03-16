@@ -2,11 +2,18 @@
 # Please delete ".dist", like "facows.conf.dist" -> "facows.conf"
 # Default position "/etc/facows/facows.conf"
 
+# Default ssl port is 443.
 PORT 443
+
+# Must not using sub domain like "www.example.com" only using main domain.
 DOMAIN "example.com"
 
+# Default web root path for "example.com".
 WEB_ROOT "/var/www/facows"
+
+# Must not comment or delete WEB_LOG. Not support yet but using web log path in Configure structure.
 WEB_LOG "/var/log/facows"
 
+# SSL certificate and priveate key path. Must need to working Facows.
 SSL_CERT "/etc/ssl/certs/cert.pem"
 SSL_KEY "/etc/ssl/private/key.pem"
