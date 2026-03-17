@@ -286,6 +286,7 @@ int http_build_path(char *path, char *http_path, char *web_root) {
 }
 
 int request_parse_header(char *req_buf, char *log, char *domain) {
+	memset(log, 0, 1024);
 	char tmp_log[2048];
 	char *tmp_log_start = tmp_log;
 	char keyword[][REQ_HEADER_KEYWORD_MAX] = {"host", "user-agent", "accept-language"};
@@ -444,6 +445,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 
 		size = end - start;
 		strncat(log, start, size);
+		strcat(log, " ");
 	} else {
 		strcat(log, "- ");
 	}
@@ -461,6 +463,50 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	}
 
 	if (keyword_i != -1) {
+		start = parse_start[keyword_i];
+		end = memchr(start, ':', REQ_HEADER_KEYWORD_MAX);
+		if (end == NULL) {
+			// keyword err
+			return 1;
+		}
+		size = end - start;
+		start += size + 1;
+		while (*start == ' ') {
+			start++;
+		}
+		end = memchr(start, '\n', 512);
+		if (end == NULL) {
+			// large err
+			return 1;
+		}
+		size = end - start;
+
+		int flag = 0;
+		for (size_t i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
+			if (memmem(start, size, os_type[i], strlen(os_type[i])) != NULL) {
+				strcat(log, os_type[i]);
+				strcat(log, " ");
+				flag = 1;
+				break;
+			}
+		}
+		if (!flag) {
+			strcat(log, "- ");
+		}
+
+		flag = 0;
+		for (size_t i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
+			if (memmem(start, size, browser_type[i], strlen(browser_type[i])) != NULL) {
+				strcat(log, browser_type[i]);
+				strcat(log, " ");
+				flag = 1;
+				break;
+			}
+		}
+		if (!flag) {
+			strcat(log, "- ");
+		}
+		printf("LOG: %s\n", log);
 
 	} else {
 		strcat(log, "- ");
