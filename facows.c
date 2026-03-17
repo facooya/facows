@@ -17,7 +17,10 @@
 #include <openssl/err.h>
 #include <ctype.h>
 
+#include "err_page.h"
+
 #define CONF_FILE "/etc/facows/facows.conf"
+#define SHARE_DIR "/usr/share/facows/"
 
 #define HTTP_METHOD_SIZE 16
 #define HTTP_PATH_SIZE 512
@@ -664,20 +667,31 @@ int main() {
 				int file_size = 0;
 				int status_code = respone_build_path(path, &file_size);
 				if (status_code == 404) {
+					char file_err_buf[1024] = {0};
+					char file_err_buf2[1024] = {0};
 					char status[1024] = {0};
 					char v_path[512];
 					long file_404_size = 0;
-					char path_tmp[] = "/404.html";
-					struct stat st_tmp;
-					strncpy(v_path, config.web_root, sizeof(config.web_root));
+					char path_tmp[] = "error_page.html";
+
+					strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
 					strcat(v_path, path_tmp);
 					realpath(v_path, path);
-					stat(path, &st_tmp);
-					file_404_size = st_tmp.st_size;
 
-					snprintf(status, sizeof(status), "HTTP/1.1 404 File Not Found\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n", file_404_size);
+					int fd = open(path, O_RDONLY);
+					if (fd < 0) {
+						// internal server err
+						err_exit(ssl, client_sock);
+					}
+					read(fd, file_err_buf, sizeof(file_err_buf));
+					close(fd);
+					snprintf(file_err_buf2, sizeof(file_err_buf2), file_err_buf, 404, 404, "File Not Found");
+					file_404_size = strlen(file_err_buf2);
+
+					snprintf(status, sizeof(status), "HTTP/1.1 404 File Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n", file_404_size);
 					SSL_write(ssl, status, strlen(status));
-					respone_send_file(ssl, path);
+					SSL_write(ssl, file_err_buf2, strlen(file_err_buf2));
+					//respone_send_file(ssl, path);
 
 					SSL_free(ssl);
 					close(client_sock);

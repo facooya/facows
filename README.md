@@ -23,12 +23,14 @@ sudo ./build/facows
 ```
 
 Make install not support yet.  
-Modifiy `facows.conf.dist` domain and path.  
+Modifiy `facows.conf.dist` domain and SSL path.  
 - Log not support yet.
-Locate manually configure file:
+Locate manually files:
 ```bash
 sudo mkdir -p /etc/facows/
 sudo cp facows.conf.dist /etc/facows/facows.conf
+sudo mkdir -p /usr/share/facows/
+sudo cp error_page.html /usr/share/facows/
 ```
 
 ---
