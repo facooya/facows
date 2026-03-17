@@ -17,8 +17,6 @@
 #include <openssl/err.h>
 #include <ctype.h>
 
-#include "err_page.h"
-
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
 
@@ -32,11 +30,17 @@
 #define REQ_UA_TYPE_MAX 16
 #define CONF_KEY_MAX 16
 
-#define ERROR_BAD_REQUEST 400
-#define ERROR_FILE_NOT_FOUND 404
-#define ERROR_HEADER_LARGE 431
-#define ERROR_INTERNAL_SERVER 500
-#define ERROR_NOT_IMPLEMENTED 501
+#define HTTP_MSG_200 "OK"
+#define HTTP_MSG_400 "Bad Request"
+#define HTTP_MSG_403 "Forbidden"
+#define HTTP_MSG_404 "File Not Found"
+#define HTTP_MSG_405 "Method Not Allowed"
+#define HTTP_MSG_414 "URI Too Long"
+#define HTTP_MSG_431 "Request Header Fields Too Large"
+#define HTTP_MSG_500 "Internal Server Error"
+#define HTTP_MSG_501 "Not Implemented"
+
+#define HTTP_STATUS "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n"
 
 struct Configure {
 	short port;
@@ -666,16 +670,15 @@ int main() {
 
 				int file_size = 0;
 				int status_code = respone_build_path(path, &file_size);
-				if (status_code == 404) {
-					char file_err_buf[1024] = {0};
-					char file_err_buf2[1024] = {0};
+				if (status_code != 0) {
+					char err_html_temp[1024] = {0};
+					char err_html[1024] = {0};
 					char status[1024] = {0};
 					char v_path[512];
-					long file_404_size = 0;
-					char path_tmp[] = "error_page.html";
+					char path_err_page[] = "error_page.html";
 
 					strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
-					strcat(v_path, path_tmp);
+					strcat(v_path, path_err_page);
 					realpath(v_path, path);
 
 					int fd = open(path, O_RDONLY);
@@ -683,15 +686,67 @@ int main() {
 						// internal server err
 						err_exit(ssl, client_sock);
 					}
-					read(fd, file_err_buf, sizeof(file_err_buf));
+					read(fd, err_html_temp, sizeof(err_html_temp));
 					close(fd);
-					snprintf(file_err_buf2, sizeof(file_err_buf2), file_err_buf, 404, 404, "File Not Found");
-					file_404_size = strlen(file_err_buf2);
 
-					snprintf(status, sizeof(status), "HTTP/1.1 404 File Not Found\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n", file_404_size);
+					switch (status_code) {
+						case 400:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_400);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_400, file_size);
+							break;
+
+						case 403:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_403);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_403, file_size);
+							break;
+
+						case 404:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_404);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_404, file_size);
+							break;
+
+						case 405:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_405);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_405, file_size);
+							break;
+
+						case 414:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_414);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file_size);
+							break;
+
+						case 431:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_431);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_431, file_size);
+							break;
+
+						case 500:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file_size);
+							break;
+
+						case 501:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_501);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_501, file_size);
+							break;
+
+						default:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file_size);
+							break;
+					}
+
 					SSL_write(ssl, status, strlen(status));
-					SSL_write(ssl, file_err_buf2, strlen(file_err_buf2));
-					//respone_send_file(ssl, path);
+					SSL_write(ssl, err_html, strlen(err_html));
 
 					SSL_free(ssl);
 					close(client_sock);
