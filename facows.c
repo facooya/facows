@@ -36,6 +36,7 @@
 #define HTTP_MSG_404 "File Not Found"
 #define HTTP_MSG_405 "Method Not Allowed"
 #define HTTP_MSG_414 "URI Too Long"
+#define HTTP_MSG_429 "Too Many Requests"
 #define HTTP_MSG_431 "Request Header Fields Too Large"
 #define HTTP_MSG_500 "Internal Server Error"
 #define HTTP_MSG_501 "Not Implemented"
@@ -49,6 +50,11 @@ struct Configure {
 	char web_log[64];
 	char ssl_cert[128];
 	char ssl_key[128];
+};
+
+struct BlackList {
+	uint8_t ip[16];
+	time_t time;
 };
 
 int facows_write_conf_str(char *file_buf, char *config, size_t config_str_size) {
@@ -596,6 +602,7 @@ int main() {
 		return 0;
 	}
 
+	struct BlackList black_list[1024];
 	char request_buf[4096];
 	char log[1024];
 	signal(SIGCHLD, SIG_IGN);
@@ -607,7 +614,7 @@ int main() {
 	socket_init_server(&server_sock, config.port);
 
 	int client_sock;
-	struct sockaddr_storage client_addr;
+	struct sockaddr_in6 client_addr;
 	socklen_t client_addr_size = sizeof(client_addr);
 	// }
 
@@ -626,16 +633,14 @@ int main() {
 			// }
 
 			// { ip
+			time_t raw_time;
+			time(&raw_time);
+
 			char ip_buf[INET6_ADDRSTRLEN];
-			if (client_addr.ss_family == AF_INET) {
-				struct sockaddr_in *ipv4 = (struct sockaddr_in *) &client_addr;
-				inet_ntop(client_addr.ss_family, &(ipv4->sin_addr), ip_buf, sizeof(ip_buf));
-			} else if (client_addr.ss_family == AF_INET6) {
-				struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) &client_addr;
-				inet_ntop(client_addr.ss_family, &(ipv6->sin6_addr), ip_buf, sizeof(ip_buf));
-			} else {
-				err_exit(ssl, client_sock);
-			}
+			inet_ntop(AF_INET6, client_addr.sin6_addr.s6_addr, ip_buf, sizeof(ip_buf));
+			memcpy(black_list[0].ip, client_addr.sin6_addr.s6_addr, 16);
+			black_list[0].time = raw_time;
+
 			printf("IP: %s\n", ip_buf);
 			// }
 
@@ -719,6 +724,13 @@ int main() {
 							file_size = strlen(err_html);
 							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file_size);
 							break;
+
+						case 429:
+							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_429);
+							file_size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file_size);
+							break;
+
 
 						case 431:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_431);
