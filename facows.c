@@ -18,6 +18,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include "conf.h"
+
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
 
@@ -29,7 +31,6 @@
 #define SUB_DOMAIN_SIZE 16
 #define REQ_HEADER_LINE_MAX 512
 #define REQ_UA_TYPE_MAX 16
-#define CONF_KEY_MAX 16
 
 #define HTTP_MSG_200 "OK"
 #define HTTP_MSG_400 "Bad Request"
@@ -44,108 +45,10 @@
 
 #define HTTP_STATUS "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n"
 
-struct Configure {
-	short port;
-	char domain[64];
-	char web_root[64];
-	char web_log[64];
-	char ssl_cert[128];
-	char ssl_key[128];
-};
-
 struct BlackList {
 	uint8_t ip[16];
 	time_t time;
 };
-
-int facows_write_conf_str(char *file_buf, char *config, size_t config_str_size) {
-	char *start;
-	char *end;
-	ptrdiff_t n;
-
-	start = memchr(file_buf, ' ', CONF_KEY_MAX);
-	if (start == NULL) {
-		// conf err
-		return 1;
-	}
-
-	while (*start == ' ') {
-		start++;
-	}
-
-	if (*(start) != '"') {
-		// conf err
-		return 1;
-	}
-
-	start++;
-	end = memchr(start, '"', config_str_size);
-	if (end == NULL) {
-		// conf err
-		return 1;
-	}
-
-	n = end - start;
-	strncpy(config, start, n);
-	config[n] = '\0';
-	return 0;
-}
-
-int facows_parse_conf(char *path, struct Configure *config) {
-	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
-	FILE *conf_file = fopen(path, "r");
-	char file_buf[4096];
-	while (fgets(file_buf, sizeof(file_buf), conf_file)) {
-		if (file_buf[0] == '#') {
-			continue;
-		}
-		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
-			if (strstr(file_buf, key[i]) != NULL) {
-				switch (i) {
-					case 0:
-						char *start = memchr(file_buf, ' ', CONF_KEY_MAX);
-						if (start == NULL) {
-							// conf err
-							return 1;
-						}
-						while (*start == ' ') {
-							start++;
-						}
-						config->port = (short) atoi(start);
-						break;
-					case 1:
-						if (facows_write_conf_str(file_buf, config->domain, sizeof(config->domain)) != 0) {
-							return 1;
-						}
-						break;
-					case 2:
-						if (facows_write_conf_str(file_buf, config->web_root, sizeof(config->web_root))) {
-							return 1;
-						}
-						break;
-					case 3:
-						if (facows_write_conf_str(file_buf, config->web_log, sizeof(config->web_log))) {
-							return 1;
-						}
-						break;
-					case 4:
-						if (facows_write_conf_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert))) {
-							return 1;
-						}
-						break;
-					case 5:
-						if (facows_write_conf_str(file_buf, config->ssl_key, sizeof(config->ssl_key))) {
-							return 1;
-						}
-						break;
-				}
-				break;
-			}
-		}
-	}
-	fclose(conf_file);
-	return 0;
-}
 
 int ssl_init(SSL_CTX **ssl_ctx, struct Configure config) {
 	SSL_library_init();
@@ -599,7 +502,7 @@ int respone_send_file(SSL *ssl, char *path) {
 int main() {
 	// { init
 	struct Configure config;
-	if (facows_parse_conf(CONF_FILE, &config) != 0) {
+	if (conf_parse(CONF_FILE, &config) != 0) {
 		// conf err
 		return 0;
 	}
