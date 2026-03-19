@@ -4,18 +4,19 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <sys/socket.h>
-#include <fcntl.h>
 #include <sys/stat.h>
-#include <stdlib.h>
+#include <arpa/inet.h>
 #include <signal.h>
 #include <time.h>
+#include <ctype.h>
+#include <fcntl.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <ctype.h>
 
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
@@ -91,14 +92,14 @@ int facows_write_conf_str(char *file_buf, char *config, size_t config_str_size) 
 }
 
 int facows_parse_conf(char *path, struct Configure *config) {
-	char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
+	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];
 	while (fgets(file_buf, sizeof(file_buf), conf_file)) {
 		if (file_buf[0] == '#') {
 			continue;
 		}
-		for (int i=0; i<sizeof(key)/sizeof(key[0]); i++) {
+		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
 			if (strstr(file_buf, key[i]) != NULL) {
 				switch (i) {
 					case 0:
@@ -164,7 +165,7 @@ int ssl_init(SSL_CTX **ssl_ctx, struct Configure config) {
 
 int socket_init_server(int *server_sock, short port) {
 	struct sockaddr_in6 server_addr;
-	int opt = 1;
+	const int opt = 1;
 
 	*server_sock = socket(AF_INET6, SOCK_STREAM, 0);
 	setsockopt(*server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -184,12 +185,13 @@ void err_exit(SSL *ssl, int client_sock) {
 	exit(1);
 }
 
-int request_read(SSL *ssl, char *buf, int buf_size) {
+int request_read(SSL *ssl, char *buf, size_t buf_size) {
 	int total_read_size = 0;
+	int read_ret = 0;
 	while (1) {
-		int read_ret = SSL_read(ssl, buf+total_read_size, buf_size-total_read_size-1);
+		read_ret = SSL_read(ssl, buf+total_read_size, buf_size-total_read_size-1);
 		if (read_ret <= 0) {
-			int err_code = SSL_get_error(ssl, read_ret);
+			const int err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
 				continue;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
@@ -220,7 +222,7 @@ int request_parse_line(char *target_line, char *method, char *path, char *versio
 		// err_log
 		return 1;
 	}
-	size_t size = end - start;
+	ptrdiff_t size = end - start;
 	if (size >= HTTP_METHOD_SIZE) {
 		// err_log
 		return 1;
@@ -299,10 +301,10 @@ int http_build_path(char *path, char *http_path, char *web_root) {
 }
 
 int request_parse_header(char *req_buf, char *log, char *domain) {
+	const char keyword[][REQ_HEADER_KEYWORD_MAX] = {"host", "user-agent", "accept-language"};
 	memset(log, 0, 1024);
 	char tmp_log[2048];
 	char *tmp_log_start = tmp_log;
-	char keyword[][REQ_HEADER_KEYWORD_MAX] = {"host", "user-agent", "accept-language"};
 	char *start = req_buf;
 	char *end = memmem(start, REQ_HEADER_LINE_MAX, "\r\n", 2);
 	if (end == NULL) {
@@ -314,11 +316,11 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	// { tok line
 	char *parse_start[3];
 	char *parse_end[3];
-	int parse_size[3] = {0};
-	int keyword_i = 0;
-	int total_log_size = 0;
+	ptrdiff_t parse_size[3] = {0};
+	size_t keyword_i = 0;
+	size_t total_log_size = 0;
 
-	for (int i=0; i<(sizeof(parse_start)/sizeof(*parse_start)); i++) {
+	for (size_t i=0; i<(sizeof(parse_start)/sizeof(*parse_start)); i++) {
 		parse_start[i] = start;
 		parse_end[i] = start;
 	}
@@ -335,14 +337,14 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 		}
 
 		char *value_end;
-		for (int i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
+		for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
 			if (strncasecmp(start, keyword[i], strlen(keyword[i])) == 0) {
 				value_end = memmem(start, 512, "\r\n", 2);
 				if (value_end == NULL) {
 					// attack log
 					return 1;
 				}
-				int n = value_end - start;
+				ptrdiff_t n = value_end - start;
 				parse_start[keyword_i] = tmp_log_start;
 				parse_end[keyword_i] = tmp_log_start + n;
 				parse_size[keyword_i] = n;
@@ -367,7 +369,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	// }
 
 	// { normalize
-	for (int i=0; i<strlen(tmp_log); i++) {
+	for (size_t i=0; i<strlen(tmp_log); i++) {
 		tmp_log[i] = tolower(tmp_log[i]);
 	}
 	// }
@@ -376,7 +378,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	// { host
 	start = tmp_log;
 	keyword_i = -1;
-	for (int i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
+	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
 		if (strncmp(parse_start[i], keyword[0], strlen(keyword[0])) == 0) {
 			keyword_i = i;
 			break;
@@ -394,7 +396,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 		return 1;
 	}
 
-	int size = end - start;
+	ptrdiff_t size = end - start;
 	start += size + 1;
 
 	while (*start == ' ') {
@@ -425,7 +427,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	// { accept language
 	start = tmp_log;
 	keyword_i = -1;
-	for (int i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
+	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
 		if (strncmp(parse_start[i], keyword[2], strlen(keyword[2])) == 0) {
 			keyword_i = i;
 			break;
@@ -464,11 +466,11 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	}
 	// }
 	// { user agent
-	char os_type[][REQ_UA_TYPE_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
-	char browser_type[][REQ_UA_TYPE_MAX] = {"firefox", "edg", "chrome", "safari"};
+	const char os_type[][REQ_UA_TYPE_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
+	const char browser_type[][REQ_UA_TYPE_MAX] = {"firefox", "edg", "chrome", "safari"};
 	start = tmp_log;
 	keyword_i = -1;
-	for (int i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
+	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
 		if (strncmp(parse_start[i], keyword[1], strlen(keyword[1])) == 0) {
 			keyword_i = i;
 			break;
@@ -530,10 +532,10 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	return 0;
 }
 
-int respone_build_path(char *path, int *size) {
+int respone_build_path(char *path, size_t *size) {
 	struct stat st;
 	if (stat(path, &st) != 0) {
-		char html_str[] = ".html";
+		const char html_str[] = ".html";
 		strcat(path, html_str);
 		if (stat(path, &st) != 0) {
 			// warn log
@@ -542,7 +544,7 @@ int respone_build_path(char *path, int *size) {
 	}
 	*size = st.st_size;
 
-	char index_str[] = "index.html";
+	const char index_str[] = "index.html";
 	if (S_ISDIR(st.st_mode) == 1) {
 		strcat(path, index_str);
 		if (stat(path, &st) == 0) {
@@ -556,7 +558,7 @@ int respone_build_path(char *path, int *size) {
 	return 0;
 }
 
-int respone_send_status(SSL *ssl, char *path, int file_size) {
+int respone_send_status(SSL *ssl, char *path, size_t file_size) {
 	char time_buf[64];
 	time_t raw_time;
 	time(&raw_time);
@@ -673,14 +675,14 @@ int main() {
 				}
 				// }
 
-				int file_size = 0;
+				size_t file_size = 0;
 				int status_code = respone_build_path(path, &file_size);
 				if (status_code != 0) {
 					char err_html_temp[1024] = {0};
 					char err_html[1024] = {0};
 					char status[1024] = {0};
 					char v_path[512];
-					char path_err_page[] = "error_page.html";
+					const char path_err_page[] = "error_page.html";
 
 					strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
 					strcat(v_path, path_err_page);
