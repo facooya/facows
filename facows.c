@@ -19,6 +19,7 @@
 #include <openssl/err.h>
 
 #include "conf.h"
+#include "net.h"
 
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
@@ -49,73 +50,6 @@ struct BlackList {
 	uint8_t ip[16];
 	time_t time;
 };
-
-int ssl_init(SSL_CTX **ssl_ctx, struct Configure config) {
-	SSL_library_init();
-	const SSL_METHOD *ssl_method;
-	ssl_method = TLS_server_method();
-	*ssl_ctx = SSL_CTX_new(ssl_method);
-	if (SSL_CTX_use_certificate_file(*ssl_ctx, config.ssl_cert, SSL_FILETYPE_PEM) <= 0) {
-		printf("SSL ERROR certificate\n");
-		return 1;
-	}
-	if (SSL_CTX_use_PrivateKey_file(*ssl_ctx, config.ssl_key, SSL_FILETYPE_PEM) <= 0) {
-		printf("SSL ERROR private key\n");
-		return 1;
-	}
-	return 0;
-}
-
-int socket_init_server(int *server_sock, short port) {
-	struct sockaddr_in6 server_addr;
-	const int opt = 1;
-
-	*server_sock = socket(AF_INET6, SOCK_STREAM, 0);
-	setsockopt(*server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-	memset(&server_addr, 0, sizeof(server_addr));
-	server_addr.sin6_family = AF_INET6;
-	server_addr.sin6_addr = in6addr_any;
-	server_addr.sin6_port = htons(port);
-
-	bind(*server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
-	listen(*server_sock, 128);
-	return 0;
-}
-
-void err_exit(SSL *ssl, int client_sock) {
-	SSL_free(ssl);
-	close(client_sock);
-	exit(1);
-}
-
-int request_read(SSL *ssl, char *buf, size_t buf_size) {
-	int total_read_size = 0;
-	int read_ret = 0;
-	while (1) {
-		read_ret = SSL_read(ssl, buf+total_read_size, buf_size-total_read_size-1);
-		if (read_ret <= 0) {
-			const int err_code = SSL_get_error(ssl, read_ret);
-			if (err_code == SSL_ERROR_WANT_READ) {
-				continue;
-			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-				return 400; // Bad Request
-			}
-			return 500; // Internal Server Error
-		}
-
-		total_read_size += read_ret;
-		buf[total_read_size] = '\0';
-
-		if (strstr(buf, "\r\n\r\n")) {
-			break;
-		}
-
-		if (total_read_size >= 4095) {
-			return 431; // Request Header Fields Too Large
-		}
-	}
-	return 0;
-}
 
 int request_parse_line(char *target_line, char *method, char *path, char *version) {
 	// { method
@@ -486,19 +420,6 @@ int respone_send_status(SSL *ssl, char *path, size_t file_size) {
 	return 0;
 }
 
-int respone_send_file(SSL *ssl, char *path) {
-	int fd = open(path, O_RDONLY);
-	char file_buf[4096];
-	ssize_t read_bytes;
-	while (read_bytes = read(fd, file_buf, sizeof(file_buf))) {
-		if (SSL_write(ssl, file_buf, read_bytes) <= 0) {
-			return 1;
-		}
-	}
-	close(fd);
-	return 0;
-}
-
 int main() {
 	// { init
 	struct Configure config;
@@ -513,27 +434,27 @@ int main() {
 	signal(SIGCHLD, SIG_IGN);
 
 	SSL_CTX *ssl_ctx;
-	ssl_init(&ssl_ctx, config);
+	net_init_ssl(&ssl_ctx, config);
 
-	int server_sock;
-	socket_init_server(&server_sock, config.port);
+	int server_fd;
+	net_init_server(&server_fd, config.port);
 
-	int client_sock;
+	int client_fd;
 	struct sockaddr_in6 client_addr;
 	socklen_t client_addr_size = sizeof(client_addr);
 	// }
 
 	while (1) {
-		client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_addr_size);
+		client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 		pid_t pid = fork();
 
 		if (pid == 0) {
 			// { init
-			close(server_sock);
+			close(server_fd);
 			SSL *ssl = SSL_new(ssl_ctx);
-			SSL_set_fd(ssl, client_sock);
+			SSL_set_fd(ssl, client_fd);
 			if (SSL_accept(ssl) <= 0) {
-				err_exit(ssl, client_sock);
+				net_exit_err(ssl, client_fd);
 			}
 			// }
 
@@ -550,9 +471,9 @@ int main() {
 			// }
 
 			while (1) {
-				// { request_read()
-				if (request_read(ssl, request_buf, sizeof(request_buf)) != 0) {
-					err_exit(ssl, client_sock);
+				// { net_read()
+				if (net_read(ssl, request_buf, sizeof(request_buf)) != 0) {
+					net_exit_err(ssl, client_fd);
 				}
 				// }
 
@@ -561,20 +482,20 @@ int main() {
 				char http_path[HTTP_PATH_SIZE];
 				char http_version[HTTP_VERSION_SIZE];
 				if (request_parse_line(request_buf, http_method, http_path, http_version) != 0) {
-					err_exit(ssl, client_sock);
+					net_exit_err(ssl, client_fd);
 				}
 				// }
 
 				// { http_build_path()
 				char path[512];
 				if (http_build_path(path, http_path, config.web_root) != 0) {
-					err_exit(ssl, client_sock);
+					net_exit_err(ssl, client_fd);
 				}
 				// }
 
 				// { request_parse_header()
 				if (request_parse_header(request_buf, log, config.domain) != 0) {
-					err_exit(ssl, client_sock);
+					net_exit_err(ssl, client_fd);
 				}
 				// }
 
@@ -594,7 +515,7 @@ int main() {
 					int fd = open(path, O_RDONLY);
 					if (fd < 0) {
 						// internal server err
-						err_exit(ssl, client_sock);
+						net_exit_err(ssl, client_fd);
 					}
 					read(fd, err_html_temp, sizeof(err_html_temp));
 					close(fd);
@@ -666,29 +587,29 @@ int main() {
 					SSL_write(ssl, err_html, strlen(err_html));
 
 					SSL_free(ssl);
-					close(client_sock);
+					close(client_fd);
 					exit(0);
 				}
 
 				if (respone_send_status(ssl, path, file_size) != 0) {
 					// warn log
-					err_exit(ssl, client_sock);
+					net_exit_err(ssl, client_fd);
 				}
-				respone_send_file(ssl, path);
+				net_write(ssl, path);
 			}
 
 			SSL_shutdown(ssl);
 			SSL_free(ssl);
-			close(client_sock);
+			close(client_fd);
 			exit(0);
 
 		} else if (pid > 0) {
-			close(client_sock);
+			close(client_fd);
 		} else {
-			close(client_sock);
+			close(client_fd);
 		}
 	}
 
-	close(server_sock);
+	close(server_fd);
 	return 0;
 }
