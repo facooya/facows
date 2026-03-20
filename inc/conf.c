@@ -13,7 +13,7 @@
 
 #define CONF_KEY_MAX 16
 
-int conf_parse(char *path, struct config *config) {
+int conf_parse(const char *path, struct config *config) {
 	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];
@@ -69,7 +69,7 @@ int conf_parse(char *path, struct config *config) {
 	return 0;
 }
 
-int conf_write_str(char *file_buf, char *config, size_t config_str_size) {
+int conf_write_str(const char *file_buf, char *dst_config, size_t config_str_size) {
 	char *start;
 	char *end;
 	ptrdiff_t n;
@@ -97,7 +97,7 @@ int conf_write_str(char *file_buf, char *config, size_t config_str_size) {
 	}
 
 	n = end - start;
-	strncpy(config, start, n);
-	config[n] = '\0';
+	strncpy(dst_config, start, n);
+	dst_config[n] = '\0';
 	return 0;
 }

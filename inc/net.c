@@ -13,16 +13,16 @@
 #include "types.h"
 #include "net.h"
 
-int net_init_ssl(SSL_CTX **ssl_ctx, struct config config) {
+int net_init_ssl(SSL_CTX **ssl_ctx, const struct config *config) {
 	SSL_library_init();
 	const SSL_METHOD *ssl_method;
 	ssl_method = TLS_server_method();
 	*ssl_ctx = SSL_CTX_new(ssl_method);
-	if (SSL_CTX_use_certificate_file(*ssl_ctx, config.ssl_cert, SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_certificate_file(*ssl_ctx, config->ssl_cert, SSL_FILETYPE_PEM) <= 0) {
 		printf("SSL ERROR certificate\n");
 		return 1;
 	}
-	if (SSL_CTX_use_PrivateKey_file(*ssl_ctx, config.ssl_key, SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_PrivateKey_file(*ssl_ctx, config->ssl_key, SSL_FILETYPE_PEM) <= 0) {
 		printf("SSL ERROR private key\n");
 		return 1;
 	}
@@ -45,11 +45,11 @@ int net_init_server(int *server_fd, short port) {
 	return 0;
 }
 
-int net_read(SSL *ssl, char *buf, size_t buf_size) {
+int net_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 	int total_read_size = 0;
 	int read_ret = 0;
 	while (1) {
-		read_ret = SSL_read(ssl, buf+total_read_size, buf_size-total_read_size-1);
+		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
 		if (read_ret <= 0) {
 			const int err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
@@ -61,9 +61,9 @@ int net_read(SSL *ssl, char *buf, size_t buf_size) {
 		}
 
 		total_read_size += read_ret;
-		buf[total_read_size] = '\0';
+		dst_buf[total_read_size] = '\0';
 
-		if (strstr(buf, "\r\n\r\n")) {
+		if (strstr(dst_buf, "\r\n\r\n")) {
 			break;
 		}
 
@@ -74,7 +74,7 @@ int net_read(SSL *ssl, char *buf, size_t buf_size) {
 	return 0;
 }
 
-int net_write(SSL *ssl, char *path) {
+int net_write(SSL *ssl, const char *path) {
 	int fd = open(path, O_RDONLY);
 	char file_buf[4096];
 	ssize_t read_size;

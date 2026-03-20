@@ -6,21 +6,24 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#define CONFIG_MAX 128
-
 struct config {
 	short port;
-	char domain[CONFIG_MAX];
-	char web_root[CONFIG_MAX];
-	char web_log[CONFIG_MAX];
-	char ssl_cert[CONFIG_MAX];
-	char ssl_key[CONFIG_MAX];
+	char domain[64];
+	char web_root[64];
+	char web_log[64];
+	char ssl_cert[128];
+	char ssl_key[128];
 };
 
 struct http {
-};
-
-struct log {
+	char ip[16];
+	char lang[16];
+	char version[16];
+	char method[16];
+	char host[16];
+	char os[16];
+	char browser[16];
+	char path[256];
 };
 
 #endif

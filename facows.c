@@ -21,6 +21,7 @@
 #include "types.h"
 #include "conf.h"
 #include "net.h"
+#include "http.h"
 
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
@@ -435,7 +436,7 @@ int main() {
 	signal(SIGCHLD, SIG_IGN);
 
 	SSL_CTX *ssl_ctx;
-	net_init_ssl(&ssl_ctx, config);
+	net_init_ssl(&ssl_ctx, &config);
 
 	int server_fd;
 	net_init_server(&server_fd, config.port);
