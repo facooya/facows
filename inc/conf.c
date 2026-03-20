@@ -8,11 +8,12 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "types.h"
 #include "conf.h"
 
 #define CONF_KEY_MAX 16
 
-int conf_parse(char *path, struct Configure *config) {
+int conf_parse(char *path, struct config *config) {
 	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];

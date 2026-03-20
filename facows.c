@@ -18,6 +18,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include "types.h"
 #include "conf.h"
 #include "net.h"
 
@@ -422,7 +423,7 @@ int respone_send_status(SSL *ssl, char *path, size_t file_size) {
 
 int main() {
 	// { init
-	struct Configure config;
+	struct config config;
 	if (conf_parse(CONF_FILE, &config) != 0) {
 		// conf err
 		return 0;
