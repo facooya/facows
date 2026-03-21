@@ -26,14 +26,7 @@
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
 
-#define HTTP_METHOD_SIZE 16
-#define HTTP_PATH_SIZE 512
-#define HTTP_VERSION_SIZE 16
-#define REQ_HEADER_KEYWORD_MAX 64
-#define PATH_SIZE 512
-#define SUB_DOMAIN_SIZE 16
-#define REQ_HEADER_LINE_MAX 512
-#define REQ_UA_TYPE_MAX 16
+#define PATH_MAX 512
 
 #define HTTP_MSG_200 "OK"
 #define HTTP_MSG_400 "Bad Request"
@@ -53,73 +46,13 @@ struct BlackList {
 	time_t time;
 };
 
-/*int request_parse_line(char *target_line, char *method, char *path, char *version) {
-	// { method
-	char *start = target_line;
-	char *end = memchr(start, ' ', HTTP_METHOD_SIZE);
-	if (end == NULL) {
-		// err_log
-		return 1;
-	}
-	ptrdiff_t size = end - start;
-	if (size >= HTTP_METHOD_SIZE) {
-		// err_log
-		return 1;
-	}
-	strncpy(method, start, size);
-	method[size] = '\0';
-	// }
-
-	// { path
-	start += size + 1;
-	end = memchr(start, ' ', HTTP_PATH_SIZE);
-	if (end == NULL) {
-		// err log
-		return 1;
-	}
-	size = end - start;
-	if (size >= HTTP_PATH_SIZE) {
-		// err log
-		return 1;
-	}
-	strncpy(path, start, size);
-	path[size] = '\0';
-	// }
-
-	// { version
-	start += size + 1;
-	end = memchr(start, '\r', HTTP_VERSION_SIZE);
-	if (end == NULL) {
-		// err log
-		return 1;
-	}
-	size = end - start;
-	if (size >= HTTP_VERSION_SIZE) {
-		// err log
-		return 1;
-	}
-	strncpy(version, start, size);
-	version[size] = '\0';
-	// }
-
-	if (strncmp(method, "GET", strlen(method)) != 0) {
-		// attack_log
-		return 1; // 405 Method Not Allowed
-	}
-	if (strncmp(version, "HTTP/1.1", strlen(version)) != 0) {
-		// warn_log
-		return 1;
-	}
-	return 0;
-}*/
-
 int http_build_path(char *path, char *http_path, char *web_root) {
-	char v_path[PATH_SIZE];
+	char v_path[PATH_MAX];
 	strcpy(v_path, web_root);
 	strcat(v_path, http_path);
 	realpath(v_path, path);
 
-	if (strlen(path) > PATH_SIZE-1) {
+	if (strlen(path) > PATH_MAX-1) {
 		// warn
 		return 2;
 	}
@@ -138,238 +71,6 @@ int http_build_path(char *path, char *http_path, char *web_root) {
 
 	return 0;
 }
-
-/*int request_parse_header(char *req_buf, char *log, char *domain) {
-	const char keyword[][REQ_HEADER_KEYWORD_MAX] = {"host", "user-agent", "accept-language"};
-	memset(log, 0, 1024);
-	char tmp_log[2048];
-	char *tmp_log_start = tmp_log;
-	char *start = req_buf;
-	char *end = memmem(start, REQ_HEADER_LINE_MAX, "\r\n", 2);
-	if (end == NULL) {
-		// err log
-		return 1;
-	}
-	start = end + 2;
-
-	// { tok line
-	char *parse_start[3];
-	char *parse_end[3];
-	ptrdiff_t parse_size[3] = {0};
-	size_t keyword_i = 0;
-	size_t total_log_size = 0;
-
-	for (size_t i=0; i<(sizeof(parse_start)/sizeof(*parse_start)); i++) {
-		parse_start[i] = start;
-		parse_end[i] = start;
-	}
-
-	while (1) {
-		if (strncmp(start, "\r\n", 2) == 0) {
-			break;
-		}
-
-		char *keyword_end = memchr(start, ':', REQ_HEADER_KEYWORD_MAX);
-		if (keyword_end == NULL) {
-			// attack log
-			return 1;
-		}
-
-		char *value_end;
-		for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
-			if (strncasecmp(start, keyword[i], strlen(keyword[i])) == 0) {
-				value_end = memmem(start, 512, "\r\n", 2);
-				if (value_end == NULL) {
-					// attack log
-					return 1;
-				}
-				ptrdiff_t n = value_end - start;
-				parse_start[keyword_i] = tmp_log_start;
-				parse_end[keyword_i] = tmp_log_start + n;
-				parse_size[keyword_i] = n;
-				keyword_i++;
-
-				strncpy(tmp_log_start, start, n);
-				total_log_size += n + 1;
-				tmp_log_start += n + 1;
-				tmp_log[total_log_size-1] = '\n';
-				break;
-			}
-		}
-
-		value_end = memmem(start, 512, "\r\n", 2);
-		if (value_end == NULL) {
-			// err log
-			return 1;
-		}
-		start = value_end + 2;
-	}
-	tmp_log[total_log_size] = '\0';
-	// }
-
-	// { normalize
-	for (size_t i=0; i<strlen(tmp_log); i++) {
-		tmp_log[i] = tolower(tmp_log[i]);
-	}
-	// }
-
-	// {{ parse
-	// { host
-	start = tmp_log;
-	keyword_i = -1;
-	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
-		if (strncmp(parse_start[i], keyword[0], strlen(keyword[0])) == 0) {
-			keyword_i = i;
-			break;
-		}
-	}
-
-	if (keyword_i == -1) {
-		// err log
-		return 1;
-	}
-	start = parse_start[keyword_i];
-	end = memchr(start, ':', REQ_HEADER_KEYWORD_MAX);
-	if (end == NULL) {
-		// err log
-		return 1;
-	}
-
-	ptrdiff_t size = end - start;
-	start += size + 1;
-
-	while (*start == ' ') {
-		start++;
-	}
-
-	end = memmem(start, 64, "\n", 1);
-	if (end == NULL) {
-		// err log
-		return 1;
-	}
-	size = end - start;
-	char *target = memmem(start, size, domain, strlen(domain));
-
-	if (target == NULL) {
-		// err log
-		return 1;
-	}
-
-	size = target - start;
-	if (size == 0) {
-		strcat(log, "www");
-	}
-
-	strncat(log, start, size-1);
-	strcat(log, " ");
-	// }
-	// { accept language
-	start = tmp_log;
-	keyword_i = -1;
-	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
-		if (strncmp(parse_start[i], keyword[2], strlen(keyword[2])) == 0) {
-			keyword_i = i;
-			break;
-		}
-	}
-
-	if (keyword_i != -1) {
-		start = parse_start[keyword_i];
-		end = memchr(start, ':', REQ_HEADER_KEYWORD_MAX);
-		if (end == NULL) {
-			return 1;
-		}
-		size = end - start;
-		start += size + 1;
-		while (*start == ' ') {
-			start++;
-		}
-
-		end = start;
-		while (1) {
-			if (*end == ',') {
-				break;
-			} else if (*end == ';') {
-				break;
-			} else if (*end == '\n') {
-				break;
-			}
-			end++;
-		}
-
-		size = end - start;
-		strncat(log, start, size);
-		strcat(log, " ");
-	} else {
-		strcat(log, "- ");
-	}
-	// }
-	// { user agent
-	const char os_type[][REQ_UA_TYPE_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
-	const char browser_type[][REQ_UA_TYPE_MAX] = {"firefox", "edg", "chrome", "safari"};
-	start = tmp_log;
-	keyword_i = -1;
-	for (size_t i=0; i<(sizeof(keyword)/REQ_HEADER_KEYWORD_MAX); i++) {
-		if (strncmp(parse_start[i], keyword[1], strlen(keyword[1])) == 0) {
-			keyword_i = i;
-			break;
-		}
-	}
-
-	if (keyword_i != -1) {
-		start = parse_start[keyword_i];
-		end = memchr(start, ':', REQ_HEADER_KEYWORD_MAX);
-		if (end == NULL) {
-			// keyword err
-			return 1;
-		}
-		size = end - start;
-		start += size + 1;
-		while (*start == ' ') {
-			start++;
-		}
-		end = memchr(start, '\n', 512);
-		if (end == NULL) {
-			// large err
-			return 1;
-		}
-		size = end - start;
-
-		int flag = 0;
-		for (size_t i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
-			if (memmem(start, size, os_type[i], strlen(os_type[i])) != NULL) {
-				strcat(log, os_type[i]);
-				strcat(log, " ");
-				flag = 1;
-				break;
-			}
-		}
-		if (!flag) {
-			strcat(log, "- ");
-		}
-
-		flag = 0;
-		for (size_t i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
-			if (memmem(start, size, browser_type[i], strlen(browser_type[i])) != NULL) {
-				strcat(log, browser_type[i]);
-				strcat(log, " ");
-				flag = 1;
-				break;
-			}
-		}
-		if (!flag) {
-			strcat(log, "- ");
-		}
-		printf("LOG: %s\n", log);
-
-	} else {
-		strcat(log, "- ");
-	}
-	// }
-	// }}
-
-	return 0;
-}*/
 
 int respone_build_path(char *path, size_t *size) {
 	struct stat st;
@@ -480,20 +181,11 @@ int main() {
 				// }
 
 				// { http_parse()
-				struct http http;
+				struct http http = {0};
 				if (http_parse(request_buf, &http, config.domain) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
-				printf("HTTP: %s, %s, %s\n", http.method, http.path, http.version);
-				// }
-
-				// { requset_parse_line()
-				/*char http_method[HTTP_METHOD_SIZE];
-				char http_path[HTTP_PATH_SIZE];
-				char http_version[HTTP_VERSION_SIZE];
-				if (request_parse_line(request_buf, http_method, http_path, http_version) != 0) {
-					net_exit_err(ssl, client_fd);
-				}*/
+				printf("HTTP: %s, %s, %s, %s, %s, %s, %s\n", http.method, http.path, http.version, http.host, http.lang, http.browser, http.os);
 				// }
 
 				// { http_build_path()
@@ -501,12 +193,6 @@ int main() {
 				if (http_build_path(path, http.path, config.web_root) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
-				// }
-
-				// { request_parse_header()
-				/*if (request_parse_header(request_buf, log, config.domain) != 0) {
-					net_exit_err(ssl, client_fd);
-				}*/
 				// }
 
 				size_t file_size = 0;

@@ -13,7 +13,9 @@
 
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64
-#define REQ_LINE_MAX 1024
+#define REQ_LINE_MAX 4096
+#define REQ_VALUE_MAX 1024
+#define REQ_UA_MAX 16
 
 static int _parse_line(const char *req_buf, struct http *http);
 static int _parse_header(const char *req_buf, struct http *http, const char *domain);
@@ -32,110 +34,180 @@ int http_parse(char *req_buf, struct http *http, const char *domain) {
 
 static int _parse_line(const char *req_buf, struct http *http) {
 	// { method
-	const char *start = req_buf;
-	const char *end = memchr(start, ' ', sizeof(http->method));
-	if (end == NULL) {
+	const char *p1 = req_buf;
+	const char *p2 = memchr(p1, ' ', sizeof(http->method));
+	ptrdiff_t n;
+	if (p2 == NULL) {
 		// err_log
 		return 1;
 	}
-	ptrdiff_t size = end - start;
-	if (size >= sizeof(http->method)) {
+	n = p2 - p1;
+	if (n >= sizeof(http->method)) {
 		// err_log
 		return 1;
 	}
-	strncpy(http->method, start, size);
-	http->method[size] = '\0';
+	strncpy(http->method, p1, n);
+	http->method[n] = '\0';
 	// }
 
 	// { path
-	start += size + 1;
-	end = memchr(start, ' ', sizeof(http->path));
-	if (end == NULL) {
+	p1 += n + 1;
+	p2 = memchr(p1, ' ', sizeof(http->path));
+	if (p2 == NULL) {
 		// err log
 		return 1;
 	}
-	size = end - start;
-	if (size >= sizeof(http->path)) {
+	n = p2 - p1;
+	if (n >= sizeof(http->path)) {
 		// err log
 		return 1;
 	}
-	strncpy(http->path, start, size);
-	http->path[size] = '\0';
+	strncpy(http->path, p1, n);
+	http->path[n] = '\0';
 	// }
 
 	// { version
-	start += size + 1;
-	end = memchr(start, '\r', sizeof(http->version));
-	if (end == NULL) {
+	p1 += n + 1;
+	p2 = memchr(p1, '\r', sizeof(http->version));
+	if (p2 == NULL) {
 		// err log
 		return 1;
 	}
-	size = end - start;
-	if (size >= sizeof(http->version)) {
+	n = p2 - p1;
+	if (n >= sizeof(http->version)) {
 		// err log
 		return 1;
 	}
-	strncpy(http->version, start, size);
-	http->version[size] = '\0';
+	strncpy(http->version, p1, n);
+	http->version[n] = '\0';
 	// }
 }
 
 static int _parse_header(const char *req_buf, struct http *http, const char *domain) {
-	enum key_idx {HOST, USER_AGENT, ACCEPT_LANG};
+	enum key_idx {HOST, UA, AL};
 	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
-	const char *start = req_buf;
-	const char *end = memmem(start, REQ_LINE_MAX, "\r\n", 2);
-	if (end == NULL) {
+
+	const char *p1 = req_buf;
+	const char *p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
+	ptrdiff_t n;
+
+	if (p2 == NULL) {
 		// err log
 		return 1;
 	}
-	start = end + 2;
+	p1 = p2 + 2;
 
 	while (1) {
-		if (strncmp(start, "\r\n", 2) == 0) {
+		if (strncmp(p1, "\r\n", 2) == 0) {
 			break;
 		}
 
-		const char *keyword_end = memchr(start, ':', REQ_KEY_MAX);
-		if (keyword_end == NULL) {
+		p2 = memchr(p1, ':', REQ_KEY_MAX);
+		if (p2 == NULL) {
 			return 1; // 400 bad
 		}
 
-		const char *value_end;
 		for (size_t i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
-			if (strncmp(start, keyword[i], strlen(keyword[i])) == 0) {
-				value_end = memmem(start, REQ_LINE_MAX, "\r\n", 2);
-				if (value_end == NULL) {
+			if (strncmp(p1, keyword[i], strlen(keyword[i])) == 0) {
+				p1 = p2 + 1;
+				p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
+				if (p2 == NULL) {
 					return 1; // 400 bad
 				}
-				ptrdiff_t n = value_end - start;
+				while (*p1 == ' ') {
+					p1++;
+				}
+				n = p2 - p1;
 
+				// p1: value start
+				// n: value size
 				switch (i) {
 					case HOST:
 						if (http->host[0] != '\0') {
+							return 1; // 400
+						}
+
+						p2 = memmem(p1, n, domain, strlen(domain));
+						if (p2 == NULL) {
 							return 1; // 400 bad
 						}
+						n = p2 - p1;
+						if (n == 0) {
+							strcat(http->host, "www");
+						} else {
+							n--; // except dot
+							strncat(http->host, p1, n);
+							http->host[n] = '\0';
+						}
 						break;
-					case USER_AGENT:
+
+					case UA:
 						if (http->os[0] != '\0' || http->browser[0] != '\0') {
-							return 1; // 400 bad
+							return 1; // 400
 						}
+
+						const char os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
+						const char browser_type[][REQ_UA_MAX] = {"firefox", "edg", "chrome", "safari"};
+
+						// { os
+						int flag = 0;
+						for (size_t i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
+							if (memmem(p1, n, os_type[i], strlen(os_type[i])) != NULL) {
+								strcat(http->os, os_type[i]);
+								flag = 1;
+								break;
+							}
+						}
+						if (!flag) {
+							strcat(http->os, "-");
+						}
+						// }
+
+						// { browser
+						flag = 0;
+						for (size_t i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
+							if (memmem(p1, n, browser_type[i], strlen(browser_type[i])) != NULL) {
+								strcat(http->browser, browser_type[i]);
+								flag = 1;
+								break;
+							}
+						}
+						if (!flag) {
+							strcat(http->browser, "-");
+						}
+						// }
 						break;
-					case ACCEPT_LANG:
+
+					case AL:
 						if (http->lang[0] != '\0') {
-							return 1; // 400 bad
+							return 1; // 400
 						}
+
+						p2 = p1;
+						while (1) {
+							if (*p2 == ',') {
+								break;
+							} else if (*p2 == ';') {
+								break;
+							} else if (*p2 == '\n') {
+								break;
+							}
+							p2++;
+						}
+						n = p2 - p1;
+						strncat(http->lang, p1, n);
+						http->lang[n] = '\0';
 						break;
 				}
 				break;
 			}
 		}
 
-		value_end = memmem(start, REQ_LINE_MAX, "\r\n", 2);
-		if (value_end == NULL) {
+		p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
+		if (p2 == NULL) {
 			return 1; // 400 bad
 		}
-		start = value_end + 2;
+		p1 = p2 + 2;
 	}
 
 	return 0;
@@ -146,8 +218,13 @@ static int _check_err(const struct http *http) {
 		// attack_log
 		return 1; // 405 Method Not Allowed
 	}
+
 	if (strncmp(http->version, "HTTP/1.1", strnlen(http->version, sizeof(http->version))) != 0) {
 		// warn_log
 		return 1;
+	}
+
+	if (http->host[0] == '\0') {
+		return 1; // 400 bad
 	}
 }
