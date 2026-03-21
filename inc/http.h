@@ -6,6 +6,6 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-int http_parse(const char *req_buf, struct http *http);
+int http_parse(char *req_buf, struct http *http, const char *domain);
 
 #endif

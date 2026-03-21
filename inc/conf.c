@@ -13,6 +13,8 @@
 
 #define CONF_KEY_MAX 16
 
+static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size);
+
 int conf_parse(const char *path, struct config *config) {
 	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
@@ -36,27 +38,27 @@ int conf_parse(const char *path, struct config *config) {
 						config->port = (short) atoi(start);
 						break;
 					case 1:
-						if (conf_write_str(file_buf, config->domain, sizeof(config->domain)) != 0) {
+						if (_write_str(file_buf, config->domain, sizeof(config->domain)) != 0) {
 							return 1;
 						}
 						break;
 					case 2:
-						if (conf_write_str(file_buf, config->web_root, sizeof(config->web_root))) {
+						if (_write_str(file_buf, config->web_root, sizeof(config->web_root))) {
 							return 1;
 						}
 						break;
 					case 3:
-						if (conf_write_str(file_buf, config->web_log, sizeof(config->web_log))) {
+						if (_write_str(file_buf, config->web_log, sizeof(config->web_log))) {
 							return 1;
 						}
 						break;
 					case 4:
-						if (conf_write_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert))) {
+						if (_write_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert))) {
 							return 1;
 						}
 						break;
 					case 5:
-						if (conf_write_str(file_buf, config->ssl_key, sizeof(config->ssl_key))) {
+						if (_write_str(file_buf, config->ssl_key, sizeof(config->ssl_key))) {
 							return 1;
 						}
 						break;
@@ -69,7 +71,7 @@ int conf_parse(const char *path, struct config *config) {
 	return 0;
 }
 
-int conf_write_str(const char *file_buf, char *dst_config, size_t config_str_size) {
+static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size) {
 	char *start;
 	char *end;
 	ptrdiff_t n;

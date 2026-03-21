@@ -53,7 +53,7 @@ struct BlackList {
 	time_t time;
 };
 
-int request_parse_line(char *target_line, char *method, char *path, char *version) {
+/*int request_parse_line(char *target_line, char *method, char *path, char *version) {
 	// { method
 	char *start = target_line;
 	char *end = memchr(start, ' ', HTTP_METHOD_SIZE);
@@ -111,7 +111,7 @@ int request_parse_line(char *target_line, char *method, char *path, char *versio
 		return 1;
 	}
 	return 0;
-}
+}*/
 
 int http_build_path(char *path, char *http_path, char *web_root) {
 	char v_path[PATH_SIZE];
@@ -139,7 +139,7 @@ int http_build_path(char *path, char *http_path, char *web_root) {
 	return 0;
 }
 
-int request_parse_header(char *req_buf, char *log, char *domain) {
+/*int request_parse_header(char *req_buf, char *log, char *domain) {
 	const char keyword[][REQ_HEADER_KEYWORD_MAX] = {"host", "user-agent", "accept-language"};
 	memset(log, 0, 1024);
 	char tmp_log[2048];
@@ -369,7 +369,7 @@ int request_parse_header(char *req_buf, char *log, char *domain) {
 	// }}
 
 	return 0;
-}
+}*/
 
 int respone_build_path(char *path, size_t *size) {
 	struct stat st;
@@ -479,26 +479,34 @@ int main() {
 				}
 				// }
 
+				// { http_parse()
+				struct http http;
+				if (http_parse(request_buf, &http, config.domain) != 0) {
+					net_exit_err(ssl, client_fd);
+				}
+				printf("HTTP: %s, %s, %s\n", http.method, http.path, http.version);
+				// }
+
 				// { requset_parse_line()
-				char http_method[HTTP_METHOD_SIZE];
+				/*char http_method[HTTP_METHOD_SIZE];
 				char http_path[HTTP_PATH_SIZE];
 				char http_version[HTTP_VERSION_SIZE];
 				if (request_parse_line(request_buf, http_method, http_path, http_version) != 0) {
 					net_exit_err(ssl, client_fd);
-				}
+				}*/
 				// }
 
 				// { http_build_path()
 				char path[512];
-				if (http_build_path(path, http_path, config.web_root) != 0) {
+				if (http_build_path(path, http.path, config.web_root) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
 				// }
 
 				// { request_parse_header()
-				if (request_parse_header(request_buf, log, config.domain) != 0) {
+				/*if (request_parse_header(request_buf, log, config.domain) != 0) {
 					net_exit_err(ssl, client_fd);
-				}
+				}*/
 				// }
 
 				size_t file_size = 0;
