@@ -13,15 +13,16 @@
 
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64
-#define REQ_LINE_MAX 4096
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
+static void _init_http(struct http *http);
 static int _parse_line(const char *req_buf, struct http *http);
 static int _parse_header(const char *req_buf, struct http *http, const char *domain);
 static int _check_err(const struct http *http);
 
 int http_parse(char *req_buf, struct http *http, const char *domain) {
+	_init_http(http);
 	_parse_line(req_buf, http);
 
 	for (size_t i=0; i<strnlen(req_buf, REQ_MAX); i++) {
@@ -30,6 +31,17 @@ int http_parse(char *req_buf, struct http *http, const char *domain) {
 
 	_parse_header(req_buf, http, domain);
 	return 0;
+}
+
+static void _init_http(struct http *http) {
+	http->ip[0] = '\0';
+	http->lang[0] = '\0';
+	http->version[0] = '\0';
+	http->method[0] = '\0';
+	http->host[0] = '\0';
+	http->os[0] = '\0';
+	http->browser[0] = '\0';
+	http->uri[0] = '\0';
 }
 
 static int _parse_line(const char *req_buf, struct http *http) {
@@ -50,20 +62,20 @@ static int _parse_line(const char *req_buf, struct http *http) {
 	http->method[n] = '\0';
 	// }
 
-	// { path
+	// { uri
 	p1 += n + 1;
-	p2 = memchr(p1, ' ', sizeof(http->path));
+	p2 = memchr(p1, ' ', sizeof(http->uri));
 	if (p2 == NULL) {
 		// err log
 		return 1;
 	}
 	n = p2 - p1;
-	if (n >= sizeof(http->path)) {
+	if (n >= sizeof(http->uri)) {
 		// err log
 		return 1;
 	}
-	strncpy(http->path, p1, n);
-	http->path[n] = '\0';
+	strncpy(http->uri, p1, n);
+	http->uri[n] = '\0';
 	// }
 
 	// { version

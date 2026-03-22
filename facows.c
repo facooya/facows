@@ -26,8 +26,6 @@
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
 
-#define PATH_MAX 512
-
 #define HTTP_MSG_200 "OK"
 #define HTTP_MSG_400 "Bad Request"
 #define HTTP_MSG_403 "Forbidden"
@@ -47,12 +45,12 @@ struct BlackList {
 };
 
 int http_build_path(char *path, char *http_path, char *web_root) {
-	char v_path[PATH_MAX];
+	char v_path[4096];
 	strcpy(v_path, web_root);
 	strcat(v_path, http_path);
 	realpath(v_path, path);
 
-	if (strlen(path) > PATH_MAX-1) {
+	if (strlen(path) > 4096-1) {
 		// warn
 		return 2;
 	}
@@ -181,16 +179,16 @@ int main() {
 				// }
 
 				// { http_parse()
-				struct http http = {0};
+				struct http http;
 				if (http_parse(request_buf, &http, config.domain) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
-				printf("HTTP: %s, %s, %s, %s, %s, %s, %s\n", http.method, http.path, http.version, http.host, http.lang, http.browser, http.os);
+				printf("HTTP: %s, %s, %s, %s, %s, %s, %s\n", http.method, http.uri, http.version, http.host, http.lang, http.browser, http.os);
 				// }
 
 				// { http_build_path()
 				char path[512];
-				if (http_build_path(path, http.path, config.web_root) != 0) {
+				if (http_build_path(path, http.uri, config.web_root) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
 				// }

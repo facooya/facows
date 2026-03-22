@@ -23,7 +23,7 @@ struct http {
 	char host[16];
 	char os[16];
 	char browser[16];
-	char path[256];
+	char uri[4096];
 };
 
 #endif
