@@ -15,7 +15,7 @@
 
 static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size);
 
-int conf_parse(const char *path, struct config *config) {
+int conf_parse(const char *path, struct fws_conf *config) {
 	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];

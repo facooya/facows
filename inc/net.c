@@ -13,7 +13,7 @@
 #include "types.h"
 #include "net.h"
 
-int net_init_ssl(SSL_CTX **ssl_ctx, const struct config *config) {
+int net_init_ssl(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	SSL_library_init();
 	const SSL_METHOD *ssl_method;
 	ssl_method = TLS_server_method();

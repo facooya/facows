@@ -16,12 +16,12 @@
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
-static void _init_http(struct http *http);
-static int _parse_line(const char *req_buf, struct http *http);
-static int _parse_header(const char *req_buf, struct http *http, const char *domain);
-static int _check_err(const struct http *http);
+static void _init_http(struct fws_http *http);
+static int _parse_line(const char *req_buf, struct fws_http *http);
+static int _parse_header(const char *req_buf, struct fws_http *http, const char *domain);
+static int _check_err(const struct fws_http *http);
 
-int http_parse(char *req_buf, struct http *http, const char *domain) {
+int http_parse(char *req_buf, struct fws_http *http, const char *domain) {
 	_init_http(http);
 	_parse_line(req_buf, http);
 
@@ -33,7 +33,7 @@ int http_parse(char *req_buf, struct http *http, const char *domain) {
 	return 0;
 }
 
-static void _init_http(struct http *http) {
+static void _init_http(struct fws_http *http) {
 	http->ip[0] = '\0';
 	http->lang[0] = '\0';
 	http->version[0] = '\0';
@@ -44,7 +44,7 @@ static void _init_http(struct http *http) {
 	http->uri[0] = '\0';
 }
 
-static int _parse_line(const char *req_buf, struct http *http) {
+static int _parse_line(const char *req_buf, struct fws_http *http) {
 	// { method
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, ' ', sizeof(http->method));
@@ -95,7 +95,7 @@ static int _parse_line(const char *req_buf, struct http *http) {
 	// }
 }
 
-static int _parse_header(const char *req_buf, struct http *http, const char *domain) {
+static int _parse_header(const char *req_buf, struct fws_http *http, const char *domain) {
 	enum key_idx {HOST, UA, AL};
 	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
 
@@ -225,7 +225,7 @@ static int _parse_header(const char *req_buf, struct http *http, const char *dom
 	return 0;
 }
 
-static int _check_err(const struct http *http) {
+static int _check_err(const struct fws_http *http) {
 	if (strncmp(http->method, "GET", strnlen(http->method, sizeof(http->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed

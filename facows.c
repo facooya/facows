@@ -22,6 +22,7 @@
 #include "conf.h"
 #include "net.h"
 #include "http.h"
+#include "file.h"
 
 #define CONF_FILE "/etc/facows/facows.conf"
 #define SHARE_DIR "/usr/share/facows/"
@@ -82,7 +83,7 @@ int respone_build_path(char *path, size_t *size) {
 	}
 	*size = st.st_size;
 
-	const char index_str[] = "index.html";
+	const char index_str[] = "/index.html";
 	if (S_ISDIR(st.st_mode) == 1) {
 		strcat(path, index_str);
 		if (stat(path, &st) == 0) {
@@ -123,7 +124,7 @@ int respone_send_status(SSL *ssl, char *path, size_t file_size) {
 
 int main() {
 	// { init
-	struct config config;
+	struct fws_conf config;
 	if (conf_parse(CONF_FILE, &config) != 0) {
 		// conf err
 		return 0;
@@ -179,22 +180,25 @@ int main() {
 				// }
 
 				// { http_parse()
-				struct http http;
+				struct fws_http http;
 				if (http_parse(request_buf, &http, config.domain) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
 				printf("HTTP: %s, %s, %s, %s, %s, %s, %s\n", http.method, http.uri, http.version, http.host, http.lang, http.browser, http.os);
 				// }
 
-				// { http_build_path()
-				char path[512];
-				if (http_build_path(path, http.uri, config.web_root) != 0) {
+				// { file_parse()
+				struct fws_file file;
+				if (file_parse(&file, http.uri, config.web_root) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
+				char path[4096];
+				strcat(path, file.path);
 				// }
 
 				size_t file_size = 0;
 				int status_code = respone_build_path(path, &file_size);
+				printf("PATH2: %s\n", path);
 				if (status_code != 0) {
 					char err_html_temp[1024] = {0};
 					char err_html[1024] = {0};
