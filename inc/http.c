@@ -100,7 +100,7 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
 
 	const char *p1 = req_buf;
-	const char *p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
+	const char *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 	ptrdiff_t n;
 
 	if (p2 == NULL) {
@@ -115,14 +115,14 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 		}
 
 		p2 = memchr(p1, ':', REQ_KEY_MAX);
-		if (p2 == NULL) {
+		if (p2 == NULL || *(p2+1) != '\n') {
 			return 1; // 400 bad
 		}
 
 		for (size_t i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
 			if (strncmp(p1, keyword[i], strlen(keyword[i])) == 0) {
 				p1 = p2 + 1;
-				p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
+				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 				if (p2 == NULL) {
 					return 1; // 400 bad
 				}
@@ -139,15 +139,17 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 							return 1; // 400
 						}
 
-						p2 = memmem(p1, n, domain, strlen(domain));
-						if (p2 == NULL) {
-							return 1; // 400 bad
-						}
-						n = p2 - p1;
-						if (n == 0) {
+						if (strncmp(p1, domain, strlen(domain)) == 0) {
 							strcat(http->host, "www");
 						} else {
-							n--; // except dot
+							p2 = p1;
+							for (size_t i=0; i<sizeof(http->host); i++) {
+								if (p2[i] == '.') {
+									p2 += i;
+									break;
+								}
+							}
+							n = p2 - p1;
 							strncat(http->host, p1, n);
 							http->host[n] = '\0';
 						}
@@ -161,12 +163,26 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 						const char os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
 						const char browser_type[][REQ_UA_MAX] = {"firefox", "edg", "chrome", "safari"};
 
+						const char *p3;
+						const char *p4;
 						// { os
 						int flag = 0;
 						for (size_t i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
-							if (memmem(p1, n, os_type[i], strlen(os_type[i])) != NULL) {
-								strcat(http->os, os_type[i]);
-								flag = 1;
+							p3 = p1;
+							while (1) {
+								p4 = memchr(p3, os_type[i][0], p2-p3+1);
+								if (p4 == NULL) {
+									break;
+								}
+								if (strncmp(p4, os_type[i], strlen(os_type[i])) == 0) {
+									strcat(http->os, os_type[i]);
+									flag = 1;
+									break;
+								} else {
+									p3 = p4 + 1;
+								}
+							}
+							if (flag) {
 								break;
 							}
 						}
@@ -178,9 +194,21 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 						// { browser
 						flag = 0;
 						for (size_t i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
-							if (memmem(p1, n, browser_type[i], strlen(browser_type[i])) != NULL) {
-								strcat(http->browser, browser_type[i]);
-								flag = 1;
+							p3 = p1;
+							while (1) {
+								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
+								if (p4 == NULL) {
+									break;
+								}
+								if (strncmp(p4, browser_type[i], strlen(browser_type[i])) == 0) {
+									strcat(http->browser, browser_type[i]);
+									flag = 1;
+									break;
+								} else {
+									p3 = p4 + 1;
+								}
+							}
+							if (flag) {
 								break;
 							}
 						}
@@ -215,8 +243,8 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 			}
 		}
 
-		p2 = memmem(p1, REQ_VALUE_MAX, "\r\n", 2);
-		if (p2 == NULL) {
+		p2 = memchr(p1, '\r', REQ_VALUE_MAX);
+		if (p2 == NULL || *(p2+1) != '\n') {
 			return 1; // 400 bad
 		}
 		p1 = p2 + 2;
