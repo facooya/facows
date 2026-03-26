@@ -45,58 +45,6 @@ struct BlackList {
 	time_t time;
 };
 
-int http_build_path(char *path, char *http_path, char *web_root) {
-	char v_path[4096];
-	strcpy(v_path, web_root);
-	strcat(v_path, http_path);
-	realpath(v_path, path);
-
-	if (strlen(path) > 4096-1) {
-		// warn
-		return 2;
-	}
-
-	size_t web_root_size = strlen(web_root);
-	if (strlen(path)+1 == web_root_size) {
-		size_t size = strlen(path);
-		path[size] = '/';
-		path[size+1] = '\0';
-	}
-
-	if (strncmp(path, web_root, web_root_size) != 0) {
-		// attack
-		return 1;
-	}
-
-	return 0;
-}
-
-int respone_build_path(char *path, size_t *size) {
-	struct stat st;
-	if (stat(path, &st) != 0) {
-		const char html_str[] = ".html";
-		strcat(path, html_str);
-		if (stat(path, &st) != 0) {
-			// warn log
-			return 404;
-		}
-	}
-	*size = st.st_size;
-
-	const char index_str[] = "/index.html";
-	if (S_ISDIR(st.st_mode) == 1) {
-		strcat(path, index_str);
-		if (stat(path, &st) == 0) {
-			*size = st.st_size;
-		} else {
-			// warn log
-			return 404;
-		}
-	}
-
-	return 0;
-}
-
 int respone_send_status(SSL *ssl, char *path, size_t file_size) {
 	char time_buf[64];
 	time_t raw_time;
@@ -199,16 +147,9 @@ int main() {
 
 				// { file_parse()
 				struct fws_file file;
-				if (file_parse(&file, http.uri, config.web_root) != 0) {
-					net_exit_err(ssl, client_fd);
-				}
-				char path[4096];
-				strcat(path, file.path);
+				int status_code = file_parse(&file, http.uri, config.web_root);
 				// }
 
-				size_t file_size = 0;
-				int status_code = respone_build_path(path, &file_size);
-				printf("PATH2: %s\n", path);
 				if (status_code != 0) {
 					char err_html_temp[1024] = {0};
 					char err_html[1024] = {0};
@@ -218,9 +159,9 @@ int main() {
 
 					strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
 					strcat(v_path, path_err_page);
-					realpath(v_path, path);
+					realpath(v_path, file.path);
 
-					int fd = open(path, O_RDONLY);
+					int fd = open(file.path, O_RDONLY);
 					if (fd < 0) {
 						// internal server err
 						net_exit_err(ssl, client_fd);
@@ -231,63 +172,63 @@ int main() {
 					switch (status_code) {
 						case 400:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_400);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_400, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_400, file.size);
 							break;
 
 						case 403:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_403);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_403, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_403, file.size);
 							break;
 
 						case 404:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_404);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_404, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_404, file.size);
 							break;
 
 						case 405:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_405);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_405, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_405, file.size);
 							break;
 
 						case 414:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_414);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file.size);
 							break;
 
 						case 429:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_429);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file.size);
 							break;
 
 
 						case 431:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_431);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_431, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_431, file.size);
 							break;
 
 						case 500:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file.size);
 							break;
 
 						case 501:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_501);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_501, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_501, file.size);
 							break;
 
 						default:
 							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
-							file_size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file_size);
+							file.size = strlen(err_html);
+							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file.size);
 							break;
 					}
 
@@ -299,11 +240,11 @@ int main() {
 					exit(0);
 				}
 
-				if (respone_send_status(ssl, path, file_size) != 0) {
+				if (respone_send_status(ssl, file.path, file.size) != 0) {
 					// warn log
 					net_exit_err(ssl, client_fd);
 				}
-				net_write(ssl, path);
+				net_write(ssl, file.path);
 			}
 
 			SSL_shutdown(ssl);

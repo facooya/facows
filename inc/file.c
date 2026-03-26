@@ -8,12 +8,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <ctype.h>
 
 #include "types.h"
 #include "file.h"
 
 static void _init_file(struct fws_file *file);
+static int _build_tail(struct fws_file *file);
 
 int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 	_init_file(file);
@@ -83,10 +85,40 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 	realpath(tmp_path, file->path);
 	// }
 
+	if (strncmp(file->path, web_root, strlen(web_root)) != 0) {
+		return 1;
+	}
+
+	_build_tail(file);
+
 	return 0;
 }
 
 static void _init_file(struct fws_file *file) {
 	file->uri_path[0] = '\0';
 	file->path[0] = '\0';
+}
+
+static int _build_tail(struct fws_file *file) {
+	struct stat file_stat;
+	if (stat(file->path, &file_stat) != 0) {
+		const char html_str[] = ".html";
+		strcat(file->path, html_str);
+		if (stat(file->path, &file_stat) != 0) {
+			return 404;
+		}
+	}
+	file->size = file_stat.st_size;
+
+	if (S_ISDIR(file_stat.st_mode) == 1) {
+		const char index_str[] = "/index.html";
+		strcat(file->path, index_str);
+		if (stat(file->path, &file_stat) == 0) {
+			file->size = file_stat.st_size;
+		} else {
+			return 404;
+		}
+	}
+
+	return 0;
 }
