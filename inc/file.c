@@ -40,7 +40,7 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 	strcat(tmp_path, web_root);
 
 	p1 = file->uri_path;
-	p2 = tmp_path;
+	p2 = tmp_path + strlen(web_root);
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
@@ -85,7 +85,8 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 	realpath(tmp_path, file->path);
 	// }
 
-	if (strncmp(file->path, web_root, strlen(web_root)) != 0) {
+	// TODO: check root dir slash
+	if (strncmp(file->path, web_root, strlen(web_root)-1) != 0) {
 		return 1;
 	}
 
