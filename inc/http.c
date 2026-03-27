@@ -103,7 +103,7 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 	const char *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 	ptrdiff_t n;
 
-	if (p2 == NULL) {
+	if (p2 == NULL || *(p2+1) != '\n') {
 		// err log
 		return 1;
 	}
@@ -115,7 +115,7 @@ static int _parse_header(const char *req_buf, struct fws_http *http, const char 
 		}
 
 		p2 = memchr(p1, ':', REQ_KEY_MAX);
-		if (p2 == NULL || *(p2+1) != '\n') {
+		if (p2 == NULL) {
 			return 1; // 400 bad
 		}
 
