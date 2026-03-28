@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "types.h"
 #include "http.h"
@@ -20,6 +21,7 @@ static void _init_http(struct fws_http *http);
 static int _parse_line(const char *req_buf, struct fws_http *http);
 static int _parse_header(const char *req_buf, struct fws_http *http, const char *domain);
 static int _check_err(const struct fws_http *http);
+static void _init_res(struct fws_http_res *res);
 
 int http_parse(char *req_buf, struct fws_http *http, const char *domain) {
 	_init_http(http);
@@ -31,6 +33,48 @@ int http_parse(char *req_buf, struct fws_http *http, const char *domain) {
 
 	_parse_header(req_buf, http, domain);
 	return 0;
+}
+
+int http_build_res(struct fws_http_res *res, const char *path) {
+	_init_res(res);
+
+	time_t raw_time;
+	time(&raw_time);
+	struct tm *tm;
+	tm = gmtime(&raw_time);
+	strftime(res->date, sizeof(res->date), "%a, %d %b %Y %H:%M:%S GMT", tm);
+
+	res->code = 200;
+	res->connection = 0;
+
+	const char *p1 = path;
+	const char *p2;
+	while (1) {
+		p2 = memchr(p1, '.', strlen(p1));
+		if (p2 == NULL) {
+			break;
+		}
+		p1 = p2 + 1;
+	}
+
+	if (strncmp(p1, "html", sizeof("html")) == 0) {
+		strcat(res->content, "text/html");
+	} else if (strncmp(p1, "css", sizeof("css")) == 0) {
+		strcat(res->content, "text/css");
+	} else if (strncmp(p1, "svg", sizeof("svg")) == 0) {
+		strcat(res->content, "image/svg+xml");
+	} else if (strncmp(p1, "php", sizeof("php")) == 0) {
+		strcat(res->content, "text/html");
+	} else {
+		return 1;
+	}
+
+	return 0;
+}
+
+static void _init_res(struct fws_http_res *res) {
+	res->date[0] = '\0';
+	res->content[0] = '\0';
 }
 
 static void _init_http(struct fws_http *http) {

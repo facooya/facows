@@ -15,6 +15,13 @@ struct fws_conf {
 	char ssl_key[128];
 };
 
+struct fws_http_res {
+	int code;
+	int connection;
+	char content[16];
+	char date[32];
+};
+
 struct fws_http {
 	char ip[16];
 	char lang[16];

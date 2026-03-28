@@ -142,7 +142,6 @@ int main() {
 				if (http_parse(request_buf, &http, config.domain) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
-				printf("HTTP: %s, %s, %s, %s, %s, %s, %s\n", http.method, http.uri, http.version, http.host, http.lang, http.browser, http.os);
 				// }
 
 				// { file_parse()
@@ -240,6 +239,12 @@ int main() {
 					exit(0);
 				}
 
+				struct fws_http_res res;
+				http_build_res(&res, file.path);
+				printf("RES: %s, %d", res.content, res.code);
+				//if (net_write_header(ssl, res, file.size) != 0) {
+					//net_exit_err(ssl, client_fd);
+				//}
 				if (respone_send_status(ssl, file.path, file.size) != 0) {
 					// warn log
 					net_exit_err(ssl, client_fd);
