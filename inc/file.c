@@ -90,9 +90,8 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 		return 1;
 	}
 
-	_build_tail(file);
-
-	return 0;
+	int code = _build_tail(file);
+	return code;
 }
 
 static void _init_file(struct fws_file *file) {

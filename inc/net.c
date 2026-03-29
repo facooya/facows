@@ -14,6 +14,21 @@
 #include "types.h"
 #include "net.h"
 
+#define SHARE_DIR "/usr/share/facows/"
+
+#define HTTP_MSG_200 "OK"
+#define HTTP_MSG_400 "Bad Request"
+#define HTTP_MSG_403 "Forbidden"
+#define HTTP_MSG_404 "File Not Found"
+#define HTTP_MSG_405 "Method Not Allowed"
+#define HTTP_MSG_414 "URI Too Long"
+#define HTTP_MSG_429 "Too Many Requests"
+#define HTTP_MSG_431 "Request Header Fields Too Large"
+#define HTTP_MSG_500 "Internal Server Error"
+#define HTTP_MSG_501 "Not Implemented"
+
+#define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n"
+
 int net_init_ssl(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	SSL_library_init();
 	const SSL_METHOD *ssl_method;
@@ -92,6 +107,84 @@ int net_write_res(SSL *ssl, struct fws_http_res res, off_t size) {
 	char res_buf[8192];
 	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", res.code, res.content, size, res.date);
 	SSL_write(ssl, res_buf, strlen(res_buf));
+	return 0;
+}
+
+int net_write_err(SSL *ssl, int code) {
+	const char path_err_page[] = "error_page.html";
+	char err_html[1024] = {0};
+	char err_html_temp[1024] = {0};
+	char res[1024] = {0};
+	char v_path[1024];
+	v_path[0] = '\0';
+	char path[1024];
+	path[0] = '\0';
+
+	strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
+	strcat(v_path, path_err_page);
+	realpath(v_path, path);
+
+	int fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		return 1;
+	}
+	read(fd, err_html_temp, sizeof(err_html_temp));
+	close(fd);
+
+	switch (code) {
+		case 400:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_400);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_400, strlen(err_html));
+			break;
+
+		case 403:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_403);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_403, strlen(err_html));
+			break;
+
+		case 404:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_404);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_404, strlen(err_html));
+			break;
+
+		case 405:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_405);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_405, strlen(err_html));
+			break;
+
+		case 414:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_414);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_414, strlen(err_html));
+			break;
+
+		case 429:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_429);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_429, strlen(err_html));
+			break;
+
+		case 431:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_431);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_431, strlen(err_html));
+			break;
+
+		case 500:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, strlen(err_html));
+			break;
+
+		case 501:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_501);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_501, strlen(err_html));
+			break;
+
+		default:
+			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, strlen(err_html));
+			break;
+	}
+
+	SSL_write(ssl, res, strlen(res));
+	SSL_write(ssl, err_html, strlen(err_html));
 	return 0;
 }
 

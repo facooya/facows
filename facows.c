@@ -25,20 +25,6 @@
 #include "file.h"
 
 #define CONF_FILE "/etc/facows/facows.conf"
-#define SHARE_DIR "/usr/share/facows/"
-
-#define HTTP_MSG_200 "OK"
-#define HTTP_MSG_400 "Bad Request"
-#define HTTP_MSG_403 "Forbidden"
-#define HTTP_MSG_404 "File Not Found"
-#define HTTP_MSG_405 "Method Not Allowed"
-#define HTTP_MSG_414 "URI Too Long"
-#define HTTP_MSG_429 "Too Many Requests"
-#define HTTP_MSG_431 "Request Header Fields Too Large"
-#define HTTP_MSG_500 "Internal Server Error"
-#define HTTP_MSG_501 "Not Implemented"
-
-#define HTTP_STATUS "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n"
 
 struct BlackList {
 	uint8_t ip[16];
@@ -115,101 +101,17 @@ int main() {
 				// }
 
 				if (status_code != 0) {
-					char err_html_temp[1024] = {0};
-					char err_html[1024] = {0};
-					char status[1024] = {0};
-					char v_path[512];
-					const char path_err_page[] = "error_page.html";
-
-					strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
-					strcat(v_path, path_err_page);
-					realpath(v_path, file.path);
-
-					int fd = open(file.path, O_RDONLY);
-					if (fd < 0) {
-						// internal server err
+					if (net_write_err(ssl, status_code) != 0) {
 						net_exit_err(ssl, client_fd);
 					}
-					read(fd, err_html_temp, sizeof(err_html_temp));
-					close(fd);
-
-					switch (status_code) {
-						case 400:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_400);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_400, file.size);
-							break;
-
-						case 403:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_403);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_403, file.size);
-							break;
-
-						case 404:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_404);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_404, file.size);
-							break;
-
-						case 405:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_405);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_405, file.size);
-							break;
-
-						case 414:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_414);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file.size);
-							break;
-
-						case 429:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_429);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_414, file.size);
-							break;
-
-
-						case 431:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_431);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_431, file.size);
-							break;
-
-						case 500:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file.size);
-							break;
-
-						case 501:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_501);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_501, file.size);
-							break;
-
-						default:
-							snprintf(err_html, sizeof(err_html), err_html_temp, status_code, status_code, HTTP_MSG_500);
-							file.size = strlen(err_html);
-							snprintf(status, sizeof(status), HTTP_STATUS, status_code, HTTP_MSG_500, file.size);
-							break;
+				} else {
+					struct fws_http_res res;
+					http_build_res(&res, file.path);
+					if (net_write_res(ssl, res, file.size) != 0) {
+						net_exit_err(ssl, client_fd);
 					}
-
-					SSL_write(ssl, status, strlen(status));
-					SSL_write(ssl, err_html, strlen(err_html));
-
-					SSL_free(ssl);
-					close(client_fd);
-					exit(0);
+					net_write(ssl, file.path);
 				}
-
-				struct fws_http_res res;
-				http_build_res(&res, file.path);
-				if (net_write_res(ssl, res, file.size) != 0) {
-					net_exit_err(ssl, client_fd);
-				}
-				net_write(ssl, file.path);
 			}
 
 			SSL_shutdown(ssl);
