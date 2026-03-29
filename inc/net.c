@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <openssl/ssl.h>
+#include <string.h>
 
 #include "types.h"
 #include "net.h"
@@ -84,6 +85,13 @@ int net_write(SSL *ssl, const char *path) {
 		}
 	}
 	close(fd);
+	return 0;
+}
+
+int net_write_res(SSL *ssl, struct fws_http_res res, off_t size) {
+	char res_buf[8192];
+	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", res.code, res.content, size, res.date);
+	SSL_write(ssl, res_buf, strlen(res_buf));
 	return 0;
 }
 

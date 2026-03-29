@@ -45,41 +45,6 @@ struct BlackList {
 	time_t time;
 };
 
-int respone_send_status(SSL *ssl, char *path, size_t file_size) {
-	char time_buf[64];
-	time_t raw_time;
-	time(&raw_time);
-	struct tm *time_info;
-	time_info = gmtime(&raw_time);
-	strftime(time_buf, sizeof(time_buf), "%a, %d %b %Y %H:%M:%S GMT", time_info);
-
-	char status[1024] = {0};
-	const char *p1 = path;
-	const char *p2;
-	while (1) {
-		p2 = memchr(p1, '.', strlen(p1));
-		if (p2 == NULL) {
-			break;
-		}
-		p1 = p2 + 1;
-	}
-
-	if (strncmp(p1, "html", sizeof("html")) == 0) {
-		snprintf(status, sizeof(status), "HTTP/1.1 200 OK\r\nKeep-Alive: timeout=1\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n", file_size);
-	} else if (strncmp(p1, "css", sizeof("css")) == 0) {
-		snprintf(status, sizeof(status), "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nKeep-Alive: timeout=1\r\nContent-Type: text/css\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", file_size, time_buf);
-	} else if (strncmp(p1, "svg", sizeof("svg")) == 0) {
-		snprintf(status, sizeof(status), "HTTP/1.1 200 OK\r\nContent-Type: image/svg+xml\r\nContent-Length: %ld\r\n\r\n", file_size);
-	} else if (strncmp(p1, "php", sizeof("php")) == 0) {
-		snprintf(status, sizeof(status), "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n", file_size);
-	} else {
-		return 1;
-	}
-	SSL_write(ssl, status, strlen(status));
-
-	return 0;
-}
-
 int main() {
 	// { init
 	struct fws_conf config;
@@ -241,12 +206,7 @@ int main() {
 
 				struct fws_http_res res;
 				http_build_res(&res, file.path);
-				printf("RES: %s, %d", res.content, res.code);
-				//if (net_write_header(ssl, res, file.size) != 0) {
-					//net_exit_err(ssl, client_fd);
-				//}
-				if (respone_send_status(ssl, file.path, file.size) != 0) {
-					// warn log
+				if (net_write_res(ssl, res, file.size) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
 				net_write(ssl, file.path);
