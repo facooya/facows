@@ -19,6 +19,7 @@
 #include <openssl/err.h>
 
 #include "types.h"
+#include "utils.h"
 #include "conf.h"
 #include "net.h"
 #include "http.h"
@@ -26,7 +27,7 @@
 
 #define CONF_FILE "/etc/facows/facows.conf"
 
-struct BlackList {
+struct fws_black_list {
 	uint8_t ip[16];
 	time_t time;
 };
@@ -39,7 +40,7 @@ int main() {
 		return 0;
 	}
 
-	struct BlackList black_list[1024];
+	struct fws_black_list black_list[1024];
 	char request_buf[4096];
 	char log[1024];
 	signal(SIGCHLD, SIG_IGN);

@@ -120,8 +120,8 @@ int net_write_err(SSL *ssl, int code) {
 	char path[1024];
 	path[0] = '\0';
 
-	strncpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
-	strcat(v_path, path_err_page);
+	memcpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
+	memcpy(v_path+sizeof(SHARE_DIR)-1, path_err_page, sizeof(path_err_page));
 	realpath(v_path, path);
 
 	int fd = open(path, O_RDONLY);
