@@ -91,7 +91,7 @@ int main() {
 
 				// { http_parse()
 				struct fws_http http;
-				if (http_parse(request_buf, &http, config.domain) != 0) {
+				if (http_parse(request_buf, &http, config.domain, sizeof(config.domain)) != 0) {
 					net_exit_err(ssl, client_fd);
 				}
 				// }
@@ -107,7 +107,7 @@ int main() {
 					}
 				} else {
 					struct fws_http_res res;
-					http_build_res(&res, file.path);
+					http_build_res(&res, file.path, sizeof(file.path));
 					if (net_write_res(ssl, res, file.size) != 0) {
 						net_exit_err(ssl, client_fd);
 					}
