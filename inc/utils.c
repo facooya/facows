@@ -15,26 +15,28 @@ size_t fu_memclen(const char *s, char c, size_t n) {
 	return p - s;
 }
 
-char *fu_memmem(const char *s1, size_t n1, const char *s2, size_t n2) {
+char *fu_memstr(const char *s1, const char *s2, size_t n) {
+	size_t s2n = fu_memclen(s2, '\0', n);
+
 	const char *p1 = s1;
 	const char *p2;
 
 	while (1) {
-		p2 = memchr(p1, s2[0], n1);
+		p2 = memchr(p1, s2[0], n);
 		if (p2 == NULL) {
 			break;
 		}
 
-		for (size_t i=0; i<n2; i++) {
+		for (size_t i=0; i<s2n; i++) {
 			if (p2[i] != s2[i]) {
 				break;
 			}
-			if (i+1 == n2) {
+			if (i+1 == s2n) {
 				return (char *) p2;
 			}
 		}
 
-		n1 -= p2 - p1 + 1;
+		n -= p2 - p1 + 1;
 		p1 += p2 - p1 + 1;
 	}
 

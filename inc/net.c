@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "types.h"
+#include "utils.h"
 #include "net.h"
 
 #define SHARE_DIR "/usr/share/facows/"
@@ -71,20 +72,16 @@ int net_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 			if (err_code == SSL_ERROR_WANT_READ) {
 				continue;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-				return 400; // Bad Request
+				return 400;
 			}
-			return 500; // Internal Server Error
+			return 500;
 		}
 
 		total_read_size += read_ret;
-		dst_buf[total_read_size] = '\0';
-
-		if (strstr(dst_buf, "\r\n\r\n")) {
-			break;
-		}
-
 		if (total_read_size >= 4095) {
-			return 431; // Request Header Fields Too Large
+			return 431;
+		} else if (fu_memstr(dst_buf, "\r\n\r\n", total_read_size) != NULL) {
+			break;
 		}
 	}
 	return 0;
@@ -106,7 +103,7 @@ int net_write(SSL *ssl, const char *path) {
 int net_write_res(SSL *ssl, struct fws_http_res res, off_t size) {
 	char res_buf[8192];
 	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", res.code, res.content, size, res.date);
-	SSL_write(ssl, res_buf, strlen(res_buf));
+	SSL_write(ssl, res_buf, fu_memclen(res_buf, '\0', sizeof(res_buf)));
 	return 0;
 }
 
