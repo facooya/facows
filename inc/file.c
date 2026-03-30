@@ -17,14 +17,23 @@
 static void _init_file(struct fws_file *file);
 static int _build_tail(struct fws_file *file);
 
-int file_parse(struct fws_file *file, char *uri, const char *web_root) {
+int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_root, size_t web_root_n) {
 	_init_file(file);
 
 	char *p1 = uri;
 	char *p2 = uri;
 	size_t n;
 
-	for (size_t i=0; i<strlen(uri); i++) {
+	size_t uri_len = fu_memclen(uri, '\0', uri_n);
+	if (uri_len == uri_n) {
+		return -1;
+	}
+	size_t web_root_len = fu_memclen(web_root, '\0', web_root_n);
+	if (web_root_len == web_root_n) {
+		return -1;
+	}
+
+	for (size_t i=0; i<uri_len; i++) {
 		if (uri[i] == '?' || uri[i] == '#') {
 			break;
 		}
@@ -36,11 +45,11 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 
 	// { path
 	char tmp_path[4096];
-	tmp_path[0] = '\0';
-	strcat(tmp_path, web_root);
+	memcpy(tmp_path, web_root, web_root_len);
+	tmp_path[web_root_len] = '\0';
 
 	p1 = file->uri_path;
-	p2 = tmp_path + strlen(web_root);
+	p2 = tmp_path + web_root_len;
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
@@ -86,8 +95,8 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 	// }
 
 	// TODO: check root dir slash
-	if (strncmp(file->path, web_root, strlen(web_root)-1) != 0) {
-		return 1;
+	if (memcmp(file->path, web_root, web_root_len-1) != 0) {
+		return -1;
 	}
 
 	int code = _build_tail(file);
@@ -101,23 +110,30 @@ static void _init_file(struct fws_file *file) {
 
 static int _build_tail(struct fws_file *file) {
 	struct stat file_stat;
+	char *p = memchr(file->path, '\0', sizeof(file->path));
+	if (p == NULL) {
+		return -1;
+	}
+
 	if (stat(file->path, &file_stat) != 0) {
 		const char html_str[] = ".html";
-		strcat(file->path, html_str);
+		memcpy(p, html_str, sizeof(html_str));
 		if (stat(file->path, &file_stat) != 0) {
 			return 404;
 		}
-	}
-	file->size = file_stat.st_size;
+		file->size = file_stat.st_size;
 
-	if (S_ISDIR(file_stat.st_mode) == 1) {
+	} else if (S_ISDIR(file_stat.st_mode) == 1) {
 		const char index_str[] = "/index.html";
-		strcat(file->path, index_str);
+		memcpy(p, index_str, sizeof(index_str));
 		if (stat(file->path, &file_stat) == 0) {
 			file->size = file_stat.st_size;
 		} else {
 			return 404;
 		}
+
+	} else {
+		file->size = file_stat.st_size;
 	}
 
 	return 0;

@@ -98,7 +98,7 @@ int main() {
 
 				// { file_parse()
 				struct fws_file file;
-				int status_code = file_parse(&file, http.uri, config.web_root);
+				int status_code = file_parse(&file, http.uri, sizeof(http.uri), config.web_root, sizeof(config.web_root));
 				// }
 
 				if (status_code != 0) {
