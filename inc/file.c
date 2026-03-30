@@ -4,7 +4,6 @@
  */
 
 #include <stdio.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -12,6 +11,7 @@
 #include <ctype.h>
 
 #include "types.h"
+#include "utils.h"
 #include "file.h"
 
 static void _init_file(struct fws_file *file);
@@ -22,7 +22,7 @@ int file_parse(struct fws_file *file, char *uri, const char *web_root) {
 
 	char *p1 = uri;
 	char *p2 = uri;
-	ptrdiff_t n;
+	size_t n;
 
 	for (size_t i=0; i<strlen(uri); i++) {
 		if (uri[i] == '?' || uri[i] == '#') {

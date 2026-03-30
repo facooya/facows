@@ -10,13 +10,16 @@
 size_t fu_memclen(const char *s, char c, size_t n) {
 	char *p = memchr(s, c, n);
 	if (p == NULL) {
-		return 0;
+		return n;
 	}
 	return p - s;
 }
 
 char *fu_memstr(const char *s1, const char *s2, size_t n) {
 	size_t s2n = fu_memclen(s2, '\0', n);
+	if (s2n == n) {
+		return NULL;
+	}
 
 	const char *p1 = s1;
 	const char *p2;
