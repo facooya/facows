@@ -5,10 +5,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
 #include <string.h>
 
 #include "types.h"
+#include "utils.h"
 #include "conf.h"
 
 #define CONF_KEY_MAX 16
@@ -23,8 +23,10 @@ int conf_parse(const char *path, struct fws_conf *config) {
 		if (file_buf[0] == '#') {
 			continue;
 		}
+
+		// TODO: fu_memstr()
 		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
-			if (strstr(file_buf, key[i]) != NULL) {
+			if (fu_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
 				switch (i) {
 					case 0:
 						char *start = memchr(file_buf, ' ', CONF_KEY_MAX);
@@ -74,7 +76,7 @@ int conf_parse(const char *path, struct fws_conf *config) {
 static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size) {
 	char *start;
 	char *end;
-	ptrdiff_t n;
+	size_t n;
 
 	start = memchr(file_buf, ' ', CONF_KEY_MAX);
 	if (start == NULL) {
@@ -99,7 +101,7 @@ static int _write_str(const char *file_buf, char *dst_config, size_t config_str_
 	}
 
 	n = end - start;
-	strncpy(dst_config, start, n);
+	memcpy(dst_config, start, n);
 	dst_config[n] = '\0';
 	return 0;
 }
