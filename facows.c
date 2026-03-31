@@ -15,6 +15,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -27,20 +28,45 @@
 
 #define CONF_FILE "/etc/facows/facows.conf"
 
-struct fws_black_list {
-	uint8_t ip[16];
-	time_t time;
+pthread_mutex_t lock;
+
+struct fws_args {
+	int fd;
+	SSL_CTX *ssl_ctx;
 };
+
+void *fws_handler(void *arg) {
+	struct fws_args *args = (struct fws_args *) arg;
+	int client_fd = args->fd;
+	SSL_CTX *ssl_ctx = args->ssl_ctx;
+
+	SSL *ssl = SSL_new(ssl_ctx);
+	SSL_set_fd(ssl, client_fd);
+	if (SSL_accept(ssl) <= 0) {
+		net_exit_err(ssl, client_fd);
+	}
+
+	pthread_mutex_lock(&lock);
+
+	pthread_mutex_unlock(&lock);
+
+	close(client_fd);
+	free(arg);
+
+	return NULL;
+}
 
 int main() {
 	// { init
 	struct fws_conf config;
 	if (conf_parse(CONF_FILE, &config) != 0) {
-		// conf err
 		return 0;
 	}
 
+	pthread_mutex_init(&lock, NULL);
+
 	struct fws_black_list black_list[1024];
+
 	char request_buf[4096];
 	char log[1024];
 	signal(SIGCHLD, SIG_IGN);
@@ -51,14 +77,22 @@ int main() {
 	int server_fd;
 	net_init_server(&server_fd, config.port);
 
-	int client_fd;
 	struct sockaddr_in6 client_addr;
 	socklen_t client_addr_size = sizeof(client_addr);
 	// }
 
 	while (1) {
-		client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_size);
-		pid_t pid = fork();
+		int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+		struct fws_args *args = malloc(sizeof(struct fws_args));
+		args->fd = client_fd;
+		args->ssl_ctx = ssl_ctx;
+
+		pthread_t thread;
+		pthread_create(&thread, NULL, fws_handler, (void*)args);
+		pthread_detach(thread);
+
+		/*pid_t pid = fork();
 
 		if (pid == 0) {
 			// { init
@@ -78,8 +112,6 @@ int main() {
 			inet_ntop(AF_INET6, client_addr.sin6_addr.s6_addr, ip_buf, sizeof(ip_buf));
 			memcpy(black_list[0].ip, client_addr.sin6_addr.s6_addr, 16);
 			black_list[0].time = raw_time;
-
-			printf("IP: %s\n", ip_buf);
 			// }
 
 			while (1) {
@@ -124,8 +156,10 @@ int main() {
 			close(client_fd);
 		} else {
 			close(client_fd);
-		}
+		}*/
 	}
+
+	pthread_mutex_destroy(&lock);
 
 	close(server_fd);
 	return 0;
