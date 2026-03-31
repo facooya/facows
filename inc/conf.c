@@ -24,44 +24,43 @@ int conf_parse(const char *path, struct fws_conf *config) {
 			continue;
 		}
 
-		// TODO: fu_memstr()
 		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
 			if (fu_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
 				switch (i) {
 					case 0:
-						char *start = memchr(file_buf, ' ', CONF_KEY_MAX);
-						if (start == NULL) {
-							// conf err
-							return 1;
+						char *p = memchr(file_buf, ' ', CONF_KEY_MAX);
+						if (p == NULL) {
+							return -1;
 						}
-						while (*start == ' ') {
-							start++;
+						while (*p == ' ') {
+							p++;
 						}
-						config->port = (short) atoi(start);
+						config->port = (short) strtol(p, NULL, 10);
 						break;
+
 					case 1:
 						if (_write_str(file_buf, config->domain, sizeof(config->domain)) != 0) {
-							return 1;
+							return -1;
 						}
 						break;
 					case 2:
-						if (_write_str(file_buf, config->web_root, sizeof(config->web_root))) {
-							return 1;
+						if (_write_str(file_buf, config->web_root, sizeof(config->web_root)) != 0) {
+							return -1;
 						}
 						break;
 					case 3:
-						if (_write_str(file_buf, config->web_log, sizeof(config->web_log))) {
-							return 1;
+						if (_write_str(file_buf, config->web_log, sizeof(config->web_log)) != 0) {
+							return -1;
 						}
 						break;
 					case 4:
-						if (_write_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert))) {
-							return 1;
+						if (_write_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert)) != 0) {
+							return -1;
 						}
 						break;
 					case 5:
-						if (_write_str(file_buf, config->ssl_key, sizeof(config->ssl_key))) {
-							return 1;
+						if (_write_str(file_buf, config->ssl_key, sizeof(config->ssl_key)) != 0) {
+							return -1;
 						}
 						break;
 				}
@@ -74,34 +73,31 @@ int conf_parse(const char *path, struct fws_conf *config) {
 }
 
 static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size) {
-	char *start;
-	char *end;
+	char *p1;
+	char *p2;
 	size_t n;
 
-	start = memchr(file_buf, ' ', CONF_KEY_MAX);
-	if (start == NULL) {
-		// conf err
-		return 1;
+	p1 = memchr(file_buf, ' ', CONF_KEY_MAX);
+	if (p1 == NULL) {
+		return -1;
 	}
 
-	while (*start == ' ') {
-		start++;
+	while (*p1 == ' ') {
+		p1++;
 	}
 
-	if (*(start) != '"') {
-		// conf err
-		return 1;
+	if (*(p1) != '"') {
+		return -1;
 	}
 
-	start++;
-	end = memchr(start, '"', config_str_size);
-	if (end == NULL) {
-		// conf err
-		return 1;
+	p1++;
+	p2 = memchr(p1, '"', config_str_size);
+	if (p2 == NULL) {
+		return -1;
 	}
 
-	n = end - start;
-	memcpy(dst_config, start, n);
+	n = p2 - p1;
+	memcpy(dst_config, p1, n);
 	dst_config[n] = '\0';
 	return 0;
 }
