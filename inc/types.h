@@ -39,9 +39,4 @@ struct fws_file {
 	off_t size;
 };
 
-struct fws_black_list {
-	char ip[16];
-	time_t time;
-};
-
 #endif

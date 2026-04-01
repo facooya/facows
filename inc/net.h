@@ -12,6 +12,6 @@ int net_read(SSL *ssl, char *dst_buf, size_t buf_size);
 int net_write(SSL *ssl, const char *path);
 int net_write_res(SSL *ssl, struct fws_http_res res, off_t size);
 int net_write_err(SSL *ssl, int code);
-void net_exit_err(SSL *ssl, int client_fd);
+void net_exit_err(SSL *ssl, int client_fd, void *arg);
 
 #endif

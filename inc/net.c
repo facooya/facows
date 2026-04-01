@@ -185,8 +185,8 @@ int net_write_err(SSL *ssl, int code) {
 	return 0;
 }
 
-void net_exit_err(SSL *ssl, int client_fd) {
+void net_exit_err(SSL *ssl, int client_fd, void *arg) {
 	SSL_free(ssl);
 	close(client_fd);
-	exit(1);
+	free(arg);
 }
