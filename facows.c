@@ -4,18 +4,10 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <arpa/inet.h>
-#include <signal.h>
-#include <time.h>
-#include <ctype.h>
-#include <fcntl.h>
 #include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -42,6 +34,7 @@ void *fws_handler(void *arg) {
 
 	int client_fd = args->fd;
 	SSL_CTX *ssl_ctx = args->ssl_ctx;
+
 	char request_buf[8192];
 
 	SSL *ssl = SSL_new(ssl_ctx);
@@ -106,10 +99,6 @@ int main() {
 	if (conf_parse(CONF_FILE, &config) != 0) {
 		return 0;
 	}
-
-	char request_buf[4096];
-	char log[1024];
-	signal(SIGCHLD, SIG_IGN);
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);
