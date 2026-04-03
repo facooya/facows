@@ -8,11 +8,15 @@ Testing ...
 
 ### Dependancy Install
 ```bash
-sudo apt install git make libssl-dev
+sudo apt update
+sudo apt install git make libssl-dev nftables
+sudo systemctl enable nftables
+sudo systemctl start nftables
 ```
 - `git` - For the `git clone`
 - `make` - Build for facows
 - `libssl-dev` - Open ssl library for C
+- `nftables` - Network filter for IP black
 
 ### Quick Start
 ```bash
@@ -31,6 +35,7 @@ sudo mkdir -p /etc/facows/
 sudo cp facows.conf.dist /etc/facows/facows.conf
 sudo mkdir -p /usr/share/facows/
 sudo cp error_page.html /usr/share/facows/
+sudo cp facows_nft.conf.dist /etc/facows/facows_nft.conf
 ```
 
 ---

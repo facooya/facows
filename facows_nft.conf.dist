@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+#
+# Copyright 2026 Facooya and Fanone Facooya
+
+add table inet facows;
+delete table inet facows;
+
+table inet facows {
+	set black {
+		type ipv4_addr;
+		flags timeout;
+	}
+
+	set black6 {
+		type ipv6_addr;
+		flags timeout;
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ip saddr @black drop;
+		ip6 saddr @black6 drop;
+
+		iif "lo" accept;
+		ct state established,related accept;
+
+		tcp dport 443 accept;
+	}
+}

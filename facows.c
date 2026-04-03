@@ -4,10 +4,13 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -19,6 +22,7 @@
 #include "file.h"
 
 #define CONF_FILE "/etc/facows/facows.conf"
+#define NFT_PATH "/etc/facows/facows_nft.conf"
 
 struct fws_args {
 	int fd;
@@ -26,6 +30,14 @@ struct fws_args {
 	struct fws_conf fws_conf;
 	struct sockaddr_in6 client_addr;
 };
+
+struct fws_black {
+	uint8_t ip[16];
+	int count;
+	time_t time;
+};
+
+struct fws_black black_list[1024];
 
 void *fws_handler(void *arg) {
 	struct fws_args *args = (struct fws_args *) arg;
@@ -44,19 +56,44 @@ void *fws_handler(void *arg) {
 		return NULL;
 	}
 
+	// { ip
 	char ip_buf[INET6_ADDRSTRLEN];
+	char *ip_p = ip_buf;
 	inet_ntop(AF_INET6, client_addr.sin6_addr.s6_addr, ip_buf, sizeof(ip_buf));
 	printf("%s\n", ip_buf);
 
+	if (memcmp(ip_buf, "::ffff:", sizeof("::ffff:")-1) == 0) {
+		ip_p += sizeof("::ffff:")-1;
+	}
+
+	char cmd_black[256];
+	snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows black {%s timeout 1m}", ip_p);
+
+	memcpy(black_list[0].ip, client_addr.sin6_addr.s6_addr, 16);
+
+	time_t ctime = time(NULL);
+
+	if (black_list[0].time == ctime) {
+		black_list[0].count++;
+
+		if (black_list[0].count > 10) {
+			system(cmd_black);
+		}
+
+	} else {
+		black_list[0].count = 1;
+		black_list[0].time = ctime;
+	}
+	// }
+
+
 	while (1) {
-		// { net_read()
+		// { net
 		if (net_read(ssl, request_buf, sizeof(request_buf)) != 0) {
 			net_exit_err(ssl, client_fd, arg);
 			return NULL;
 		}
-		// }
 
-		// { http_parse()
 		struct fws_http http;
 		if (http_parse(request_buf, &http, config.domain, sizeof(config.domain)) != 0) {
 			net_exit_err(ssl, client_fd, arg);
@@ -64,10 +101,9 @@ void *fws_handler(void *arg) {
 		}
 		// }
 
-		// { file_parse()
+		// { file
 		struct fws_file file;
 		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config.web_root, sizeof(config.web_root));
-		// }
 
 		if (status_code != 0) {
 			if (net_write_err(ssl, status_code) != 0) {
@@ -83,6 +119,7 @@ void *fws_handler(void *arg) {
 			}
 			net_write(ssl, file.path);
 		}
+		// }
 	}
 
 	SSL_shutdown(ssl);
@@ -99,6 +136,23 @@ int main() {
 	if (conf_parse(CONF_FILE, &config) != 0) {
 		return 0;
 	}
+
+	struct stat nft_st;
+	stat(NFT_PATH, &nft_st);
+	off_t nft_size = nft_st.st_size;
+	// TODO: malloc
+
+	int nft_fd = open(NFT_PATH, O_RDONLY);
+	char nft_buf[2048];
+
+	read(nft_fd, nft_buf, sizeof(nft_buf));
+	nft_buf[nft_size] = '\0';
+	close(nft_fd);
+
+	char nft_cmd[2048];
+	snprintf(nft_cmd, sizeof(nft_cmd), "nft -f - << EOF\n%s\nEOF\n", nft_buf);
+	system(nft_cmd);
+	// TODO: end nft delete table facows, port number
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);
