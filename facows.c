@@ -24,6 +24,7 @@
 
 #define CONF_FILE "/etc/facows/facows.conf"
 #define NFT_PATH "/etc/facows/facows_nft.conf"
+#define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
 
 struct fws_args {
 	int fd;
@@ -151,20 +152,27 @@ int main() {
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
-	// TODO: malloc
+	char *nft_raw = malloc(nft_size+1);
+	char *nft_buf = malloc(nft_size+6);
+	char *nft_cmd = malloc(nft_size+6+sizeof(NFT_CMD));
 
 	int nft_fd = open(NFT_PATH, O_RDONLY);
-	char nft_raw[2048];
-	char nft_buf[2048];
-
-	read(nft_fd, nft_raw, sizeof(nft_raw));
+	read(nft_fd, nft_raw, nft_size+1);
 	nft_raw[nft_size] = '\0';
 	close(nft_fd);
 
-	char nft_cmd[2048];
-	snprintf(nft_buf, sizeof(nft_buf), nft_raw, config.port);
-	snprintf(nft_cmd, sizeof(nft_cmd), "nft -f - << EOF\n%s\nEOF\n", nft_buf);
+	snprintf(nft_buf, nft_size+6, nft_raw, config.port);
+	snprintf(nft_cmd, nft_size+6+sizeof(NFT_CMD), NFT_CMD, nft_buf);
 	system(nft_cmd);
+
+	printf("%s, %d\n", nft_raw, nft_size);
+
+	free(nft_raw);
+	free(nft_buf);
+	free(nft_cmd);
+	nft_raw = NULL;
+	nft_buf = NULL;
+	nft_cmd = NULL;
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);
