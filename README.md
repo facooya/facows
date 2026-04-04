@@ -10,13 +10,17 @@ Testing ...
 ```bash
 sudo apt update
 sudo apt install git make libssl-dev nftables
-sudo systemctl enable nftables
-sudo systemctl start nftables
 ```
 - `git` - For the `git clone`
 - `make` - Build for facows
 - `libssl-dev` - Open ssl library for C
 - `nftables` - Network filter for IP black
+
+Register nftables to systemd:
+```bash
+sudo systemctl enable nftables
+sudo systemctl start nftables
+```
 
 ### Quick Start
 ```bash
@@ -25,6 +29,10 @@ cd facows
 make
 sudo ./build/facows
 ```
+
+> [!WARNING]
+> Deny all port except Facows port defined by `facows.conf.dist`.
+> Add more port number in `facows_nft.conf.dist` at `facows_chain` below `tcp dport %d accept;`, or comment all line at `facows_chain` section, this way can not IP black to any attack.
 
 Make install not support yet.  
 Modifiy `facows.conf.dist` domain and SSL path.  

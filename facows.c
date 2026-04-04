@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -62,12 +63,13 @@ void *fws_handler(void *arg) {
 	inet_ntop(AF_INET6, client_addr.sin6_addr.s6_addr, ip_buf, sizeof(ip_buf));
 	printf("%s\n", ip_buf);
 
+	char cmd_black[256];
 	if (memcmp(ip_buf, "::ffff:", sizeof("::ffff:")-1) == 0) {
 		ip_p += sizeof("::ffff:")-1;
+		snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows facows_black {%s timeout 1m}", ip_p);
+	} else {
+		snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows facows_black6 {%s timeout 1m}", ip_p);
 	}
-
-	char cmd_black[256];
-	snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows black {%s timeout 1m}", ip_p);
 
 	memcpy(black_list[0].ip, client_addr.sin6_addr.s6_addr, 16);
 
@@ -130,6 +132,12 @@ void *fws_handler(void *arg) {
 	return NULL;
 }
 
+void facows_end() {
+	system("nft delete table inet facows");
+	printf("\n");
+	exit(0);
+}
+
 int main() {
 	// { init
 	struct fws_conf config;
@@ -137,22 +145,26 @@ int main() {
 		return 0;
 	}
 
+	signal(SIGINT, facows_end);
+	signal(SIGTERM, facows_end);
+
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
 	// TODO: malloc
 
 	int nft_fd = open(NFT_PATH, O_RDONLY);
+	char nft_raw[2048];
 	char nft_buf[2048];
 
-	read(nft_fd, nft_buf, sizeof(nft_buf));
-	nft_buf[nft_size] = '\0';
+	read(nft_fd, nft_raw, sizeof(nft_raw));
+	nft_raw[nft_size] = '\0';
 	close(nft_fd);
 
 	char nft_cmd[2048];
+	snprintf(nft_buf, sizeof(nft_buf), nft_raw, config.port);
 	snprintf(nft_cmd, sizeof(nft_cmd), "nft -f - << EOF\n%s\nEOF\n", nft_buf);
 	system(nft_cmd);
-	// TODO: end nft delete table facows, port number
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);
@@ -179,5 +191,6 @@ int main() {
 	}
 
 	close(server_fd);
+	facows_end();
 	return 0;
 }
