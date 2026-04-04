@@ -9,9 +9,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <arpa/inet.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
-#include <fcntl.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -21,10 +19,9 @@
 #include "net.h"
 #include "http.h"
 #include "file.h"
+#include "nft.h"
 
-#define CONF_FILE "/etc/facows/facows.conf"
-#define NFT_PATH "/etc/facows/facows_nft.conf"
-#define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
+#define CONF_PATH "/etc/facows/facows.conf"
 
 struct fws_args {
 	int fd;
@@ -89,7 +86,6 @@ void *fws_handler(void *arg) {
 	}
 	// }
 
-
 	while (1) {
 		// { net
 		if (net_read(ssl, request_buf, sizeof(request_buf)) != 0) {
@@ -142,37 +138,14 @@ void facows_end() {
 int main() {
 	// { init
 	struct fws_conf config;
-	if (conf_parse(CONF_FILE, &config) != 0) {
+	if (conf_parse(CONF_PATH, &config) != 0) {
 		return 0;
 	}
 
 	signal(SIGINT, facows_end);
 	signal(SIGTERM, facows_end);
 
-	struct stat nft_st;
-	stat(NFT_PATH, &nft_st);
-	off_t nft_size = nft_st.st_size;
-	char *nft_raw = malloc(nft_size+1);
-	char *nft_buf = malloc(nft_size+6);
-	char *nft_cmd = malloc(nft_size+6+sizeof(NFT_CMD));
-
-	int nft_fd = open(NFT_PATH, O_RDONLY);
-	read(nft_fd, nft_raw, nft_size+1);
-	nft_raw[nft_size] = '\0';
-	close(nft_fd);
-
-	snprintf(nft_buf, nft_size+6, nft_raw, config.port);
-	snprintf(nft_cmd, nft_size+6+sizeof(NFT_CMD), NFT_CMD, nft_buf);
-	system(nft_cmd);
-
-	printf("%s, %d\n", nft_raw, nft_size);
-
-	free(nft_raw);
-	free(nft_buf);
-	free(nft_cmd);
-	nft_raw = NULL;
-	nft_buf = NULL;
-	nft_cmd = NULL;
+	nft_init(config.port);
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);

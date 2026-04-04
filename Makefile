@@ -8,8 +8,9 @@ all: | ./build/
 	gcc -Iinc -c ./inc/net.c -o ./build/net.o
 	gcc -Iinc -c ./inc/http.c -o ./build/http.o
 	gcc -Iinc -c ./inc/file.c -o ./build/file.o
+	gcc -Iinc -c ./inc/nft.c -o ./build/nft.o
 	gcc -Iinc -c ./facows.c -o ./build/facows.o
-	gcc -Iinc -pthread -o ./build/facows ./build/facows.o ./build/conf.o ./build/net.o ./build/http.o ./build/file.o ./build/utils.o -lssl -lcrypto
+	gcc -Iinc -pthread -o ./build/facows ./build/facows.o ./build/conf.o ./build/net.o ./build/http.o ./build/file.o ./build/utils.o ./build/nft.o -lssl -lcrypto
 
 ./build/:
 	mkdir -p $@
