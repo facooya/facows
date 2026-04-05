@@ -3,6 +3,10 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include <stdint.h>
+#include <sys/socket.h>
+#include <openssl/ssl.h>
+
 #ifndef TYPES_H
 #define TYPES_H
 
@@ -37,6 +41,19 @@ struct fws_file {
 	char uri_path[4096];
 	char path[4096];
 	off_t size;
+};
+
+struct fws_nft {
+	uint8_t ip[16];
+	int count;
+	time_t time;
+};
+
+struct fws_args {
+	int fd;
+	SSL_CTX *ssl_ctx;
+	const struct fws_conf *fws_conf;
+	const struct sockaddr_in6 *client_addr;
 };
 
 #endif

@@ -23,25 +23,12 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
-struct fws_args {
-	int fd;
-	SSL_CTX *ssl_ctx;
-	struct fws_conf fws_conf;
-	struct sockaddr_in6 client_addr;
-};
-
-struct fws_black {
-	uint8_t ip[16];
-	int count;
-	time_t time;
-};
-
-struct fws_black black_list[1024];
+struct fws_nft nft_list[1024];
 
 void *fws_handler(void *arg) {
-	struct fws_args *args = (struct fws_args *) arg;
-	struct fws_conf config = args->fws_conf;
-	struct sockaddr_in6 client_addr = args->client_addr;
+	const struct fws_args *args = (struct fws_args *) arg;
+	const struct fws_conf *config = args->fws_conf;
+	const struct sockaddr_in6 *client_addr = args->client_addr;
 
 	int client_fd = args->fd;
 	SSL_CTX *ssl_ctx = args->ssl_ctx;
@@ -55,36 +42,8 @@ void *fws_handler(void *arg) {
 		return NULL;
 	}
 
-	// { ip
-	char ip_buf[INET6_ADDRSTRLEN];
-	char *ip_p = ip_buf;
-	inet_ntop(AF_INET6, client_addr.sin6_addr.s6_addr, ip_buf, sizeof(ip_buf));
-	printf("%s\n", ip_buf);
-
-	char cmd_black[256];
-	if (memcmp(ip_buf, "::ffff:", sizeof("::ffff:")-1) == 0) {
-		ip_p += sizeof("::ffff:")-1;
-		snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows facows_black {%s timeout 1m}", ip_p);
-	} else {
-		snprintf(cmd_black, sizeof(cmd_black), "nft add element inet facows facows_black6 {%s timeout 1m}", ip_p);
-	}
-
-	memcpy(black_list[0].ip, client_addr.sin6_addr.s6_addr, 16);
-
-	time_t ctime = time(NULL);
-
-	if (black_list[0].time == ctime) {
-		black_list[0].count++;
-
-		if (black_list[0].count > 10) {
-			system(cmd_black);
-		}
-
-	} else {
-		black_list[0].count = 1;
-		black_list[0].time = ctime;
-	}
-	// }
+	// TODO: html count
+	nft_ban_dos(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
 
 	while (1) {
 		// { net
@@ -94,7 +53,7 @@ void *fws_handler(void *arg) {
 		}
 
 		struct fws_http http;
-		if (http_parse(request_buf, &http, config.domain, sizeof(config.domain)) != 0) {
+		if (http_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
 			net_exit_err(ssl, client_fd, arg);
 			return NULL;
 		}
@@ -102,7 +61,7 @@ void *fws_handler(void *arg) {
 
 		// { file
 		struct fws_file file;
-		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config.web_root, sizeof(config.web_root));
+		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config->web_root, sizeof(config->web_root));
 
 		if (status_code != 0) {
 			if (net_write_err(ssl, status_code) != 0) {
@@ -163,8 +122,8 @@ int main() {
 		struct fws_args *args = malloc(sizeof(struct fws_args));
 		args->fd = client_fd;
 		args->ssl_ctx = ssl_ctx;
-		args->fws_conf = config;
-		args->client_addr = client_addr;
+		args->fws_conf = &config;
+		args->client_addr = &client_addr;
 
 		pthread_t thread;
 		pthread_create(&thread, NULL, fws_handler, (void*)args);

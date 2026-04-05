@@ -6,20 +6,20 @@ add table inet facows;
 delete table inet facows;
 
 table inet facows {
-	set facows_black {
+	set facows_ban4 {
 		type ipv4_addr;
 		flags timeout;
 	}
 
-	set facows_black6 {
+	set facows_ban6 {
 		type ipv6_addr;
 		flags timeout;
 	}
 
 	chain facows_input {
 		type filter hook input priority filter; policy drop;
-		ip saddr @facows_black drop;
-		ip6 saddr @facows_black6 drop;
+		ip saddr @facows_ban4 drop;
+		ip6 saddr @facows_ban6 drop;
 
 		iif "lo" accept;
 		ct state established,related accept;
