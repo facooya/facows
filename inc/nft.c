@@ -15,6 +15,7 @@
 #include "types.h"
 #include "nft.h"
 
+#define DOS_LIMIT 10
 #define NFT_PATH "/etc/facows/facows_nft.conf"
 #define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
 #define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout 1m}"
@@ -67,7 +68,7 @@ void nft_ban_dos(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_lis
 	if (nft_list[0].time == ctime) {
 		nft_list[0].count++;
 
-		if (nft_list[0].count > 10) {
+		if (nft_list[0].count > DOS_LIMIT) {
 			system(cmd_ban);
 		}
 

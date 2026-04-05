@@ -42,9 +42,6 @@ void *fws_handler(void *arg) {
 		return NULL;
 	}
 
-	// TODO: html count
-	nft_ban_dos(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
-
 	while (1) {
 		// { net
 		if (net_read(ssl, request_buf, sizeof(request_buf)) != 0) {
@@ -62,6 +59,12 @@ void *fws_handler(void *arg) {
 		// { file
 		struct fws_file file;
 		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config->web_root, sizeof(config->web_root));
+
+		size_t path_size = fu_memclen(file.path, '\0', sizeof(file.path));
+		char *path_p = file.path + path_size - (sizeof(".html") - 1);
+		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+			nft_ban_dos(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+		}
 
 		if (status_code != 0) {
 			if (net_write_err(ssl, status_code) != 0) {
