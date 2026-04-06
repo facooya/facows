@@ -18,8 +18,8 @@
 #define DOS_LIMIT 10
 #define NFT_PATH "/etc/facows/facows_nft.conf"
 #define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
-#define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout 1m}"
-#define NFT_BAN6 "nft add element inet facows facows_ban6 {%s timeout 1m}"
+#define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout 1m}"
+#define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout 1m}"
 
 void nft_init(short port) {
 	struct stat nft_st;

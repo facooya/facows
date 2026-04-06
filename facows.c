@@ -92,6 +92,7 @@ void *fws_handler(void *arg) {
 }
 
 void facows_end() {
+	system("nft delete table netdev facows");
 	system("nft delete table inet facows");
 	printf("\n");
 	exit(0);
