@@ -108,7 +108,7 @@ int net_write_res(SSL *ssl, struct fws_http_res res, off_t size) {
 }
 
 int net_write_err(SSL *ssl, int code) {
-	const char path_err_page[] = "error_page.html";
+	const char path_err_page[] = "/share/error_page.html";
 	char err_html[1024] = {0};
 	char err_html_temp[1024] = {0};
 	char res[1024] = {0};

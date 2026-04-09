@@ -43,13 +43,14 @@ Modifiy `facows.conf.dist` domain and SSL path.
 - Log not support yet.
 Locate manually files:
 ```bash
+sudo mkdir -p /var/www/facows/
 sudo mkdir -p /etc/facows/
-sudo cp facows.conf.dist /etc/facows/facows.conf
+sudo cp ./etc/facows.conf.dist /etc/facows/facows.conf
 sudo mkdir -p /usr/share/facows/
-sudo cp error_page.html /usr/share/facows/
+sudo cp ./share/error_page.html /usr/share/facows/
 
-sudo cp facows_nft.conf.dist /etc/facows/facows_nft.conf
-sudo cp facows_tc.conf.dist /etc/facows/facows_tc.conf
+sudo cp ./etc/facows_nft.conf.dist /etc/facows/facows_nft.conf
+sudo cp ./etc/facows_tc.conf.dist /etc/facows/facows_tc.conf
 ```
 
 **Execute**
