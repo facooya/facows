@@ -23,13 +23,9 @@
 #include "http.h"
 #include "file.h"
 #include "nft.h"
+#include "tc.h"
 
 #define CONF_PATH "/etc/facows/facows.conf"
-
-#define TC_PATH "/etc/facows/facows_tc.conf"
-#define NET_NAME "eno1"
-#define NET_VNAME "ifb0"
-#define BANDWIDTH "90mbps"
 
 struct fws_nft nft_list[1024];
 
@@ -100,7 +96,7 @@ void *fws_handler(void *arg) {
 	return NULL;
 }
 
-void facows_end() {
+void fws_end() {
 	system("tc qdisc del dev ifb0 root");
 	system("tc qdisc del dev eno1 ingress");
 	system("ip link set dev ifb0 down");
@@ -112,23 +108,6 @@ void facows_end() {
 	exit(0);
 }
 
-void tc_init() {
-	struct stat tc_st;
-	stat(TC_PATH, &tc_st);
-	off_t tc_size = tc_st.st_size;
-
-	char tc_raw[1024];
-	char tc_cmd[1024];
-
-	int tc_fd = open(TC_PATH, O_RDONLY);
-	read(tc_fd, tc_raw, sizeof(tc_raw)-1);
-	tc_raw[tc_size] = '\0';
-	close(tc_fd);
-
-	snprintf(tc_cmd, sizeof(tc_cmd), tc_raw, NET_NAME, NET_VNAME, BANDWIDTH);
-	system(tc_cmd);
-}
-
 int main() {
 	// { init
 	struct fws_conf config;
@@ -136,8 +115,8 @@ int main() {
 		return 0;
 	}
 
-	signal(SIGINT, facows_end);
-	signal(SIGTERM, facows_end);
+	signal(SIGINT, fws_end);
+	signal(SIGTERM, fws_end);
 
 	nft_init(config.port);
 	tc_init();
@@ -167,6 +146,6 @@ int main() {
 	}
 
 	close(server_fd);
-	facows_end();
+	fws_end();
 	return 0;
 }
