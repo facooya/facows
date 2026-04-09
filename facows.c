@@ -13,6 +13,9 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "types.h"
 #include "utils.h"
 #include "conf.h"
@@ -22,6 +25,11 @@
 #include "nft.h"
 
 #define CONF_PATH "/etc/facows/facows.conf"
+
+#define TC_PATH "/etc/facows/facows_tc.conf"
+#define NET_NAME "eno1"
+#define NET_VNAME "ifb0"
+#define BANDWIDTH "90mbps"
 
 struct fws_nft nft_list[1024];
 
@@ -71,6 +79,7 @@ void *fws_handler(void *arg) {
 				net_exit_err(ssl, client_fd, arg);
 				return NULL;
 			}
+
 		} else {
 			struct fws_http_res res;
 			http_build_res(&res, file.path, sizeof(file.path));
@@ -92,10 +101,32 @@ void *fws_handler(void *arg) {
 }
 
 void facows_end() {
+	system("tc qdisc del dev ifb0 root");
+	system("tc qdisc del dev eno1 ingress");
+	system("ip link set dev ifb0 down");
+	system("modprobe -r ifb");
+
 	system("nft delete table netdev facows");
 	system("nft delete table inet facows");
 	printf("\n");
 	exit(0);
+}
+
+void tc_init() {
+	struct stat tc_st;
+	stat(TC_PATH, &tc_st);
+	off_t tc_size = tc_st.st_size;
+
+	char tc_raw[1024];
+	char tc_cmd[1024];
+
+	int tc_fd = open(TC_PATH, O_RDONLY);
+	read(tc_fd, tc_raw, sizeof(tc_raw)-1);
+	tc_raw[tc_size] = '\0';
+	close(tc_fd);
+
+	snprintf(tc_cmd, sizeof(tc_cmd), tc_raw, NET_NAME, NET_VNAME, BANDWIDTH);
+	system(tc_cmd);
 }
 
 int main() {
@@ -109,6 +140,7 @@ int main() {
 	signal(SIGTERM, facows_end);
 
 	nft_init(config.port);
+	tc_init();
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);

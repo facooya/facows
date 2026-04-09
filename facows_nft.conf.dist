@@ -33,8 +33,8 @@ table netdev facows {
 		ip saddr @facows_ban4 drop;
 		ip6 saddr @facows_ban6 drop;
 
-		update @facows_flood4 {ip saddr limit rate over 500/second burst 1000 packets} update @facows_ban4 {ip saddr timeout 1m} drop;
-		update @facows_flood6 {ip6 saddr limit rate over 500/second burst 1000 packets} update @facows_ban6 {ip6 saddr timeout 1m} drop;
+		update @facows_flood4 {ip saddr limit rate over 1000/second burst 2000 packets} update @facows_ban4 {ip saddr timeout 1m} drop;
+		update @facows_flood6 {ip6 saddr limit rate over 1000/second burst 2000 packets} update @facows_ban6 {ip6 saddr timeout 1m} drop;
 	}
 }
 

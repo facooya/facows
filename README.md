@@ -23,16 +23,20 @@ sudo systemctl start nftables
 ```
 
 ### Quick Start
+**Build**
 ```bash
 git clone https://github.com/facooya/facows.git
 cd facows
 make
-sudo ./build/facows
 ```
 
+**Configuration**
 > [!WARNING]
 > Deny all port except Facows port defined by `facows.conf.dist`.
 > Add more port number in `facows_nft.conf.dist` at `facows_chain` below `tcp dport %d accept;`, or comment all line at `facows_chain` section, this way can not IP black to any attack.
+
+> [!CAUTION]
+> Overwirte forced `ifb` module and queue discipline on `tc` by `facows_tc.conf.dist`.
 
 Make install not support yet.  
 Modifiy `facows.conf.dist` domain and SSL path.  
@@ -43,7 +47,14 @@ sudo mkdir -p /etc/facows/
 sudo cp facows.conf.dist /etc/facows/facows.conf
 sudo mkdir -p /usr/share/facows/
 sudo cp error_page.html /usr/share/facows/
+
 sudo cp facows_nft.conf.dist /etc/facows/facows_nft.conf
+sudo cp facows_tc.conf.dist /etc/facows/facows_tc.conf
+```
+
+**Execute**
+```bash
+sudo ./build/facows
 ```
 
 ---
