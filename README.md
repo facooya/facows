@@ -33,7 +33,7 @@ make
 **Configuration**
 > [!WARNING]
 > Deny all port except Facows port defined by `facows.conf.dist`.
-> Add more port number in `facows_nft.conf.dist` at `facows_chain` below `tcp dport %d accept;`, or comment all line at `facows_chain` section, this way can not IP black to any attack.
+> Add more port number in `facows_nft.conf.dist` at `facows_chain` below `tcp dport {%d, %d} accept;`, like `tcp dport {[PORT], [PORT], ...} accept;` e.g., `tcp dport {1234, 5678} accept;`, or comment all line at `facows_chain` section, this way can not IP ban to any attack.
 
 > [!CAUTION]
 > Overwirte forced `ifb` module and queue discipline on `tc` by `facows_tc.conf.dist`.
@@ -45,12 +45,12 @@ Locate manually files:
 ```bash
 sudo mkdir -p /var/www/facows/
 sudo mkdir -p /etc/facows/
-sudo cp ./etc/facows.conf.dist /etc/facows/facows.conf
+sudo cp etc/facows.conf.dist /etc/facows/facows.conf
 sudo mkdir -p /usr/share/facows/
-sudo cp ./share/error_page.html /usr/share/facows/
+sudo cp share/error_page.html /usr/share/facows/
 
-sudo cp ./etc/facows_nft.conf.dist /etc/facows/facows_nft.conf
-sudo cp ./etc/facows_tc.conf.dist /etc/facows/facows_tc.conf
+sudo cp etc/facows_nft.conf.dist /etc/facows/facows_nft.conf
+sudo cp etc/facows_tc.conf.dist /etc/facows/facows_tc.conf
 ```
 
 **Execute**

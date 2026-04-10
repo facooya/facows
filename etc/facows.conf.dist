@@ -1,11 +1,16 @@
+# SPDX-License-Identifier: MIT
+#
+# Copyright 2026 Facooya and Fanone Facooya
+
 # Example configure file.
 # Please delete ".dist", like "facows.conf.dist" -> "facows.conf"
 # Default position "/etc/facows/facows.conf"
 
-# Default ssl port is 443.
-PORT 443
+# Default web port.
+HTTP_PORT 80
+HTTPS_PORT 443
 
-# Must not using sub domain like "www.example.com" only using main domain.
+# Must not using sub domain, like "www.example.com", only using main domain.
 DOMAIN "example.com"
 
 # Default web root path for "example.com".

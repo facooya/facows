@@ -16,9 +16,10 @@
 static int _write_str(const char *file_buf, char *dst_config, size_t config_str_size);
 
 int conf_parse(const char *path, struct fws_conf *config) {
-	const char *key[] = {"PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
+	const char *key[] = {"HTTP_PORT", "HTTPS_PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 	FILE *conf_file = fopen(path, "r");
 	char file_buf[4096];
+	char *p;
 	while (fgets(file_buf, sizeof(file_buf), conf_file)) {
 		if (file_buf[0] == '#') {
 			continue;
@@ -28,37 +29,48 @@ int conf_parse(const char *path, struct fws_conf *config) {
 			if (fu_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
 				switch (i) {
 					case 0:
-						char *p = memchr(file_buf, ' ', CONF_KEY_MAX);
+						p = memchr(file_buf, ' ', CONF_KEY_MAX);
 						if (p == NULL) {
 							return -1;
 						}
 						while (*p == ' ') {
 							p++;
 						}
-						config->port = (short) strtol(p, NULL, 10);
+						config->http_port = (short) strtol(p, NULL, 10);
 						break;
 
 					case 1:
+						p = memchr(file_buf, ' ', CONF_KEY_MAX);
+						if (p == NULL) {
+							return -1;
+						}
+						while (*p == ' ') {
+							p++;
+						}
+						config->https_port = (short) strtol(p, NULL, 10);
+						break;
+
+					case 2:
 						if (_write_str(file_buf, config->domain, sizeof(config->domain)) != 0) {
 							return -1;
 						}
 						break;
-					case 2:
+					case 3:
 						if (_write_str(file_buf, config->web_root, sizeof(config->web_root)) != 0) {
 							return -1;
 						}
 						break;
-					case 3:
+					case 4:
 						if (_write_str(file_buf, config->web_log, sizeof(config->web_log)) != 0) {
 							return -1;
 						}
 						break;
-					case 4:
+					case 5:
 						if (_write_str(file_buf, config->ssl_cert, sizeof(config->ssl_cert)) != 0) {
 							return -1;
 						}
 						break;
-					case 5:
+					case 6:
 						if (_write_str(file_buf, config->ssl_key, sizeof(config->ssl_key)) != 0) {
 							return -1;
 						}

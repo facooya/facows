@@ -45,7 +45,8 @@ table inet facows {
 		iif "lo" accept;
 		ct state established,related accept;
 
-		tcp dport %d accept;
-		# tcp dport [PORT] accept;
+		tcp dport {%d, %d} accept;
+		# tcp dport {[PORT], [PORT], ...} accept;
+		# E.g., tcp dport {1234, 5678} accept;
 	}
 }

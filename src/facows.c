@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -118,34 +120,52 @@ int main() {
 	signal(SIGINT, fws_end);
 	signal(SIGTERM, fws_end);
 
-	nft_init(config.port);
+	nft_init(config.http_port, config.https_port);
 	tc_init();
 
 	SSL_CTX *ssl_ctx;
 	net_init_ssl(&ssl_ctx, &config);
 
-	int server_fd;
-	net_init_server(&server_fd, config.port);
+	int server_http_fd;
+	net_init_server(&server_http_fd, config.http_port);
+
+	int server_https_fd;
+	net_init_server(&server_https_fd, config.https_port);
+
+	struct pollfd fds[2];
+	fds[0].fd = server_http_fd;
+	fds[0].events = POLLIN;
+	fds[1].fd = server_https_fd;
+	fds[1].events = POLLIN;
 
 	struct sockaddr_in6 client_addr;
 	socklen_t client_addr_size = sizeof(client_addr);
 	// }
 
 	while (1) {
-		int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+		poll(fds, 2, -1);
 
-		struct fws_args *args = malloc(sizeof(struct fws_args));
-		args->fd = client_fd;
-		args->ssl_ctx = ssl_ctx;
-		args->fws_conf = &config;
-		args->client_addr = &client_addr;
+		if (fds[0].revents & POLLIN) {
+			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+			close(client_http_fd);
 
-		pthread_t thread;
-		pthread_create(&thread, NULL, fws_handler, (void*)args);
-		pthread_detach(thread);
+		} else if (fds[1].revents & POLLIN) {
+			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			struct fws_args *args = malloc(sizeof(struct fws_args));
+			args->fd = client_fd;
+			args->ssl_ctx = ssl_ctx;
+			args->fws_conf = &config;
+			args->client_addr = &client_addr;
+	
+			pthread_t thread;
+			pthread_create(&thread, NULL, fws_handler, (void*)args);
+			pthread_detach(thread);
+		}
 	}
 
-	close(server_fd);
+	close(server_http_fd);
+	close(server_https_fd);
 	fws_end();
 	return 0;
 }

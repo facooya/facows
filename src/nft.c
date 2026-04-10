@@ -21,21 +21,21 @@
 #define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout 1m}"
 #define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout 1m}"
 
-void nft_init(short port) {
+void nft_init(short http_port, short https_port) {
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
 	char *nft_raw = malloc(nft_size+1);
-	char *nft_buf = malloc(nft_size+6);
-	char *nft_cmd = malloc(nft_size+6+sizeof(NFT_CMD));
+	char *nft_buf = malloc(nft_size+11);
+	char *nft_cmd = malloc(nft_size+11+sizeof(NFT_CMD));
 
 	int nft_fd = open(NFT_PATH, O_RDONLY);
 	read(nft_fd, nft_raw, nft_size+1);
 	nft_raw[nft_size] = '\0';
 	close(nft_fd);
 
-	snprintf(nft_buf, nft_size+6, nft_raw, port);
-	snprintf(nft_cmd, nft_size+6+sizeof(NFT_CMD), NFT_CMD, nft_buf);
+	snprintf(nft_buf, nft_size+11, nft_raw, http_port, https_port);
+	snprintf(nft_cmd, nft_size+11+sizeof(NFT_CMD), NFT_CMD, nft_buf);
 	system(nft_cmd);
 
 	free(nft_raw);
