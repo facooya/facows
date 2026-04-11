@@ -36,7 +36,7 @@ int conf_parse(const char *path, struct fws_conf *config) {
 						while (*p == ' ') {
 							p++;
 						}
-						config->http_port = (short) strtol(p, NULL, 10);
+						config->http_port = (uint16_t) strtol(p, NULL, 10);
 						break;
 
 					case 1:
@@ -47,7 +47,7 @@ int conf_parse(const char *path, struct fws_conf *config) {
 						while (*p == ' ') {
 							p++;
 						}
-						config->https_port = (short) strtol(p, NULL, 10);
+						config->https_port = (uint16_t) strtol(p, NULL, 10);
 						break;
 
 					case 2:

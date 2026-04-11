@@ -11,8 +11,8 @@
 #define TYPES_H
 
 struct fws_conf {
-	short http_port;
-	short https_port;
+	uint16_t http_port;
+	uint16_t https_port;
 	char domain[64];
 	char web_root[64];
 	char web_log[64];

@@ -10,13 +10,13 @@
 #include <pthread.h>
 #include <signal.h>
 #include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include "types.h"
 #include "utils.h"
@@ -99,6 +99,7 @@ void *fws_handler(void *arg) {
 }
 
 void fws_end() {
+	// TODO: close server fd
 	system("tc qdisc del dev ifb0 root");
 	system("tc qdisc del dev eno1 ingress");
 	system("ip link set dev ifb0 down");
@@ -147,6 +148,152 @@ int main() {
 
 		if (fds[0].revents & POLLIN) {
 			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			int flag = 0;
+			char recv_buf[8192] = {0};
+			char header_raw[] = "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+			char header_buf[1024] = {0};
+
+			char port_str[7];
+			port_str[0] = '\0';
+			if (config.https_port != 443) {
+				snprintf(port_str, sizeof(port_str), ":%hu", config.https_port);
+			}
+
+			// { recv
+			int recv_size;
+			int recv_total_size = 0;
+			while (1) {
+				recv_size = recv(client_http_fd, recv_buf, sizeof(recv_buf)-1, 0);
+				if (recv_size == 0) {
+					break;
+				} else if (recv_size == -1) {
+					flag = 1;
+					break;
+				}
+
+				recv_total_size += recv_size;
+				recv_buf[recv_total_size] = '\0';
+
+				if (recv_total_size >= 8191) {
+					flag = 1;
+					break;
+				} else if (fu_memstr(recv_buf, "\r\n\r\n", recv_total_size) != NULL) {
+					break;
+				}
+
+			}
+			if (flag == 1) {
+				close(client_http_fd);
+				continue;
+			}
+			// }
+
+			// {{ http
+			struct fws_http http;
+			http.host[0] = '\0';
+			http.uri[0] = '\0';
+
+			// { parse uri
+			const char *p1 = recv_buf;
+			const char *p2 = memchr(p1, ' ', sizeof(http.method));
+			size_t n;
+			if (p2 == NULL) {
+				close(client_http_fd);
+				continue;
+			}
+			n = p2 - p1;
+			if (n >= sizeof(http.method)) {
+				close(client_http_fd);
+				continue;
+			}
+			p1 += n + 1;
+			p2 = memchr(p1, ' ', sizeof(http.uri));
+			if (p2 == NULL) {
+				close(client_http_fd);
+				continue;
+			}
+			n = p2 - p1;
+			if (n >= sizeof(http.uri)) {
+				close(client_http_fd);
+				continue;
+			}
+			memcpy(http.uri, p1, n);
+			http.uri[n] = '\0';
+			// }
+
+			// { parse host
+			flag = 0;
+			p1 = recv_buf;
+			p2 = fu_memstr(p1, "\r\n", 1024);
+			if (p2 == NULL) {
+				close(client_http_fd);
+				continue;
+			}
+			p1 = p2 + 2;
+
+			while (1) {
+				if (memcmp(p1, "\r\n", sizeof("\r\n")-1) == 0) {
+					break;
+				}
+
+				if (memcmp(p1, "Host", fu_memclen("host", '\0', sizeof("host"))) == 0) {
+					if (http.host[0] != '\0') {
+						flag = 1;
+						break;
+					}
+
+					p2 = memchr(p1, ':', 64);
+					if (p2 == NULL) {
+						flag = 1;
+						break;
+					}
+					p1 = p2 + 1;
+					while (*p1 == ' ') {
+						p1++;
+					}
+
+					if (memcmp(p1, config.domain, fu_memclen(config.domain, '\0', sizeof(config.domain))) == 0) {
+						memcpy(http.host, "www", sizeof("www"));
+					} else {
+						p2 = p1;
+						for (size_t i=0; i<sizeof(http.host); i++) {
+							if (p2[i] == '.') {
+								p2 += i;
+								break;
+							}
+						}
+
+						n = p2 - p1;
+						memcpy(http.host, p1, n);
+						http.host[n] = '\0';
+					}
+					break;
+				}
+
+				p2 = fu_memstr(p1, "\r\n", 1024);
+				if (p2 == NULL) {
+					flag = 1;
+					break;
+				}
+				p1 = p2 + 2;
+
+			}
+			if (flag) {
+				close(client_http_fd);
+				continue;
+			}
+			// }
+			// }}
+
+			printf("%s, %s\n", http.host, http.uri);
+			n = fu_memclen(http.host, '\0', sizeof(http.host));
+			http.host[n] = '.';
+			http.host[n+1] = '\0';
+
+			snprintf(header_buf, sizeof(header_buf), header_raw, http.host, config.domain, port_str, http.uri);
+			send(client_http_fd, header_buf, strlen(header_buf), 0);
+
 			close(client_http_fd);
 
 		} else if (fds[1].revents & POLLIN) {

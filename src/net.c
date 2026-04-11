@@ -46,7 +46,7 @@ int net_init_ssl(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	return 0;
 }
 
-int net_init_server(int *server_fd, short port) {
+int net_init_server(int *server_fd, uint16_t port) {
 	struct sockaddr_in6 server_addr;
 	const int opt = 1;
 

@@ -21,7 +21,7 @@
 #define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout 1m}"
 #define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout 1m}"
 
-void nft_init(short http_port, short https_port) {
+void nft_init(uint16_t http_port, uint16_t https_port) {
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
