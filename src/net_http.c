@@ -9,8 +9,8 @@
 #include <ctype.h>
 #include <time.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "net.h"
 
 #define REQ_MAX 8192
@@ -28,7 +28,7 @@ int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 	_init_http(http_req);
 	_parse_line(req_buf, http_req);
 
-	for (size_t i=0; i<fu_memclen(req_buf, '\0', REQ_MAX); i++) {
+	for (size_t i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
 		req_buf[i] = tolower(req_buf[i]);
 	}
 
@@ -50,7 +50,7 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 
 	const char *p1 = path;
 	const char *p2;
-	size_t n = fu_memclen(p1, '\0', path_n);
+	size_t n = fac_memclen(p1, '\0', path_n);
 
 	while (1) {
 		p2 = memchr(p1, '.', n);
@@ -169,7 +169,7 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 		}
 
 		for (size_t i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
-			if (memcmp(p1, keyword[i], fu_memclen(keyword[i], '\0', sizeof(keyword[i]))) == 0) {
+			if (memcmp(p1, keyword[i], fac_memclen(keyword[i], '\0', sizeof(keyword[i]))) == 0) {
 				p1 = p2 + 1;
 				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 				if (p2 == NULL) {
@@ -188,7 +188,7 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 							return 1; // 400
 						}
 
-						if (memcmp(p1, domain, fu_memclen(domain, '\0', domain_n)) == 0) {
+						if (memcmp(p1, domain, fac_memclen(domain, '\0', domain_n)) == 0) {
 							memcpy(http_req->host, "www", sizeof("www"));
 						} else {
 							p2 = p1;
@@ -223,7 +223,7 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 								if (p4 == NULL) {
 									break;
 								}
-								if (memcmp(p4, os_type[i], fu_memclen(os_type[i], '\0', sizeof(os_type[i]))) == 0) {
+								if (memcmp(p4, os_type[i], fac_memclen(os_type[i], '\0', sizeof(os_type[i]))) == 0) {
 									memcpy(http_req->os, os_type[i], sizeof(os_type[i]));
 									flag = 1;
 									break;
@@ -249,7 +249,7 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 								if (p4 == NULL) {
 									break;
 								}
-								if (memcmp(p4, browser_type[i], fu_memclen(browser_type[i], '\0', sizeof(browser_type[i]))) == 0) {
+								if (memcmp(p4, browser_type[i], fac_memclen(browser_type[i], '\0', sizeof(browser_type[i]))) == 0) {
 									memcpy(http_req->browser, browser_type[i], sizeof(browser_type[i]));
 									flag = 1;
 									break;
@@ -303,12 +303,12 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 }
 
 static int _check_err(const struct fws_http_req *http_req) {
-	if (memcmp(http_req->method, "GET", fu_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
+	if (memcmp(http_req->method, "GET", fac_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed
 	}
 
-	if (memcmp(http_req->version, "HTTP/1.1", fu_memclen(http_req->version, '\0', sizeof(http_req->version))) != 0) {
+	if (memcmp(http_req->version, "HTTP/1.1", fac_memclen(http_req->version, '\0', sizeof(http_req->version))) != 0) {
 		// warn_log
 		return 1;
 	}

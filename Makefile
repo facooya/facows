@@ -3,13 +3,15 @@
 # Copyright 2026 Facooya and Fanone Facooya
 
 SRCS = \
-lib/utils.c \
+lib/fac_utils.c \
+\
 src/net.c \
 src/net_80.c \
 src/net_443.c \
 src/net_http.c \
 src/net_nft.c \
 src/net_tc.c \
+\
 src/conf.c \
 src/file.c \
 src/facows.c

@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "conf.h"
 
 #define CONF_KEY_MAX 16
@@ -26,7 +26,7 @@ int conf_parse(const char *path, struct fws_conf *config) {
 		}
 
 		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
-			if (fu_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
+			if (fac_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
 				switch (i) {
 					case 0:
 						p = memchr(file_buf, ' ', CONF_KEY_MAX);

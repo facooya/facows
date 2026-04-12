@@ -1,7 +1,10 @@
 # Roadmap
 - No file extand
 
-# Traffic Control
+## Thread
+- pthread mutex lock for nft list
+
+## Traffic Control
 - check auto ip name `/proc/net/route`
 - check collision
 

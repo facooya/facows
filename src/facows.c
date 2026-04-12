@@ -18,8 +18,8 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "conf.h"
 #include "net.h"
 #include "file.h"
@@ -63,7 +63,7 @@ void *fws_handler(void *arg) {
 		struct fws_file file;
 		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config->web_root, sizeof(config->web_root));
 
-		size_t path_size = fu_memclen(file.path, '\0', sizeof(file.path));
+		size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 		char *path_p = file.path + path_size - (sizeof(".html") - 1);
 		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 			net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));

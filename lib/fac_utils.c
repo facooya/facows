@@ -5,9 +5,9 @@
 
 #include <string.h>
 
-#include "utils.h"
+#include "fac_utils.h"
 
-size_t fu_memclen(const char *s, char c, size_t n) {
+size_t fac_memclen(const char *s, char c, size_t n) {
 	char *p = memchr(s, c, n);
 	if (p == NULL) {
 		return n;
@@ -15,8 +15,8 @@ size_t fu_memclen(const char *s, char c, size_t n) {
 	return p - s;
 }
 
-char *fu_memstr(const char *s1, const char *s2, size_t n) {
-	size_t s2n = fu_memclen(s2, '\0', n);
+char *fac_memstr(const char *s1, const char *s2, size_t n) {
+	size_t s2n = fac_memclen(s2, '\0', n);
 	if (s2n == n) {
 		return NULL;
 	}

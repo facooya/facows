@@ -7,7 +7,6 @@
 #define FWS_NET_H
 
 int net_server_init(int *server_fd, uint16_t port);
-
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config);
 
 int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config);

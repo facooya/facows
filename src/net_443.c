@@ -9,8 +9,8 @@
 #include <openssl/ssl.h>
 #include <string.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "net.h"
 
 #define SHARE_DIR "/usr/share/facows/"
@@ -62,7 +62,7 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 		total_read_size += read_ret;
 		if (total_read_size >= 4095) {
 			return 431;
-		} else if (fu_memstr(dst_buf, "\r\n\r\n", total_read_size) != NULL) {
+		} else if (fac_memstr(dst_buf, "\r\n\r\n", total_read_size) != NULL) {
 			break;
 		}
 	}
@@ -85,7 +85,7 @@ int net_443_write(SSL *ssl, const char *path) {
 int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
 	char res_buf[8192];
 	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", http_res->code, http_res->content, size, http_res->date);
-	SSL_write(ssl, res_buf, fu_memclen(res_buf, '\0', sizeof(res_buf)));
+	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
 	return 0;
 }
 
@@ -113,57 +113,57 @@ int net_443_err_write(SSL *ssl, int code) {
 	switch (code) {
 		case 400:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_400);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_400, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_400, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 403:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_403);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_403, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_403, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 404:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_404);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_404, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_404, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 405:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_405);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_405, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_405, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 414:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_414);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_414, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_414, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 429:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_429);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_429, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_429, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 431:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_431);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_431, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_431, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 500:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		case 501:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_501);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_501, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_501, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 
 		default:
 			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fu_memclen(err_html, '\0', sizeof(err_html)));
+			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fac_memclen(err_html, '\0', sizeof(err_html)));
 			break;
 	}
 
-	SSL_write(ssl, res, fu_memclen(res, '\0', sizeof(res)));
-	SSL_write(ssl, err_html, fu_memclen(err_html, '\0', sizeof(err_html)));
+	SSL_write(ssl, res, fac_memclen(res, '\0', sizeof(res)));
+	SSL_write(ssl, err_html, fac_memclen(err_html, '\0', sizeof(err_html)));
 	return 0;
 }
 

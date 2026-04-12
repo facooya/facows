@@ -10,8 +10,8 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "file.h"
 
 static void _init_file(struct fws_file *file);
@@ -24,11 +24,11 @@ int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_r
 	char *p2 = uri;
 	size_t n;
 
-	size_t uri_len = fu_memclen(uri, '\0', uri_n);
+	size_t uri_len = fac_memclen(uri, '\0', uri_n);
 	if (uri_len == uri_n) {
 		return -1;
 	}
-	size_t web_root_len = fu_memclen(web_root, '\0', web_root_n);
+	size_t web_root_len = fac_memclen(web_root, '\0', web_root_n);
 	if (web_root_len == web_root_n) {
 		return -1;
 	}

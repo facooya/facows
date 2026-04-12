@@ -5,8 +5,8 @@
 
 #include <stdio.h>
 
+#include "fac_utils.h"
 #include "types.h"
-#include "utils.h"
 #include "net.h"
 
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
@@ -36,7 +36,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 
 		if (recv_total_size >= 8191) {
 			return -1;
-		} else if (fu_memstr(recv_buf, "\r\n\r\n", recv_total_size) != NULL) {
+		} else if (fac_memstr(recv_buf, "\r\n\r\n", recv_total_size) != NULL) {
 			break;
 		}
 
@@ -74,7 +74,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 
 	// { parse host
 	p1 = recv_buf;
-	p2 = fu_memstr(p1, "\r\n", 1024);
+	p2 = fac_memstr(p1, "\r\n", 1024);
 	if (p2 == NULL) {
 		return -1;
 	}
@@ -85,7 +85,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 			break;
 		}
 
-		if (memcmp(p1, "Host", fu_memclen("host", '\0', sizeof("host"))) == 0) {
+		if (memcmp(p1, "Host", fac_memclen("host", '\0', sizeof("host"))) == 0) {
 			if (http_req.host[0] != '\0') {
 				return -1;
 			}
@@ -99,7 +99,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 				p1++;
 			}
 
-			if (memcmp(p1, config->domain, fu_memclen(config->domain, '\0', sizeof(config->domain))) == 0) {
+			if (memcmp(p1, config->domain, fac_memclen(config->domain, '\0', sizeof(config->domain))) == 0) {
 				memcpy(http_req.host, "www", sizeof("www"));
 			} else {
 				p2 = p1;
@@ -117,7 +117,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 			break;
 		}
 
-		p2 = fu_memstr(p1, "\r\n", 1024);
+		p2 = fac_memstr(p1, "\r\n", 1024);
 		if (p2 == NULL) {
 			return -1;
 		}
@@ -128,7 +128,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	// }}
 
 	printf("%s, %s\n", http_req.host, http_req.uri);
-	n = fu_memclen(http_req.host, '\0', sizeof(http_req.host));
+	n = fac_memclen(http_req.host, '\0', sizeof(http_req.host));
 	http_req.host[n] = '.';
 	http_req.host[n+1] = '\0';
 
