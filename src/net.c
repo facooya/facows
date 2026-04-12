@@ -9,7 +9,6 @@
 #include <string.h>
 
 #include "types.h"
-#include "utils.h"
 #include "net.h"
 
 #define REQ_MAX 8192

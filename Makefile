@@ -12,7 +12,6 @@ src/net_http.c \
 src/net_nft.c \
 src/net_tc.c \
 \
-src/conf.c \
 src/file.c \
 src/facows.c
 

@@ -20,7 +20,6 @@
 
 #include "fac_utils.h"
 #include "types.h"
-#include "conf.h"
 #include "net.h"
 #include "file.h"
 
@@ -111,7 +110,7 @@ void fws_end() {
 int main() {
 	// { init
 	struct fws_conf config;
-	if (conf_parse(CONF_PATH, &config) != 0) {
+	if (file_conf_parse(CONF_PATH, &config) != 0) {
 		return 0;
 	}
 

@@ -14,11 +14,14 @@
 #include "types.h"
 #include "file.h"
 
-static void _init_file(struct fws_file *file);
-static int _build_tail(struct fws_file *file);
+#define CONF_KEY_MAX 16
+
+static void _file_init(struct fws_file *file);
+static int _tail_build(struct fws_file *file);
+static int _str_write(const char *file_buf, char *dst_config, size_t config_str_size);
 
 int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_root, size_t web_root_n) {
-	_init_file(file);
+	_file_init(file);
 
 	char *p1 = uri;
 	char *p2 = uri;
@@ -99,16 +102,85 @@ int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_r
 		return -1;
 	}
 
-	int code = _build_tail(file);
+	int code = _tail_build(file);
 	return code;
 }
 
-static void _init_file(struct fws_file *file) {
+int file_conf_parse(const char *path, struct fws_conf *config) {
+	const char *key[] = {"HTTP_PORT", "HTTPS_PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
+	FILE *conf_file = fopen(path, "r");
+	char file_buf[4096];
+	char *p;
+	while (fgets(file_buf, sizeof(file_buf), conf_file)) {
+		if (file_buf[0] == '#') {
+			continue;
+		}
+
+		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
+			if (fac_memstr(file_buf, key[i], sizeof(file_buf)) != NULL) {
+				switch (i) {
+					case 0:
+						p = memchr(file_buf, ' ', CONF_KEY_MAX);
+						if (p == NULL) {
+							return -1;
+						}
+						while (*p == ' ') {
+							p++;
+						}
+						config->http_port = (uint16_t) strtol(p, NULL, 10);
+						break;
+
+					case 1:
+						p = memchr(file_buf, ' ', CONF_KEY_MAX);
+						if (p == NULL) {
+							return -1;
+						}
+						while (*p == ' ') {
+							p++;
+						}
+						config->https_port = (uint16_t) strtol(p, NULL, 10);
+						break;
+
+					case 2:
+						if (_str_write(file_buf, config->domain, sizeof(config->domain)) != 0) {
+							return -1;
+						}
+						break;
+					case 3:
+						if (_str_write(file_buf, config->web_root, sizeof(config->web_root)) != 0) {
+							return -1;
+						}
+						break;
+					case 4:
+						if (_str_write(file_buf, config->web_log, sizeof(config->web_log)) != 0) {
+							return -1;
+						}
+						break;
+					case 5:
+						if (_str_write(file_buf, config->ssl_cert, sizeof(config->ssl_cert)) != 0) {
+							return -1;
+						}
+						break;
+					case 6:
+						if (_str_write(file_buf, config->ssl_key, sizeof(config->ssl_key)) != 0) {
+							return -1;
+						}
+						break;
+				}
+				break;
+			}
+		}
+	}
+	fclose(conf_file);
+	return 0;
+}
+
+static void _file_init(struct fws_file *file) {
 	file->uri_path[0] = '\0';
 	file->path[0] = '\0';
 }
 
-static int _build_tail(struct fws_file *file) {
+static int _tail_build(struct fws_file *file) {
 	struct stat file_stat;
 	char *p = memchr(file->path, '\0', sizeof(file->path));
 	if (p == NULL) {
@@ -136,5 +208,35 @@ static int _build_tail(struct fws_file *file) {
 		file->size = file_stat.st_size;
 	}
 
+	return 0;
+}
+
+static int _str_write(const char *file_buf, char *dst_config, size_t config_str_size) {
+	char *p1;
+	char *p2;
+	size_t n;
+
+	p1 = memchr(file_buf, ' ', CONF_KEY_MAX);
+	if (p1 == NULL) {
+		return -1;
+	}
+
+	while (*p1 == ' ') {
+		p1++;
+	}
+
+	if (*(p1) != '"') {
+		return -1;
+	}
+
+	p1++;
+	p2 = memchr(p1, '"', config_str_size);
+	if (p2 == NULL) {
+		return -1;
+	}
+
+	n = p2 - p1;
+	memcpy(dst_config, p1, n);
+	dst_config[n] = '\0';
 	return 0;
 }

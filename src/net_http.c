@@ -18,26 +18,26 @@
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
-static void _init_http(struct fws_http_req *http_req);
-static int _parse_line(const char *req_buf, struct fws_http_req *http_req);
-static int _parse_header(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
-static int _check_err(const struct fws_http_req *http_req);
-static void _init_res(struct fws_http_res *http_res);
+static void _http_init(struct fws_http_req *http_req);
+static int _line_parse(const char *req_buf, struct fws_http_req *http_req);
+static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
+static int _err_check(const struct fws_http_req *http_req);
+static void _res_init(struct fws_http_res *http_res);
 
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
-	_init_http(http_req);
-	_parse_line(req_buf, http_req);
+	_http_init(http_req);
+	_line_parse(req_buf, http_req);
 
 	for (size_t i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
 		req_buf[i] = tolower(req_buf[i]);
 	}
 
-	_parse_header(req_buf, http_req, domain, domain_n);
+	_header_parse(req_buf, http_req, domain, domain_n);
 	return 0;
 }
 
 int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t path_n) {
-	_init_res(http_res);
+	_res_init(http_res);
 
 	time_t raw_time;
 	time(&raw_time);
@@ -77,12 +77,12 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	return 0;
 }
 
-static void _init_res(struct fws_http_res *http_res) {
+static void _res_init(struct fws_http_res *http_res) {
 	http_res->date[0] = '\0';
 	http_res->content[0] = '\0';
 }
 
-static void _init_http(struct fws_http_req *http_req) {
+static void _http_init(struct fws_http_req *http_req) {
 	http_req->ip[0] = '\0';
 	http_req->lang[0] = '\0';
 	http_req->version[0] = '\0';
@@ -93,7 +93,7 @@ static void _init_http(struct fws_http_req *http_req) {
 	http_req->uri[0] = '\0';
 }
 
-static int _parse_line(const char *req_buf, struct fws_http_req *http_req) {
+static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
 	// { method
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, ' ', sizeof(http_req->method));
@@ -144,7 +144,7 @@ static int _parse_line(const char *req_buf, struct fws_http_req *http_req) {
 	// }
 }
 
-static int _parse_header(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
+static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
 	enum key_idx {HOST, UA, AL};
 	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
 
@@ -302,7 +302,7 @@ static int _parse_header(const char *req_buf, struct fws_http_req *http_req, con
 	return 0;
 }
 
-static int _check_err(const struct fws_http_req *http_req) {
+static int _err_check(const struct fws_http_req *http_req) {
 	if (memcmp(http_req->method, "GET", fac_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed
