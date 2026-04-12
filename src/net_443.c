@@ -82,9 +82,9 @@ int net_443_write(SSL *ssl, const char *path) {
 	return 0;
 }
 
-int net_443_response_write(SSL *ssl, struct fws_http_res res, off_t size) {
+int net_443_response_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
 	char res_buf[8192];
-	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", res.code, res.content, size, res.date);
+	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", http_res->code, http_res->content, size, http_res->date);
 	SSL_write(ssl, res_buf, fu_memclen(res_buf, '\0', sizeof(res_buf)));
 	return 0;
 }

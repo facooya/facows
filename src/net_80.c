@@ -43,33 +43,33 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	}
 	// }
 
-	// {{ http
-	struct fws_http http;
-	http.host[0] = '\0';
-	http.uri[0] = '\0';
+	// {{ http req
+	struct fws_http_req http_req;
+	http_req.host[0] = '\0';
+	http_req.uri[0] = '\0';
 
 	// { parse uri
 	const char *p1 = recv_buf;
-	const char *p2 = memchr(p1, ' ', sizeof(http.method));
+	const char *p2 = memchr(p1, ' ', sizeof(http_req.method));
 	size_t n;
 	if (p2 == NULL) {
 		return -1;
 	}
 	n = p2 - p1;
-	if (n >= sizeof(http.method)) {
+	if (n >= sizeof(http_req.method)) {
 		return -1;
 	}
 	p1 += n + 1;
-	p2 = memchr(p1, ' ', sizeof(http.uri));
+	p2 = memchr(p1, ' ', sizeof(http_req.uri));
 	if (p2 == NULL) {
 		return -1;
 	}
 	n = p2 - p1;
-	if (n >= sizeof(http.uri)) {
+	if (n >= sizeof(http_req.uri)) {
 		return -1;
 	}
-	memcpy(http.uri, p1, n);
-	http.uri[n] = '\0';
+	memcpy(http_req.uri, p1, n);
+	http_req.uri[n] = '\0';
 	// }
 
 	// { parse host
@@ -86,7 +86,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 		}
 
 		if (memcmp(p1, "Host", fu_memclen("host", '\0', sizeof("host"))) == 0) {
-			if (http.host[0] != '\0') {
+			if (http_req.host[0] != '\0') {
 				return -1;
 			}
 
@@ -100,10 +100,10 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 			}
 
 			if (memcmp(p1, config->domain, fu_memclen(config->domain, '\0', sizeof(config->domain))) == 0) {
-				memcpy(http.host, "www", sizeof("www"));
+				memcpy(http_req.host, "www", sizeof("www"));
 			} else {
 				p2 = p1;
-				for (size_t i=0; i<sizeof(http.host); i++) {
+				for (size_t i=0; i<sizeof(http_req.host); i++) {
 					if (p2[i] == '.') {
 						p2 += i;
 						break;
@@ -111,8 +111,8 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 				}
 
 				n = p2 - p1;
-				memcpy(http.host, p1, n);
-				http.host[n] = '\0';
+				memcpy(http_req.host, p1, n);
+				http_req.host[n] = '\0';
 			}
 			break;
 		}
@@ -127,12 +127,12 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	// }
 	// }}
 
-	printf("%s, %s\n", http.host, http.uri);
-	n = fu_memclen(http.host, '\0', sizeof(http.host));
-	http.host[n] = '.';
-	http.host[n+1] = '\0';
+	printf("%s, %s\n", http_req.host, http_req.uri);
+	n = fu_memclen(http_req.host, '\0', sizeof(http_req.host));
+	http_req.host[n] = '.';
+	http_req.host[n+1] = '\0';
 
-	snprintf(header_buf, sizeof(header_buf), header_raw, http.host, config->domain, port_str, http.uri);
+	snprintf(header_buf, sizeof(header_buf), header_raw, http_req.host, config->domain, port_str, http_req.uri);
 	send(client_80_fd, header_buf, strlen(header_buf), 0);
 	return 0;
 }

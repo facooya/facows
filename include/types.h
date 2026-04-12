@@ -33,7 +33,7 @@ struct fws_http_res {
 	char date[32];
 };
 
-struct fws_http {
+struct fws_http_req {
 	char ip[16];
 	char lang[16];
 	char version[16];

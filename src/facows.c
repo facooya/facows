@@ -22,7 +22,6 @@
 #include "utils.h"
 #include "conf.h"
 #include "net.h"
-#include "http.h"
 #include "file.h"
 #include "nft.h"
 #include "tc.h"
@@ -55,8 +54,8 @@ void *fws_handler(void *arg) {
 			return NULL;
 		}
 
-		struct fws_http http;
-		if (http_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
+		struct fws_http_req http;
+		if (net_http_req_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
 			net_443_err_exit(ssl, client_fd, arg);
 			return NULL;
 		}
@@ -79,9 +78,9 @@ void *fws_handler(void *arg) {
 			}
 
 		} else {
-			struct fws_http_res res;
-			http_build_res(&res, file.path, sizeof(file.path));
-			if (net_443_response_write(ssl, res, file.size) != 0) {
+			struct fws_http_res http_res;
+			net_http_res_build(&http_res, file.path, sizeof(file.path));
+			if (net_443_response_write(ssl, &http_res, file.size) != 0) {
 				net_443_err_exit(ssl, client_fd, arg);
 				return NULL;
 			}

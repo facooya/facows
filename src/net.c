@@ -12,6 +12,11 @@
 #include "utils.h"
 #include "net.h"
 
+#define REQ_MAX 8192
+#define REQ_KEY_MAX 64
+#define REQ_VALUE_MAX 1024
+#define REQ_UA_MAX 16
+
 int net_server_init(int *server_fd, uint16_t port) {
 	struct sockaddr_in6 server_addr;
 	const int opt = 1;
