@@ -6,6 +6,7 @@ SRCS = \
 lib/utils.c \
 src/conf.c \
 src/net.c \
+src/net_80.c \
 src/http.c \
 src/file.c \
 src/nft.c \

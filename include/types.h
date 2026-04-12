@@ -7,8 +7,8 @@
 #include <sys/socket.h>
 #include <openssl/ssl.h>
 
-#ifndef TYPES_H
-#define TYPES_H
+#ifndef FWS_TYPES_H
+#define FWS_TYPES_H
 
 struct fws_conf {
 	uint16_t http_port;
