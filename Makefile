@@ -4,14 +4,14 @@
 
 SRCS = \
 lib/utils.c \
-src/conf.c \
 src/net.c \
 src/net_80.c \
 src/net_443.c \
 src/net_http.c \
+src/net_nft.c \
+src/net_tc.c \
+src/conf.c \
 src/file.c \
-src/nft.c \
-src/tc.c \
 src/facows.c
 
 OBJS = $(SRCS:%.c=build/%.o)

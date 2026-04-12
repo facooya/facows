@@ -23,8 +23,6 @@
 #include "conf.h"
 #include "net.h"
 #include "file.h"
-#include "nft.h"
-#include "tc.h"
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
@@ -68,7 +66,7 @@ void *fws_handler(void *arg) {
 		size_t path_size = fu_memclen(file.path, '\0', sizeof(file.path));
 		char *path_p = file.path + path_size - (sizeof(".html") - 1);
 		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-			nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+			net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
 		}
 
 		if (status_code != 0) {
@@ -80,7 +78,7 @@ void *fws_handler(void *arg) {
 		} else {
 			struct fws_http_res http_res;
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
-			if (net_443_response_write(ssl, &http_res, file.size) != 0) {
+			if (net_443_res_write(ssl, &http_res, file.size) != 0) {
 				net_443_err_exit(ssl, client_fd, arg);
 				return NULL;
 			}
@@ -120,8 +118,8 @@ int main() {
 	signal(SIGINT, fws_end);
 	signal(SIGTERM, fws_end);
 
-	nft_init(config.http_port, config.https_port);
-	tc_init();
+	net_nft_init(config.http_port, config.https_port);
+	net_tc_init();
 
 	SSL_CTX *ssl_ctx;
 	net_443_init(&ssl_ctx, &config);

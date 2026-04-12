@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 
 #include "types.h"
-#include "nft.h"
+#include "net.h"
 
 #define DOS_LIMIT 10
 #define NFT_PATH "/etc/facows/facows_nft.conf"
@@ -21,7 +21,7 @@
 #define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout 1m}"
 #define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout 1m}"
 
-void nft_init(uint16_t http_port, uint16_t https_port) {
+void net_nft_init(uint16_t http_port, uint16_t https_port) {
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
@@ -46,7 +46,7 @@ void nft_init(uint16_t http_port, uint16_t https_port) {
 	nft_cmd = NULL;
 }
 
-void nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n) {
+void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n) {
 	char ip_str[INET6_ADDRSTRLEN];
 	char *ip_p = ip_str;
 	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));

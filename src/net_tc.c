@@ -13,14 +13,14 @@
 #include <sys/stat.h>
 
 #include "types.h"
-#include "tc.h"
+#include "net.h"
 
 #define TC_PATH "/etc/facows/facows_tc.conf"
 #define NET_NAME "eno1"
 #define NET_VNAME "ifb0"
 #define BANDWIDTH "90mbps"
 
-void tc_init(void) {
+void net_tc_init(void) {
 	struct stat tc_st;
 	stat(TC_PATH, &tc_st);
 	off_t tc_size = tc_st.st_size;
