@@ -46,7 +46,7 @@ void nft_init(uint16_t http_port, uint16_t https_port) {
 	nft_cmd = NULL;
 }
 
-void nft_ban_dos(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t list_size) {
+void nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n) {
 	char ip_str[INET6_ADDRSTRLEN];
 	char *ip_p = ip_str;
 	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));

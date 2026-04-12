@@ -20,6 +20,12 @@ struct fws_conf {
 	char ssl_key[128];
 };
 
+struct fws_nft {
+	uint8_t ip[16];
+	int count;
+	time_t time;
+};
+
 struct fws_http_res {
 	int code;
 	int connection;
@@ -42,12 +48,6 @@ struct fws_file {
 	char uri_path[4096];
 	char path[4096];
 	off_t size;
-};
-
-struct fws_nft {
-	uint8_t ip[16];
-	int count;
-	time_t time;
 };
 
 struct fws_args {

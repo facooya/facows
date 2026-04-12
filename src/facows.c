@@ -44,20 +44,20 @@ void *fws_handler(void *arg) {
 	SSL *ssl = SSL_new(ssl_ctx);
 	SSL_set_fd(ssl, client_fd);
 	if (SSL_accept(ssl) <= 0) {
-		net_exit_err(ssl, client_fd, arg);
+		net_443_err_exit(ssl, client_fd, arg);
 		return NULL;
 	}
 
 	while (1) {
 		// { net
-		if (net_read(ssl, request_buf, sizeof(request_buf)) != 0) {
-			net_exit_err(ssl, client_fd, arg);
+		if (net_443_read(ssl, request_buf, sizeof(request_buf)) != 0) {
+			net_443_err_exit(ssl, client_fd, arg);
 			return NULL;
 		}
 
 		struct fws_http http;
 		if (http_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
-			net_exit_err(ssl, client_fd, arg);
+			net_443_err_exit(ssl, client_fd, arg);
 			return NULL;
 		}
 		// }
@@ -69,23 +69,23 @@ void *fws_handler(void *arg) {
 		size_t path_size = fu_memclen(file.path, '\0', sizeof(file.path));
 		char *path_p = file.path + path_size - (sizeof(".html") - 1);
 		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-			nft_ban_dos(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+			nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
 		}
 
 		if (status_code != 0) {
-			if (net_write_err(ssl, status_code) != 0) {
-				net_exit_err(ssl, client_fd, arg);
+			if (net_443_err_write(ssl, status_code) != 0) {
+				net_443_err_exit(ssl, client_fd, arg);
 				return NULL;
 			}
 
 		} else {
 			struct fws_http_res res;
 			http_build_res(&res, file.path, sizeof(file.path));
-			if (net_write_res(ssl, res, file.size) != 0) {
-				net_exit_err(ssl, client_fd, arg);
+			if (net_443_response_write(ssl, res, file.size) != 0) {
+				net_443_err_exit(ssl, client_fd, arg);
 				return NULL;
 			}
-			net_write(ssl, file.path);
+			net_443_write(ssl, file.path);
 		}
 		// }
 	}
@@ -125,13 +125,13 @@ int main() {
 	tc_init();
 
 	SSL_CTX *ssl_ctx;
-	net_init_ssl(&ssl_ctx, &config);
+	net_443_init(&ssl_ctx, &config);
 
 	int server_http_fd;
-	net_init_server(&server_http_fd, config.http_port);
+	net_server_init(&server_http_fd, config.http_port);
 
 	int server_https_fd;
-	net_init_server(&server_https_fd, config.https_port);
+	net_server_init(&server_https_fd, config.https_port);
 
 	struct pollfd fds[2];
 	fds[0].fd = server_http_fd;

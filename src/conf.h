@@ -6,6 +6,6 @@
 #ifndef CONF_H
 #define CONF_H
 
-int conf_parse(const char *path, struct fws_conf *config);
+int conf_parse(const char *conf_path, struct fws_conf *conf);
 
 #endif
