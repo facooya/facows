@@ -174,7 +174,6 @@ int file_conf_parse(const char *path, struct fws_conf *config) {
 	fclose(conf_file);
 	return 0;
 }
-
 static void _file_init(struct fws_file *file) {
 	file->uri_path[0] = '\0';
 	file->path[0] = '\0';

@@ -56,6 +56,8 @@ void *fws_handler(void *arg) {
 			net_443_err_exit(ssl, client_fd, arg);
 			return NULL;
 		}
+
+		//net_http_path_redir(&http);
 		// }
 
 		// { file

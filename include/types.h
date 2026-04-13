@@ -42,6 +42,10 @@ struct fws_http_req {
 	char os[16];
 	char browser[16];
 	char uri[4096];
+	const char *path;
+	size_t path_n;
+	const char *query;
+	size_t query_n;
 };
 
 struct fws_file {

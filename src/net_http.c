@@ -20,6 +20,7 @@
 
 static void _http_init(struct fws_http_req *http_req);
 static int _line_parse(const char *req_buf, struct fws_http_req *http_req);
+static void _uri_parse(struct fws_http_req *http_req);
 static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
 static int _err_check(const struct fws_http_req *http_req);
 static void _res_init(struct fws_http_res *http_res);
@@ -27,6 +28,7 @@ static void _res_init(struct fws_http_res *http_res);
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
 	_http_init(http_req);
 	_line_parse(req_buf, http_req);
+	_uri_parse(http_req);
 
 	for (size_t i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
 		req_buf[i] = tolower(req_buf[i]);
@@ -77,6 +79,11 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	return 0;
 }
 
+void net_http_path_redir(struct fws_http_req *http_req) {
+	//const char allow_ext[][] = {"js", "css", "svg", "ico"};
+	//const char redir_ext[][] = {"html"};
+}
+
 static void _res_init(struct fws_http_res *http_res) {
 	http_res->date[0] = '\0';
 	http_res->content[0] = '\0';
@@ -91,6 +98,10 @@ static void _http_init(struct fws_http_req *http_req) {
 	http_req->os[0] = '\0';
 	http_req->browser[0] = '\0';
 	http_req->uri[0] = '\0';
+	http_req->path = NULL;
+	http_req->path_n = 0;
+	http_req->query = NULL;
+	http_req->query_n = 0;
 }
 
 static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
@@ -142,6 +153,22 @@ static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
 	memcpy(http_req->version, p1, n);
 	http_req->version[n] = '\0';
 	// }
+}
+
+static void _uri_parse(struct fws_http_req *http_req) {
+	const char *p1 = http_req->uri;
+	const char *p2;
+	size_t uri_len = fac_memclen(http_req->uri, '\0', sizeof(http_req->uri));
+
+	http_req->path = p1;
+	p2 = memchr(http_req->uri, '?', uri_len);
+	if (p2 == NULL) {
+		http_req->path_n = uri_len;
+	} else {
+		http_req->path_n = p2 - p1;
+		http_req->query = p2 + 1;
+		http_req->query_n = uri_len - (http_req->path_n + 1);
+	}
 }
 
 static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
