@@ -3,6 +3,7 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "fac_utils.h"
@@ -41,6 +42,18 @@ char *fac_memstr(const char *s1, const char *s2, size_t n) {
 
 		n -= p2 - p1 + 1;
 		p1 += p2 - p1 + 1;
+	}
+
+	return NULL;
+}
+
+char *fac_memrchr(const char *s, char c, size_t n) {
+	s += n - 1;
+	for (size_t i=0; i<n; i++) {
+		if (*s == c) {
+			return (char *) s;
+		}
+		s--;
 	}
 
 	return NULL;

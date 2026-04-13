@@ -57,7 +57,7 @@ void *fws_handler(void *arg) {
 			return NULL;
 		}
 
-		//net_http_path_redir(&http);
+		net_http_path_redir(&http, config);
 		// }
 
 		// { file

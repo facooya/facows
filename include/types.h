@@ -38,9 +38,9 @@ struct fws_http_req {
 	char lang[16];
 	char version[16];
 	char method[16];
-	char host[16];
 	char os[16];
 	char browser[16];
+	char subdomain[64];
 	char uri[4096];
 	const char *path;
 	size_t path_n;

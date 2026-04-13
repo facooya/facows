@@ -14,7 +14,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	char header_raw[] = "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 	char header_buf[1024] = {0};
 
-	char port_str[7];
+	char port_str[8];
 	port_str[0] = '\0';
 	if (config->https_port != 443) {
 		snprintf(port_str, sizeof(port_str), ":%hu", config->https_port);
@@ -45,7 +45,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 
 	// {{ http req
 	struct fws_http_req http_req;
-	http_req.host[0] = '\0';
+	http_req.subdomain[0] = '\0';
 	http_req.uri[0] = '\0';
 
 	// { parse uri
@@ -86,7 +86,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 		}
 
 		if (memcmp(p1, "Host", fac_memclen("host", '\0', sizeof("host"))) == 0) {
-			if (http_req.host[0] != '\0') {
+			if (http_req.subdomain[0] != '\0') {
 				return -1;
 			}
 
@@ -100,10 +100,10 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 			}
 
 			if (memcmp(p1, config->domain, fac_memclen(config->domain, '\0', sizeof(config->domain))) == 0) {
-				memcpy(http_req.host, "www", sizeof("www"));
+				memcpy(http_req.subdomain, "www", sizeof("www"));
 			} else {
 				p2 = p1;
-				for (size_t i=0; i<sizeof(http_req.host); i++) {
+				for (size_t i=0; i<sizeof(http_req.subdomain); i++) {
 					if (p2[i] == '.') {
 						p2 += i;
 						break;
@@ -111,8 +111,8 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 				}
 
 				n = p2 - p1;
-				memcpy(http_req.host, p1, n);
-				http_req.host[n] = '\0';
+				memcpy(http_req.subdomain, p1, n);
+				http_req.subdomain[n] = '\0';
 			}
 			break;
 		}
@@ -127,12 +127,11 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	// }
 	// }}
 
-	printf("%s, %s\n", http_req.host, http_req.uri);
-	n = fac_memclen(http_req.host, '\0', sizeof(http_req.host));
-	http_req.host[n] = '.';
-	http_req.host[n+1] = '\0';
+	n = fac_memclen(http_req.subdomain, '\0', sizeof(http_req.subdomain));
+	http_req.subdomain[n] = '.';
+	http_req.subdomain[n+1] = '\0';
 
-	snprintf(header_buf, sizeof(header_buf), header_raw, http_req.host, config->domain, port_str, http_req.uri);
+	snprintf(header_buf, sizeof(header_buf), header_raw, http_req.subdomain, config->domain, port_str, http_req.uri);
 	send(client_80_fd, header_buf, strlen(header_buf), 0);
 	return 0;
 }

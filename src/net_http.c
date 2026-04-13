@@ -13,6 +13,8 @@
 #include "types.h"
 #include "net.h"
 
+#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64
 #define REQ_VALUE_MAX 1024
@@ -24,6 +26,7 @@ static void _uri_parse(struct fws_http_req *http_req);
 static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
 static int _err_check(const struct fws_http_req *http_req);
 static void _res_init(struct fws_http_res *http_res);
+static void _host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf);
 
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
 	_http_init(http_req);
@@ -79,9 +82,63 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	return 0;
 }
 
-void net_http_path_redir(struct fws_http_req *http_req) {
-	//const char allow_ext[][] = {"js", "css", "svg", "ico"};
-	//const char redir_ext[][] = {"html"};
+void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf) {
+	char host_buf[512];
+	_host_build(host_buf, http_req, conf);
+	printf("HOST: %s\n", host_buf);
+
+	char res_buf[2048];
+
+	// { index
+	const char *p1 = fac_memrchr(http_req->uri, '/', http_req->path_n);
+	if (p1 != NULL && memcmp(p1, "index", sizeof("index")-1) == 0) {
+		// --index
+		//snprintf(res_buf, sizeof(res_buf), RES_301, http_req->subdomain, path);
+		// redir
+	} else if (p1 != NULL && memcmp(p1, "index.html", sizeof("index.html")-1) == 0) {
+		//snprintf(res_buf, sizeof(res_buf), RES_301, http_req->subdomain, path);
+		// redir
+	}
+	// }
+	printf("%s, %s\n", http_req->uri, p1);
+
+	// { extension
+	const char *p2 = fac_memrchr(p1, '.', http_req->path_n);
+	if (p2 != NULL && memcmp(p2, "html", sizeof("html")-1) == 0) {
+		//redir
+	}
+	// }
+
+	// { dir
+	// struct stat st_dir;
+	// memcpy(tmp_path, ".html", sizeof(".html"));
+	// if (stat(tmp_path)) {}
+	// else {}
+	// }
+}
+
+static void _host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
+	char port[8];
+	port[0] = '\0';
+	if (conf->https_port != 443) {
+		snprintf(port, sizeof(port), ":%hu", conf->https_port);
+	}
+
+	size_t n = fac_memclen(http_req->subdomain, '\0', sizeof(http_req->subdomain));
+	char *p = host_buf;
+	*p = '\0';
+	memcpy(p, http_req->subdomain, n);
+	p += n;
+	*p = '.';
+	p++;
+	*p = '\0';
+
+	n = fac_memclen(conf->domain, '\0', sizeof(conf->domain));
+	memcpy(p, conf->domain, n);
+	p += n;
+	*p = '\0';
+	n = fac_memclen(port, '\0', sizeof(port));
+	memcpy(p, port, n+1);
 }
 
 static void _res_init(struct fws_http_res *http_res) {
@@ -94,9 +151,9 @@ static void _http_init(struct fws_http_req *http_req) {
 	http_req->lang[0] = '\0';
 	http_req->version[0] = '\0';
 	http_req->method[0] = '\0';
-	http_req->host[0] = '\0';
 	http_req->os[0] = '\0';
 	http_req->browser[0] = '\0';
+	http_req->subdomain[0] = '\0';
 	http_req->uri[0] = '\0';
 	http_req->path = NULL;
 	http_req->path_n = 0;
@@ -211,23 +268,23 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 				// n: value size
 				switch (i) {
 					case HOST:
-						if (http_req->host[0] != '\0') {
+						if (http_req->subdomain[0] != '\0') {
 							return 1; // 400
 						}
 
 						if (memcmp(p1, domain, fac_memclen(domain, '\0', domain_n)) == 0) {
-							memcpy(http_req->host, "www", sizeof("www"));
+							memcpy(http_req->subdomain, "www", sizeof("www"));
 						} else {
 							p2 = p1;
-							for (size_t i=0; i<sizeof(http_req->host); i++) {
+							for (size_t i=0; i<sizeof(http_req->subdomain); i++) {
 								if (p2[i] == '.') {
 									p2 += i;
 									break;
 								}
 							}
 							n = p2 - p1;
-							memcpy(http_req->host, p1, n);
-							http_req->host[n] = '\0';
+							memcpy(http_req->subdomain, p1, n);
+							http_req->subdomain[n] = '\0';
 						}
 						break;
 
@@ -340,7 +397,7 @@ static int _err_check(const struct fws_http_req *http_req) {
 		return 1;
 	}
 
-	if (http_req->host[0] == '\0') {
+	if (http_req->subdomain[0] == '\0') {
 		return 1; // 400 bad
 	}
 }
