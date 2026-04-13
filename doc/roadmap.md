@@ -1,5 +1,4 @@
 # Roadmap
-- No file extand
 
 ## Thread
 - pthread mutex lock for nft list

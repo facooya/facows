@@ -90,7 +90,7 @@ int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
 }
 
 int net_443_err_write(SSL *ssl, int code) {
-	const char path_err_page[] = "/share/error_page.html";
+	const char path_err_page[] = "/error_page.html";
 	char err_html[1024] = {0};
 	char err_html_temp[1024] = {0};
 	char res[1024] = {0};

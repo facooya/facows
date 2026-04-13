@@ -56,13 +56,23 @@ void *fws_handler(void *arg) {
 			net_443_err_exit(ssl, client_fd, arg);
 			return NULL;
 		}
-
-		net_http_path_redir(&http, config);
 		// }
 
 		// { file
 		struct fws_file file;
-		int status_code = file_parse(&file, http.uri, sizeof(http.uri), config->web_root, sizeof(config->web_root));
+		int status_code = file_parse(&file, &http, config->web_root, sizeof(config->web_root));
+
+		printf("path: %s, %d\n", file.path, status_code);
+
+		if (status_code == 301) {
+			net_http_path_redir(&http, config, &file, ssl);
+
+			SSL_shutdown(ssl);
+			SSL_free(ssl);
+			close(client_fd);
+			free(arg);
+			return NULL;
+		}
 
 		size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 		char *path_p = file.path + path_size - (sizeof(".html") - 1);

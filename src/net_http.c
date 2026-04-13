@@ -13,7 +13,7 @@
 #include "types.h"
 #include "net.h"
 
-#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64
@@ -82,39 +82,13 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	return 0;
 }
 
-void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf) {
+void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, SSL *ssl) {
+	char res_buf[2048];
 	char host_buf[512];
 	_host_build(host_buf, http_req, conf);
-	printf("HOST: %s\n", host_buf);
 
-	char res_buf[2048];
-
-	// { index
-	const char *p1 = fac_memrchr(http_req->uri, '/', http_req->path_n);
-	if (p1 != NULL && memcmp(p1, "index", sizeof("index")-1) == 0) {
-		// --index
-		//snprintf(res_buf, sizeof(res_buf), RES_301, http_req->subdomain, path);
-		// redir
-	} else if (p1 != NULL && memcmp(p1, "index.html", sizeof("index.html")-1) == 0) {
-		//snprintf(res_buf, sizeof(res_buf), RES_301, http_req->subdomain, path);
-		// redir
-	}
-	// }
-	printf("%s, %s\n", http_req->uri, p1);
-
-	// { extension
-	const char *p2 = fac_memrchr(p1, '.', http_req->path_n);
-	if (p2 != NULL && memcmp(p2, "html", sizeof("html")-1) == 0) {
-		//redir
-	}
-	// }
-
-	// { dir
-	// struct stat st_dir;
-	// memcpy(tmp_path, ".html", sizeof(".html"));
-	// if (stat(tmp_path)) {}
-	// else {}
-	// }
+	snprintf(res_buf, sizeof(res_buf), RES_301, host_buf, file->uri_path);
+	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
 }
 
 static void _host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {

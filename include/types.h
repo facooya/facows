@@ -50,6 +50,7 @@ struct fws_http_req {
 
 struct fws_file {
 	char uri_path[4096];
+	size_t uri_path_n;
 	char path[4096];
 	off_t size;
 };

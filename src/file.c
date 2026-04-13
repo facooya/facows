@@ -17,42 +17,29 @@
 #define CONF_KEY_MAX 16
 
 static void _file_init(struct fws_file *file);
-static int _tail_build(struct fws_file *file);
+static int _uri_path_build(struct fws_file *file);
+static int _path_build(struct fws_file *file);
 static int _str_write(const char *file_buf, char *dst_config, size_t config_str_size);
 
-int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_root, size_t web_root_n) {
+int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const char *web_root, size_t web_root_n) {
 	_file_init(file);
 
-	char *p1 = uri;
-	char *p2 = uri;
-	size_t n;
+	memcpy(file->uri_path, http_req->path, http_req->path_n);
+	file->uri_path[http_req->path_n] = '\0';
+	file->uri_path_n = http_req->path_n;
 
-	size_t uri_len = fac_memclen(uri, '\0', uri_n);
-	if (uri_len == uri_n) {
-		return -1;
-	}
 	size_t web_root_len = fac_memclen(web_root, '\0', web_root_n);
 	if (web_root_len == web_root_n) {
 		return -1;
 	}
-
-	for (size_t i=0; i<uri_len; i++) {
-		if (uri[i] == '?' || uri[i] == '#') {
-			break;
-		}
-		p2++;
-	}
-	n = p2 - p1;
-	memcpy(file->uri_path, uri, n);
-	file->uri_path[n] = '\0';
 
 	// { path
 	char tmp_path[4096];
 	memcpy(tmp_path, web_root, web_root_len);
 	tmp_path[web_root_len] = '\0';
 
-	p1 = file->uri_path;
-	p2 = tmp_path + web_root_len;
+	char *p1 = file->uri_path;
+	char *p2 = tmp_path + web_root_len;
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
@@ -102,7 +89,14 @@ int file_parse(struct fws_file *file, char *uri, size_t uri_n, const char *web_r
 		return -1;
 	}
 
-	int code = _tail_build(file);
+	int code = _uri_path_build(file);
+	if (code == 301) {
+		return code;
+	} else if (code < 0) {
+		return -1;
+	}
+
+	code = _path_build(file);
 	return code;
 }
 
@@ -174,12 +168,54 @@ int file_conf_parse(const char *path, struct fws_conf *config) {
 	fclose(conf_file);
 	return 0;
 }
+
 static void _file_init(struct fws_file *file) {
 	file->uri_path[0] = '\0';
+	file->uri_path_n = 0;
 	file->path[0] = '\0';
+	file->size = 0;
 }
 
-static int _tail_build(struct fws_file *file) {
+static int _uri_path_build(struct fws_file *file) {
+	struct stat path_stat;
+	char *p1;
+	char *p2;
+
+	// dir
+	if (*(file->uri_path+(file->uri_path_n-1)) == '/') {
+		return 1;
+	}
+
+	p1 = fac_memrchr(file->uri_path, '/', file->uri_path_n);
+	if (p1 == NULL) {
+		return -1;
+	}
+
+	// index
+	p1++;
+	if (memcmp(p1, "index", sizeof("index")) == 0) {
+		file->uri_path_n -= (sizeof("index") - 1);
+		file->uri_path[file->uri_path_n] = '\0';
+		return 301;
+
+	} else if (memcmp(p1, "index.html", sizeof("index.html")) == 0) {
+		file->uri_path_n -= (sizeof("index.html") - 1);
+		file->uri_path[file->uri_path_n] = '\0';
+		return 301;
+	}
+
+	// extension
+	p1 = file->uri_path + file->uri_path_n - (sizeof(".html") - 1);
+	if (memcmp(p1, ".html", sizeof(".html")-1) == 0) {
+		file->uri_path_n -= (sizeof(".html") - 1);
+		file->uri_path[file->uri_path_n] = '\0';
+		return 301;
+	}
+
+	return 0;
+}
+
+static int _path_build(struct fws_file *file) {
 	struct stat file_stat;
 	char *p = memchr(file->path, '\0', sizeof(file->path));
 	if (p == NULL) {
@@ -197,6 +233,7 @@ static int _tail_build(struct fws_file *file) {
 	} else if (S_ISDIR(file_stat.st_mode) == 1) {
 		const char index_str[] = "/index.html";
 		memcpy(p, index_str, sizeof(index_str));
+		
 		if (stat(file->path, &file_stat) == 0) {
 			file->size = file_stat.st_size;
 		} else {
