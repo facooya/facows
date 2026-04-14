@@ -4,21 +4,17 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
+#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	char recv_buf[8192] = {0};
-	char header_raw[] = "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-	char header_buf[1024] = {0};
-
-	char port_str[8];
-	port_str[0] = '\0';
-	if (config->https_port != 443) {
-		snprintf(port_str, sizeof(port_str), ":%hu", config->https_port);
-	}
+	char res_buf[1024] = {0};
 
 	// { recv
 	int recv_size;
@@ -127,11 +123,10 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	// }
 	// }}
 
-	n = fac_memclen(http_req.subdomain, '\0', sizeof(http_req.subdomain));
-	http_req.subdomain[n] = '.';
-	http_req.subdomain[n+1] = '\0';
+	char host_buf[512];
+	net_host_build(host_buf, &http_req, config);
 
-	snprintf(header_buf, sizeof(header_buf), header_raw, http_req.subdomain, config->domain, port_str, http_req.uri);
-	send(client_80_fd, header_buf, strlen(header_buf), 0);
+	snprintf(res_buf, sizeof(res_buf), RES_301, host_buf, http_req.uri);
+	send(client_80_fd, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)), 0);
 	return 0;
 }

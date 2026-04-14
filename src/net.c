@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
@@ -30,4 +31,28 @@ int net_server_init(int *server_fd, uint16_t port) {
 	bind(*server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
 	listen(*server_fd, 128);
 	return 0;
+}
+
+void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
+	char port[8];
+	port[0] = '\0';
+	if (conf->https_port != 443) {
+		snprintf(port, sizeof(port), ":%hu", conf->https_port);
+	}
+
+	size_t n = fac_memclen(http_req->subdomain, '\0', sizeof(http_req->subdomain));
+	char *p = host_buf;
+	*p = '\0';
+	memcpy(p, http_req->subdomain, n);
+	p += n;
+	*p = '.';
+	p++;
+	*p = '\0';
+
+	n = fac_memclen(conf->domain, '\0', sizeof(conf->domain));
+	memcpy(p, conf->domain, n);
+	p += n;
+	*p = '\0';
+	n = fac_memclen(port, '\0', sizeof(port));
+	memcpy(p, port, n+1);
 }

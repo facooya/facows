@@ -26,7 +26,6 @@ static void _uri_parse(struct fws_http_req *http_req);
 static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
 static int _err_check(const struct fws_http_req *http_req);
 static void _res_init(struct fws_http_res *http_res);
-static void _host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf);
 
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
 	_http_init(http_req);
@@ -85,34 +84,10 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, SSL *ssl) {
 	char res_buf[2048];
 	char host_buf[512];
-	_host_build(host_buf, http_req, conf);
+	net_host_build(host_buf, http_req, conf);
 
 	snprintf(res_buf, sizeof(res_buf), RES_301, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
-}
-
-static void _host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
-	char port[8];
-	port[0] = '\0';
-	if (conf->https_port != 443) {
-		snprintf(port, sizeof(port), ":%hu", conf->https_port);
-	}
-
-	size_t n = fac_memclen(http_req->subdomain, '\0', sizeof(http_req->subdomain));
-	char *p = host_buf;
-	*p = '\0';
-	memcpy(p, http_req->subdomain, n);
-	p += n;
-	*p = '.';
-	p++;
-	*p = '\0';
-
-	n = fac_memclen(conf->domain, '\0', sizeof(conf->domain));
-	memcpy(p, conf->domain, n);
-	p += n;
-	*p = '\0';
-	n = fac_memclen(port, '\0', sizeof(port));
-	memcpy(p, port, n+1);
 }
 
 static void _res_init(struct fws_http_res *http_res) {
