@@ -18,7 +18,7 @@
 
 static void _file_init(struct fws_file *file);
 static int _uri_path_build(struct fws_file *file);
-static int _path_build(struct fws_file *file, int dir);
+static int _path_build(struct fws_file *file, char *raw_path, int dir);
 static int _str_write(const char *file_buf, char *dst_config, size_t config_str_size);
 
 int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const char *web_root, size_t web_root_n) {
@@ -33,13 +33,13 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		return -1;
 	}
 
-	// { path
-	char tmp_path[4096];
-	memcpy(tmp_path, web_root, web_root_len);
-	tmp_path[web_root_len] = '\0';
+	// { path decoding
+	char raw_path[4096];
+	memcpy(raw_path, web_root, web_root_len);
+	raw_path[web_root_len] = '\0';
 
 	char *p1 = file->uri_path;
-	char *p2 = tmp_path + web_root_len;
+	char *p2 = raw_path + web_root_len;
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
@@ -53,7 +53,9 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 					c1 -= 0x30;
 					c1 <<= 4;
 				} else {
-					if (c1 < 0x50) c1 = c1 + 0x20;
+					if (c1 < 0x50) {
+						c1 += 0x20;
+					}
 					c1 -= 0x57;
 					c1 <<= 4;
 				}
@@ -62,7 +64,9 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 					c2 -= 0x30;
 					c1 |= c2;
 				} else {
-					if (c2 < 0x50) c2 = c2 + 0x20;
+					if (c2 < 0x50) {
+						c2 += 0x20;
+					}
 					c2 -= 0x57;
 					c1 |= c2;
 				}
@@ -81,16 +85,7 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 			p2++;
 		}
 	}
-	printf("TMP: %s\n", tmp_path);
-	if (realpath(tmp_path, file->path) == NULL) {
-		return 404;
-	}
 	// }
-
-	// TODO: check root dir slash
-	if (memcmp(file->path, web_root, web_root_len-1) != 0) {
-		return -1;
-	}
 
 	int code = _uri_path_build(file);
 	if (code == 301) {
@@ -99,8 +94,20 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		return -1;
 	}
 
-	code = _path_build(file, code);
-	return code;
+	code = _path_build(file, raw_path, code);
+	if (code != 0) {
+		return code;
+	}
+
+	if (realpath(raw_path, file->path) == NULL) {
+		return 404;
+	}
+
+	if (memcmp(file->path, web_root, web_root_len) != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 int file_conf_parse(const char *path, struct fws_conf *config) {
@@ -218,21 +225,21 @@ static int _uri_path_build(struct fws_file *file) {
 	return 0;
 }
 
-static int _path_build(struct fws_file *file, int dir) {
+static int _path_build(struct fws_file *file, char *raw_path, int dir) {
 	struct stat file_stat;
-	char *p = memchr(file->path, '\0', sizeof(file->path));
+	char *p = memchr(raw_path, '\0', sizeof(file->path));
 	if (p == NULL) {
 		return -1;
 	}
 
 	if (dir == 1) {
-		if (stat(file->path, &file_stat) != 0) {
+		if (stat(raw_path, &file_stat) != 0) {
 			return 404;
 		} else {
-			const char index_str[] = "/index.html";
+			const char index_str[] = "index.html";
 			memcpy(p, index_str, sizeof(index_str));
 
-			if (stat(file->path, &file_stat) == 0) {
+			if (stat(raw_path, &file_stat) == 0) {
 				file->size = file_stat.st_size;
 			} else {
 				return 404;
@@ -240,24 +247,13 @@ static int _path_build(struct fws_file *file, int dir) {
 		}
 
 	} else {
-		if (stat(file->path, &file_stat) != 0) {
+		if (stat(raw_path, &file_stat) != 0) {
 			const char html_str[] = ".html";
 			memcpy(p, html_str, sizeof(html_str));
-			//printf("HTML: %s, URI: %s\n", file->path, file->uri_path);
-			if (stat(file->path, &file_stat) != 0) {
+			if (stat(raw_path, &file_stat) != 0) {
 				return 404;
 			}
 			file->size = file_stat.st_size;
-
-		} else if (S_ISDIR(file_stat.st_mode) == 1) {
-			const char index_str[] = "/index.html";
-			memcpy(p, index_str, sizeof(index_str));
-
-			if (stat(file->path, &file_stat) == 0) {
-				file->size = file_stat.st_size;
-			} else {
-				return 404;
-			}
 
 		} else {
 			file->size = file_stat.st_size;

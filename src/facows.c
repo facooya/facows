@@ -25,6 +25,7 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
+pthread_mutex_t nft_lock;
 struct fws_nft nft_list[1024];
 
 void *fws_handler(void *arg) {
@@ -62,8 +63,6 @@ void *fws_handler(void *arg) {
 		struct fws_file file;
 		int status_code = file_parse(&file, &http, config->web_root, sizeof(config->web_root));
 
-		printf("path: %s, %d\n", file.path, status_code);
-
 		if (status_code == 301) {
 			net_http_path_redir(&http, config, &file, ssl);
 
@@ -77,7 +76,9 @@ void *fws_handler(void *arg) {
 		size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 		char *path_p = file.path + path_size - (sizeof(".html") - 1);
 		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+			pthread_mutex_lock(&nft_lock);
 			net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+			pthread_mutex_unlock(&nft_lock);
 		}
 
 		if (status_code != 0) {
@@ -149,6 +150,8 @@ int main() {
 
 	struct sockaddr_in6 client_addr;
 	socklen_t client_addr_size = sizeof(client_addr);
+
+	pthread_mutex_init(&nft_lock, NULL);
 	// }
 
 	while (1) {
@@ -179,6 +182,7 @@ int main() {
 		}
 	}
 
+	pthread_mutex_destroy(&nft_lock);
 	close(server_http_fd);
 	close(server_https_fd);
 	fws_end();

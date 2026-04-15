@@ -1,7 +1,7 @@
 # Roadmap
+- epoll
 
 ## Thread
-- pthread mutex lock for nft list
 
 ## Traffic Control
 - check auto ip name `/proc/net/route`
