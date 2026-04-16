@@ -17,6 +17,7 @@
 #define CONF_KEY_MAX 16
 
 static void _file_init(struct fws_file *file);
+static int _raw_path_build(char *raw_path, const char *uri_path, const char *web_root, size_t web_root_len);
 static int _uri_path_build(struct fws_file *file);
 static int _path_build(struct fws_file *file, char *raw_path, int dir);
 static int _str_write(const char *file_buf, char *dst_config, size_t config_str_size);
@@ -33,59 +34,8 @@ int file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		return -1;
 	}
 
-	// { path decoding
 	char raw_path[4096];
-	memcpy(raw_path, web_root, web_root_len);
-	raw_path[web_root_len] = '\0';
-
-	char *p1 = file->uri_path;
-	char *p2 = raw_path + web_root_len;
-	while (1) {
-		if (*p1 == '\0') {
-			*p2 = '\0';
-			break;
-		} else if (*p1 == '%') {
-			if (isxdigit(*(p1+1)) != 0 && isxdigit(*(p1+2)) != 0) {
-				uint8_t c1 = *(p1 + 1);
-				uint8_t c2 = *(p1 + 2);
-
-				if (isdigit(*(p1+1)) != 0) {
-					c1 -= 0x30;
-					c1 <<= 4;
-				} else {
-					if (c1 < 0x50) {
-						c1 += 0x20;
-					}
-					c1 -= 0x57;
-					c1 <<= 4;
-				}
-
-				if (isdigit(*(p1+2)) != 0) {
-					c2 -= 0x30;
-					c1 |= c2;
-				} else {
-					if (c2 < 0x50) {
-						c2 += 0x20;
-					}
-					c2 -= 0x57;
-					c1 |= c2;
-				}
-
-				*p2 = c1;
-				p1 += 3;
-				p2++;
-			} else {
-				*p2 = *p1;
-				p1++;
-				p2++;
-			}
-		} else {
-			*p2 = *p1;
-			p1++;
-			p2++;
-		}
-	}
-	// }
+	_raw_path_build(raw_path, file->uri_path, web_root, web_root_len);
 
 	int code = _uri_path_build(file);
 	if (code == 301) {
@@ -291,4 +241,57 @@ static int _str_write(const char *file_buf, char *dst_config, size_t config_str_
 	memcpy(dst_config, p1, n);
 	dst_config[n] = '\0';
 	return 0;
+}
+
+static int _raw_path_build(char *raw_path, const char *uri_path, const char *web_root, size_t web_root_len) {
+	memcpy(raw_path, web_root, web_root_len);
+	raw_path[web_root_len] = '\0';
+
+	const char *p1 = uri_path;
+	char *p2 = raw_path + web_root_len;
+	while (1) {
+		if (*p1 == '\0') {
+			*p2 = '\0';
+			break;
+		} else if (*p1 == '%') {
+			if (isxdigit(*(p1+1)) != 0 && isxdigit(*(p1+2)) != 0) {
+				uint8_t c1 = *(p1 + 1);
+				uint8_t c2 = *(p1 + 2);
+
+				if (isdigit(*(p1+1)) != 0) {
+					c1 -= 0x30;
+					c1 <<= 4;
+				} else {
+					if (c1 < 0x50) {
+						c1 += 0x20;
+					}
+					c1 -= 0x57;
+					c1 <<= 4;
+				}
+
+				if (isdigit(*(p1+2)) != 0) {
+					c2 -= 0x30;
+					c1 |= c2;
+				} else {
+					if (c2 < 0x50) {
+						c2 += 0x20;
+					}
+					c2 -= 0x57;
+					c1 |= c2;
+				}
+
+				*p2 = c1;
+				p1 += 3;
+				p2++;
+			} else {
+				*p2 = *p1;
+				p1++;
+				p2++;
+			}
+		} else {
+			*p2 = *p1;
+			p1++;
+			p2++;
+		}
+	}
 }
