@@ -25,6 +25,9 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
+static void _fws_end(int sig);
+
+volatile sig_atomic_t fws_flag;
 pthread_mutex_t nft_lock;
 struct fws_nft nft_list[1024];
 
@@ -107,19 +110,6 @@ void *fws_handler(void *arg) {
 	return NULL;
 }
 
-void fws_end() {
-	// TODO: close server fd
-	system("tc qdisc del dev ifb0 root");
-	system("tc qdisc del dev eno1 ingress");
-	system("ip link set dev ifb0 down");
-	system("modprobe -r ifb");
-
-	system("nft delete table netdev facows");
-	system("nft delete table inet facows");
-	printf("\n");
-	exit(0);
-}
-
 int main() {
 	// { init
 	struct fws_conf config;
@@ -127,8 +117,9 @@ int main() {
 		return 0;
 	}
 
-	signal(SIGINT, fws_end);
-	signal(SIGTERM, fws_end);
+	signal(SIGINT, _fws_end);
+	signal(SIGTERM, _fws_end);
+	fws_flag = 0;
 
 	net_nft_init(config.http_port, config.https_port);
 	net_tc_init();
@@ -155,7 +146,9 @@ int main() {
 	// }
 
 	while (1) {
-		poll(fds, 2, -1);
+		if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
+			break;
+		}
 
 		if (fds[0].revents & POLLIN) {
 			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
@@ -185,6 +178,19 @@ int main() {
 	pthread_mutex_destroy(&nft_lock);
 	close(server_http_fd);
 	close(server_https_fd);
-	fws_end();
+
+	system("tc qdisc del dev ifb0 root");
+	system("tc qdisc del dev eno1 ingress");
+	system("ip link set dev ifb0 down");
+	system("modprobe -r ifb");
+
+	system("nft delete table netdev facows");
+	system("nft delete table inet facows");
+	printf("\n");
+
 	return 0;
+}
+
+static void _fws_end(int sig) {
+	fws_flag = sig;
 }
