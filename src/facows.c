@@ -25,13 +25,98 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
-static void _fws_end(int sig);
-
 volatile sig_atomic_t fws_flag;
 pthread_mutex_t nft_lock;
 struct fws_nft nft_list[1024];
 
-void *fws_handler(void *arg) {
+static void *_fws_thread_run(void *arg);
+static void _fws_exit(int sig);
+
+int main() {
+	// { init
+	struct fws_conf config;
+	if (file_conf_parse(CONF_PATH, &config) != 0) {
+		return 0;
+	}
+
+	signal(SIGINT, _fws_exit);
+	signal(SIGTERM, _fws_exit);
+	fws_flag = 0;
+
+	net_nft_init(config.http_port, config.https_port);
+	net_tc_init();
+
+	SSL_CTX *ssl_ctx;
+	net_443_init(&ssl_ctx, &config);
+
+	int server_http_fd;
+	net_server_init(&server_http_fd, config.http_port);
+
+	int server_https_fd;
+	net_server_init(&server_https_fd, config.https_port);
+
+	struct pollfd fds[2];
+	fds[0].fd = server_http_fd;
+	fds[0].events = POLLIN;
+	fds[1].fd = server_https_fd;
+	fds[1].events = POLLIN;
+
+	struct sockaddr_in6 client_addr;
+	socklen_t client_addr_size = sizeof(client_addr);
+
+	pthread_mutex_init(&nft_lock, NULL);
+	// }
+
+	while (1) {
+		if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
+			break;
+		}
+
+		if (fds[0].revents & POLLIN) {
+			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			if (net_80_443_redir(client_http_fd, &config) < 0) {
+				close(client_http_fd);
+				continue;
+			}
+
+			close(client_http_fd);
+
+		} else if (fds[1].revents & POLLIN) {
+			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+			struct fws_args *args = malloc(sizeof(struct fws_args));
+			args->fd = client_fd;
+			args->ssl_ctx = ssl_ctx;
+			args->fws_conf = &config;
+			args->client_addr = &client_addr;
+	
+			pthread_t fws_thread;
+			pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
+			pthread_detach(fws_thread);
+		}
+	}
+
+	pthread_mutex_destroy(&nft_lock);
+	close(server_http_fd);
+	close(server_https_fd);
+
+	system(
+		"tc qdisc del dev ifb0 root;"
+		"tc qdisc del dev eno1 ingress;"
+		"ip link set dev ifb0 down;"
+		"modprobe -r ifb;"
+
+		"nft delete table netdev facows;"
+		"nft delete table inet facows;"
+	);
+
+	printf("\n");
+
+	return 0;
+}
+
+static void *_fws_thread_run(void *arg) {
 	const struct fws_args *args = (struct fws_args *) arg;
 	const struct fws_conf *config = args->fws_conf;
 	const struct sockaddr_in6 *client_addr = args->client_addr;
@@ -110,87 +195,6 @@ void *fws_handler(void *arg) {
 	return NULL;
 }
 
-int main() {
-	// { init
-	struct fws_conf config;
-	if (file_conf_parse(CONF_PATH, &config) != 0) {
-		return 0;
-	}
-
-	signal(SIGINT, _fws_end);
-	signal(SIGTERM, _fws_end);
-	fws_flag = 0;
-
-	net_nft_init(config.http_port, config.https_port);
-	net_tc_init();
-
-	SSL_CTX *ssl_ctx;
-	net_443_init(&ssl_ctx, &config);
-
-	int server_http_fd;
-	net_server_init(&server_http_fd, config.http_port);
-
-	int server_https_fd;
-	net_server_init(&server_https_fd, config.https_port);
-
-	struct pollfd fds[2];
-	fds[0].fd = server_http_fd;
-	fds[0].events = POLLIN;
-	fds[1].fd = server_https_fd;
-	fds[1].events = POLLIN;
-
-	struct sockaddr_in6 client_addr;
-	socklen_t client_addr_size = sizeof(client_addr);
-
-	pthread_mutex_init(&nft_lock, NULL);
-	// }
-
-	while (1) {
-		if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
-			break;
-		}
-
-		if (fds[0].revents & POLLIN) {
-			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
-
-			if (net_80_443_redir(client_http_fd, &config) < 0) {
-				close(client_http_fd);
-				continue;
-			}
-
-			close(client_http_fd);
-
-		} else if (fds[1].revents & POLLIN) {
-			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
-
-			struct fws_args *args = malloc(sizeof(struct fws_args));
-			args->fd = client_fd;
-			args->ssl_ctx = ssl_ctx;
-			args->fws_conf = &config;
-			args->client_addr = &client_addr;
-	
-			pthread_t thread;
-			pthread_create(&thread, NULL, fws_handler, (void*)args);
-			pthread_detach(thread);
-		}
-	}
-
-	pthread_mutex_destroy(&nft_lock);
-	close(server_http_fd);
-	close(server_https_fd);
-
-	system("tc qdisc del dev ifb0 root");
-	system("tc qdisc del dev eno1 ingress");
-	system("ip link set dev ifb0 down");
-	system("modprobe -r ifb");
-
-	system("nft delete table netdev facows");
-	system("nft delete table inet facows");
-	printf("\n");
-
-	return 0;
-}
-
-static void _fws_end(int sig) {
+static void _fws_exit(int sig) {
 	fws_flag = sig;
 }
