@@ -49,11 +49,8 @@ int main() {
 	SSL_CTX *ssl_ctx;
 	net_443_init(&ssl_ctx, &config);
 
-	int server_http_fd;
-	net_server_init(&server_http_fd, config.http_port);
-
-	int server_https_fd;
-	net_server_init(&server_https_fd, config.https_port);
+	int server_http_fd = net_server_init(config.http_port);
+	int server_https_fd = net_server_init(config.https_port);
 
 	struct pollfd fds[2];
 	fds[0].fd = server_http_fd;

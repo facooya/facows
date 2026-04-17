@@ -17,20 +17,21 @@
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
-int net_server_init(int *server_fd, uint16_t port) {
+int net_server_init(uint16_t port) {
 	struct sockaddr_in6 server_addr;
 	const int opt = 1;
 
-	*server_fd = socket(AF_INET6, SOCK_STREAM, 0);
-	setsockopt(*server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	int server_fd = socket(AF_INET6, SOCK_STREAM, 0);
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin6_family = AF_INET6;
 	server_addr.sin6_addr = in6addr_any;
 	server_addr.sin6_port = htons(port);
 
-	bind(*server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
-	listen(*server_fd, 128);
-	return 0;
+	bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+	listen(server_fd, 128);
+
+	return server_fd;
 }
 
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {

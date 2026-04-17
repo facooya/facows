@@ -6,7 +6,7 @@
 #ifndef FWS_NET_H
 #define FWS_NET_H
 
-int net_server_init(int *server_fd, uint16_t port);
+int net_server_init(uint16_t port);
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf);
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config);
 
