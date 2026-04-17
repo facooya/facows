@@ -28,7 +28,9 @@ int net_server_init(uint16_t port) {
 	server_addr.sin6_addr = in6addr_any;
 	server_addr.sin6_port = htons(port);
 
-	bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
+	if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+		return -1;
+	}
 	listen(server_fd, 128);
 
 	return server_fd;

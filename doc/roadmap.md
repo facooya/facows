@@ -1,5 +1,7 @@
 # Roadmap
 - epoll
+- reduce root access
+- systemd
 
 ## Traffic Control
 - check auto ip name `/proc/net/route`

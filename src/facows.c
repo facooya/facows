@@ -36,7 +36,7 @@ int main() {
 	// { init
 	struct fws_conf config;
 	if (file_conf_parse(CONF_PATH, &config) != 0) {
-		return 0;
+		return 1;
 	}
 
 	signal(SIGINT, _fws_exit);
@@ -51,6 +51,9 @@ int main() {
 
 	int server_http_fd = net_server_init(config.http_port);
 	int server_https_fd = net_server_init(config.https_port);
+	if (server_http_fd < 0 || server_https_fd < 0) {
+		return 1;
+	}
 
 	struct pollfd fds[2];
 	fds[0].fd = server_http_fd;
