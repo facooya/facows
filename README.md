@@ -60,5 +60,6 @@ sudo ./build/facows
 
 ---
 
-> FACOWS: FACOoya Web Server  
+> FWS: Facooya Web Server  
+> FACOWS: FACOoya Web Server   
 > Authors 2026 Facooya and Fanone Facooya

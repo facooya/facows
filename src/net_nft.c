@@ -15,11 +15,11 @@
 #include "types.h"
 #include "net.h"
 
-#define DOS_LIMIT 10
+#define DOS_LIMIT 3
 #define NFT_PATH "/etc/facows/facows_nft.conf"
 #define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
-#define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout 1m}"
-#define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout 1m}"
+#define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout 1m}"
+#define NFT_BAN6 "nft add element inet facows facows_ban6 {%s timeout 1m}"
 
 void net_nft_init(uint16_t http_port, uint16_t https_port) {
 	struct stat nft_st;
@@ -60,20 +60,40 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 		snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN6, ip_p);
 	}
 
-	// TODO: search ip
-	memcpy(nft_list[0].ip, client_addr->sin6_addr.s6_addr, 16);
+	// TODO
+	time_t cur_sec = time(NULL);
+	int nft_i = -1;
+	for (size_t i=0; i<nft_list_n; i++) {
+		if (memcmp(nft_list[i].ip, client_addr->sin6_addr.s6_addr, 16) == 0) {
+			nft_i = i;
+			break;
+		}
+	}
 
-	time_t ctime = time(NULL);
+	if (nft_i < 0) {
+		for (size_t i=0; i<nft_list_n; i++) {
+			if (nft_list[i].time != cur_sec) {
+				nft_i = i;
+				break;
+			}
+		}
 
-	if (nft_list[0].time == ctime) {
-		nft_list[0].count++;
+		if (nft_i < 0) {
+			nft_i = nft_list_n;
+		}
 
-		if (nft_list[0].count > DOS_LIMIT) {
+		memcpy(nft_list[nft_i].ip, client_addr->sin6_addr.s6_addr, 16);
+	}
+
+	if (nft_list[nft_i].time == cur_sec) {
+		nft_list[nft_i].count++;
+
+		if (nft_list[nft_i].count > DOS_LIMIT) {
 			system(cmd_ban);
 		}
 
 	} else {
-		nft_list[0].count = 1;
-		nft_list[0].time = ctime;
+		nft_list[nft_i].count = 1;
+		nft_list[nft_i].time = cur_sec;
 	}
 }

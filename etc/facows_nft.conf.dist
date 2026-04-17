@@ -2,17 +2,14 @@
 #
 # Copyright 2026 Facooya and Fanone Facooya
 
-add table netdev facows;
-delete table netdev facows;
 add table inet facows;
 delete table inet facows;
 
-table netdev facows {
+table inet facows {
 	set facows_ban4 {
 		type ipv4_addr;
 		flags timeout;
 	}
-
 	set facows_ban6 {
 		type ipv6_addr;
 		flags timeout;
@@ -28,19 +25,16 @@ table netdev facows {
 	}
 
 	chain facows_ingress {
-		# check device name
-		type filter hook ingress device "eno1" priority -300; policy accept;
+		type filter hook prerouting priority -300; policy accept;
 		ip saddr @facows_ban4 drop;
 		ip6 saddr @facows_ban6 drop;
 
 		update @facows_flood4 {ip saddr limit rate over 1000/second burst 2000 packets} update @facows_ban4 {ip saddr timeout 1m} drop;
 		update @facows_flood6 {ip6 saddr limit rate over 1000/second burst 2000 packets} update @facows_ban6 {ip6 saddr timeout 1m} drop;
 	}
-}
 
-table inet facows {
 	chain facows_input {
-		type filter hook input priority filter; policy drop;
+		type filter hook input priority 0; policy drop;
 
 		iif "lo" accept;
 		ct state established,related accept;

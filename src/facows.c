@@ -106,8 +106,6 @@ int main() {
 		"tc qdisc del dev eno1 ingress;"
 		"ip link set dev ifb0 down;"
 		"modprobe -r ifb;"
-
-		"nft delete table netdev facows;"
 		"nft delete table inet facows;"
 	);
 
