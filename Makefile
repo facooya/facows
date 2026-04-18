@@ -3,6 +3,7 @@
 # Copyright 2026 Facooya and Fanone Facooya
 
 SRCS = \
+src/facows.c \
 lib/fac_utils.c \
 \
 src/net.c \
@@ -13,7 +14,7 @@ src/net_nft.c \
 src/net_tc.c \
 \
 src/file.c \
-src/facows.c
+src/file_conf.c
 
 OBJS = $(SRCS:%.c=build/%.o)
 

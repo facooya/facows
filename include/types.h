@@ -11,6 +11,8 @@
 #define FWS_TYPES_H
 
 struct fws_conf {
+	uint8_t nft;
+	uint8_t tc;
 	uint16_t http_port;
 	uint16_t https_port;
 	char domain[64];
