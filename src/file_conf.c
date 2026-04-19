@@ -15,10 +15,10 @@
 
 #define CONF_KEY_MAX 16
 
-static int _conf_build(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
-static int _conf_write(const char *conf_buf, char *conf_dst, size_t conf_str_n);
+static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
+static int _tool_conf_set(char *member, const char *val, size_t member_n);
 
-int file_conf_parse(const char *path, struct fws_conf *conf) {
+int file_conf_read(struct fws_conf *conf, const char *path) {
 	int ret = 0;
 	int conf_fd = -1;
 	char *conf_buf = NULL;
@@ -44,7 +44,7 @@ int file_conf_parse(const char *path, struct fws_conf *conf) {
 	conf_buf[conf_len-1] = '\n';
 	conf_buf[conf_len] = '\0';
 
-	if (_conf_build(conf, conf_buf, conf_len)) {
+	if (_conf_parse(conf, conf_buf, conf_len)) {
 		ret = -1;
 		goto out;
 	}
@@ -60,7 +60,7 @@ out:
 	return ret;
 }
 
-static int _conf_build(struct fws_conf *conf, const char *conf_buf, size_t conf_len) {
+static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len) {
 	const char *key[] = {"HTTP_PORT", "HTTPS_PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
 
 	const char *p = conf_buf;
@@ -96,27 +96,27 @@ static int _conf_build(struct fws_conf *conf, const char *conf_buf, size_t conf_
 							break;
 
 						case 2:
-							if (_conf_write(p, conf->domain, sizeof(conf->domain)) != 0) {
+							if (_tool_conf_set(conf->domain, p, sizeof(conf->domain)) != 0) {
 								return -1;
 							}
 							break;
 						case 3:
-							if (_conf_write(p, conf->web_root, sizeof(conf->web_root)) != 0) {
+							if (_tool_conf_set(conf->web_root, p, sizeof(conf->web_root)) != 0) {
 								return -1;
 							}
 							break;
 						case 4:
-							if (_conf_write(p, conf->web_log, sizeof(conf->web_log)) != 0) {
+							if (_tool_conf_set(conf->web_log, p, sizeof(conf->web_log)) != 0) {
 								return -1;
 							}
 							break;
 						case 5:
-							if (_conf_write(p, conf->ssl_cert, sizeof(conf->ssl_cert)) != 0) {
+							if (_tool_conf_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) != 0) {
 								return -1;
 							}
 							break;
 						case 6:
-							if (_conf_write(p, conf->ssl_key, sizeof(conf->ssl_key)) != 0) {
+							if (_tool_conf_set(conf->ssl_key, p, sizeof(conf->ssl_key)) != 0) {
 								return -1;
 							}
 							break;
@@ -140,22 +140,22 @@ next_line:
 	return 0;
 }
 
-static int _conf_write(const char *conf_val, char *conf_dst, size_t conf_str_n) {
-	const char *p1 = conf_val + 1;
+static int _tool_conf_set(char *member, const char *val, size_t member_n) {
+	const char *p1 = val + 1;
 	if (*(p1-1) != '"') {
 		printf("facows.conf: error: require double quote before write string\n");
 		return -1;
 	}
 
-	const char *p2 = memchr(p1, '"', conf_str_n);
+	const char *p2 = memchr(p1, '"', member_n-1);
 	if (p2 == NULL) {
-		printf("facows.conf: error: very large value, lower than %d\n", conf_str_n);
+		printf("facows.conf: error: very large value, lower than %d\n", member_n-1);
 		return -1;
 	}
 
 	size_t n = p2 - p1;
-	memcpy(conf_dst, p1, n);
-	conf_dst[n] = '\0';
+	memcpy(member, p1, n);
+	member[n] = '\0';
 
 	return 0;
 }

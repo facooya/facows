@@ -35,7 +35,7 @@ static void _fws_exit(int sig);
 int main() {
 	// { init
 	struct fws_conf config;
-	if (file_conf_parse(CONF_PATH, &config) != 0) {
+	if (file_conf_read(&config, CONF_PATH) != 0) {
 		return 1;
 	}
 
