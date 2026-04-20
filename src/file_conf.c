@@ -13,14 +13,28 @@
 #include "types.h"
 #include "file.h"
 
-#define CONF_KEY_MAX 16
+#define TRUE "true"
+#define FALSE "false"
+#define TRUE_N sizeof(TRUE) - 1
+#define FALSE_N sizeof(FALSE) - 1
 
-#define CONF_KEYS(KEY) KEY(HTTP_PORT) KEY(HTTPS_PORT) KEY(DOMAIN) KEY(WEB_ROOT) KEY(WEB_LOG) KEY(SSL_CERT) KEY(SSL_KEY)
+#define CONF_KEY_MAX 16
+#define CONF_KEYS(KEY) \
+	KEY(HTTP_PORT) \
+	KEY(HTTPS_PORT) \
+	KEY(NFT) \
+	KEY(TC) \
+	KEY(DOMAIN) \
+	KEY(WEB_ROOT) \
+	KEY(WEB_LOG) \
+	KEY(SSL_CERT) \
+	KEY(SSL_KEY)
 #define CONF_KEYS_ENUM(key) key,
 #define CONF_KEYS_ARR(key) #key,
 
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
-static int _tool_conf_set(char *member, const char *val, size_t member_n);
+static int _tool_conf_str_set(char *member, const char *val, size_t member_n);
+static int _tool_conf_bool_set(uint8_t *member, const char *val);
 
 int file_conf_read(struct fws_conf *conf, const char *path) {
 	int ret = 0;
@@ -100,28 +114,39 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 							conf->https_port = (uint16_t) strtol(p, NULL, 10);
 							break;
 
+						case NFT:
+							if (_tool_conf_bool_set(&conf->nft, p) < 0) {
+								return -1;
+							}
+							break;
+						case TC:
+							if (_tool_conf_bool_set(&conf->tc, p) < 0) {
+								return -1;
+							}
+							break;
+
 						case DOMAIN:
-							if (_tool_conf_set(conf->domain, p, sizeof(conf->domain)) != 0) {
+							if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
 								return -1;
 							}
 							break;
 						case WEB_ROOT:
-							if (_tool_conf_set(conf->web_root, p, sizeof(conf->web_root)) != 0) {
+							if (_tool_conf_str_set(conf->web_root, p, sizeof(conf->web_root)) < 0) {
 								return -1;
 							}
 							break;
 						case WEB_LOG:
-							if (_tool_conf_set(conf->web_log, p, sizeof(conf->web_log)) != 0) {
+							if (_tool_conf_str_set(conf->web_log, p, sizeof(conf->web_log)) < 0) {
 								return -1;
 							}
 							break;
 						case SSL_CERT:
-							if (_tool_conf_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) != 0) {
+							if (_tool_conf_str_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) < 0) {
 								return -1;
 							}
 							break;
 						case SSL_KEY:
-							if (_tool_conf_set(conf->ssl_key, p, sizeof(conf->ssl_key)) != 0) {
+							if (_tool_conf_str_set(conf->ssl_key, p, sizeof(conf->ssl_key)) < 0) {
 								return -1;
 							}
 							break;
@@ -145,7 +170,7 @@ next_line:
 	return 0;
 }
 
-static int _tool_conf_set(char *member, const char *val, size_t member_n) {
+static int _tool_conf_str_set(char *member, const char *val, size_t member_n) {
 	const char *p1 = val + 1;
 	if (*(p1-1) != '"') {
 		printf("facows.conf: error: require double quote before write string\n");
@@ -161,6 +186,29 @@ static int _tool_conf_set(char *member, const char *val, size_t member_n) {
 	size_t n = p2 - p1;
 	memcpy(member, p1, n);
 	member[n] = '\0';
+
+	return 0;
+}
+
+static int _tool_conf_bool_set(uint8_t *member, const char *val) {
+	if (memcmp(val, TRUE, TRUE_N) == 0) {
+		if (*(val+TRUE_N) == ' ' || *(val+TRUE_N) == '\n') {
+			*member = 1;
+		} else {
+			printf("facows.conf: error: bool type error\n");
+			return -1;
+		}
+	} else if (memcmp(val, FALSE, FALSE_N) == 0) {
+		if (*(val+FALSE_N) == ' ' || *(val+FALSE_N) == '\n') {
+			*member = 0;
+		} else {
+			printf("facows.conf: error: bool type error\n");
+			return -1;
+		}
+	} else {
+		printf("facows.conf: error: type error\n");
+		return -1;
+	}
 
 	return 0;
 }
