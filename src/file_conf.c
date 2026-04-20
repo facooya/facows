@@ -15,6 +15,10 @@
 
 #define CONF_KEY_MAX 16
 
+#define CONF_KEYS(KEY) KEY(HTTP_PORT) KEY(HTTPS_PORT) KEY(DOMAIN) KEY(WEB_ROOT) KEY(WEB_LOG) KEY(SSL_CERT) KEY(SSL_KEY)
+#define CONF_KEYS_ENUM(key) key,
+#define CONF_KEYS_ARR(key) #key,
+
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
 static int _tool_conf_set(char *member, const char *val, size_t member_n);
 
@@ -61,7 +65,8 @@ out:
 }
 
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len) {
-	const char *key[] = {"HTTP_PORT", "HTTPS_PORT", "DOMAIN", "WEB_ROOT", "WEB_LOG", "SSL_CERT", "SSL_KEY"};
+	enum {CONF_KEYS(CONF_KEYS_ENUM)};
+	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
 	const char *p = conf_buf;
 	size_t total_n = 0;
@@ -70,15 +75,15 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 			goto next_line;
 		}
 
-		for (size_t i=0; i<sizeof(key)/sizeof(key[0]); i++) {
+		for (size_t i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
 			size_t conf_key_len = fac_memclen(p, ' ', CONF_KEY_MAX);
 			if (conf_key_len == CONF_KEY_MAX) {
 				goto next_line;
 			}
 
-			size_t key_len = fac_memclen(key[i], '\0', CONF_KEY_MAX);
+			size_t key_len = fac_memclen(keys[i], '\0', CONF_KEY_MAX);
 			if (conf_key_len == key_len) {
-				if (memcmp(p, key[i], key_len) == 0) {
+				if (memcmp(p, keys[i], key_len) == 0) {
 					p += conf_key_len;
 					total_n += conf_key_len;
 					while (*p == ' ') {
@@ -87,35 +92,35 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 					}
 
 					switch (i) {
-						case 0:
+						case HTTP_PORT:
 							conf->http_port = (uint16_t) strtol(p, NULL, 10);
 							break;
 
-						case 1:
+						case HTTPS_PORT:
 							conf->https_port = (uint16_t) strtol(p, NULL, 10);
 							break;
 
-						case 2:
+						case DOMAIN:
 							if (_tool_conf_set(conf->domain, p, sizeof(conf->domain)) != 0) {
 								return -1;
 							}
 							break;
-						case 3:
+						case WEB_ROOT:
 							if (_tool_conf_set(conf->web_root, p, sizeof(conf->web_root)) != 0) {
 								return -1;
 							}
 							break;
-						case 4:
+						case WEB_LOG:
 							if (_tool_conf_set(conf->web_log, p, sizeof(conf->web_log)) != 0) {
 								return -1;
 							}
 							break;
-						case 5:
+						case SSL_CERT:
 							if (_tool_conf_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) != 0) {
 								return -1;
 							}
 							break;
-						case 6:
+						case SSL_KEY:
 							if (_tool_conf_set(conf->ssl_key, p, sizeof(conf->ssl_key)) != 0) {
 								return -1;
 							}
