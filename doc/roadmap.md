@@ -2,8 +2,8 @@
 - epoll
 - reduce root access
 - systemd
-- more conf
 - add log
+- check conf port
 
 ## Traffic Control
 - check auto ip name `/proc/net/route`

@@ -21,7 +21,7 @@ int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t path_n);
 void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, SSL *ssl);
 
-void net_nft_init(uint16_t http_port, uint16_t https_port);
+void net_nft_init(const struct fws_conf *conf);
 void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n);
 void net_tc_init(void);
 

@@ -32,11 +32,11 @@ make
 
 **Configuration**
 > [!WARNING]
-> Deny all port except Facows port defined by `facows.conf.dist`.
-> Add more port number in `facows_nft.conf.dist` at `facows_chain` below `tcp dport {%d, %d} accept;`, like `tcp dport {[PORT], [PORT], ...} accept;` e.g., `tcp dport {1234, 5678} accept;`, or comment all line at `facows_chain` section, this way can not IP ban to any attack.
+> If `NFT` configuration true, deny all port except Facows port defined by `facows.conf.dist`.
+> Enable `ALLOW_PORTS` and write allow port in `facows.conf.dist`.
 
 > [!CAUTION]
-> Overwirte forced `ifb` module and queue discipline on `tc` by `facows_tc.conf.dist`.
+> If `TC` configuration true, overwirte forced `ifb` module and queue discipline on `tc` by `facows_tc.conf.dist`.
 
 Make install not support yet.  
 Modifiy `facows.conf.dist` domain and SSL path.  

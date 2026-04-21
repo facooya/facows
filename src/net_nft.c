@@ -15,13 +15,16 @@
 #include "types.h"
 #include "net.h"
 
+#define IPV4_MAP "::ffff:"
+#define IPV4_MAP_N sizeof(IPV4_MAP) - 1
+
 #define DOS_LIMIT 3
 #define NFT_PATH "/etc/facows/facows_nft.conf"
 #define NFT_CMD "nft -f - << EOF\n%s\nEOF\n"
 #define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout 1m}"
 #define NFT_BAN6 "nft add element inet facows facows_ban6 {%s timeout 1m}"
 
-void net_nft_init(uint16_t http_port, uint16_t https_port) {
+void net_nft_init(const struct fws_conf *conf) {
 	struct stat nft_st;
 	stat(NFT_PATH, &nft_st);
 	off_t nft_size = nft_st.st_size;
@@ -34,8 +37,8 @@ void net_nft_init(uint16_t http_port, uint16_t https_port) {
 	nft_raw[nft_size] = '\0';
 	close(nft_fd);
 
-	snprintf(nft_buf, nft_size+11, nft_raw, http_port, https_port);
-	snprintf(nft_cmd, nft_size+11+sizeof(NFT_CMD), NFT_CMD, nft_buf);
+	snprintf(nft_buf, nft_size+11+sizeof(conf->allow_ports), nft_raw, conf->http_port, conf->https_port, conf->allow_ports);
+	snprintf(nft_cmd, nft_size+11+sizeof(conf->allow_ports)+sizeof(NFT_CMD), NFT_CMD, nft_buf);
 	system(nft_cmd);
 
 	free(nft_raw);
@@ -50,17 +53,15 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 	char ip_str[INET6_ADDRSTRLEN];
 	char *ip_p = ip_str;
 	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));
-	printf("%s\n", ip_str);
 
 	char cmd_ban[256];
-	if (memcmp(ip_str, "::ffff:", sizeof("::ffff:")-1) == 0) {
-		ip_p += sizeof("::ffff:")-1;
+	if (memcmp(ip_str, IPV4_MAP, IPV4_MAP_N) == 0) {
+		ip_p += IPV4_MAP_N;
 		snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN4, ip_p);
 	} else {
 		snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN6, ip_p);
 	}
 
-	// TODO
 	time_t cur_sec = time(NULL);
 	int nft_i = -1;
 	for (size_t i=0; i<nft_list_n; i++) {

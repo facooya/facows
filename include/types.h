@@ -15,9 +15,10 @@ struct fws_conf {
 	uint8_t tc;
 	uint16_t http_port;
 	uint16_t https_port;
-	char domain[64];
-	char web_root[64];
-	char web_log[64];
+	char allow_ports[128];
+	char domain[128];
+	char web_root[128];
+	char web_log[128];
 	char ssl_cert[128];
 	char ssl_key[128];
 };

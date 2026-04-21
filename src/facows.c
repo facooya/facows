@@ -43,8 +43,12 @@ int main() {
 	signal(SIGTERM, _fws_exit);
 	fws_flag = 0;
 
-	net_nft_init(config.http_port, config.https_port);
-	net_tc_init();
+	if (config.nft == 1) {
+		net_nft_init(&config);
+	}
+	if (config.tc == 1) {
+		net_tc_init();
+	}
 
 	SSL_CTX *ssl_ctx;
 	net_443_init(&ssl_ctx, &config);
@@ -101,14 +105,17 @@ int main() {
 	close(server_http_fd);
 	close(server_https_fd);
 
-	system(
-		"tc qdisc del dev ifb0 root;"
-		"tc qdisc del dev eno1 ingress;"
-		"ip link set dev ifb0 down;"
-		"modprobe -r ifb;"
-		"nft delete table inet facows;"
-	);
-
+	if (config.nft == 1) {
+		system("nft delete table inet facows;");
+	}
+	if (config.tc == 1) {
+		system(
+			"tc qdisc del dev ifb0 root;"
+			"tc qdisc del dev eno1 ingress;"
+			"ip link set dev ifb0 down;"
+			"modprobe -r ifb;"
+		);
+	}
 	printf("\n");
 
 	return 0;
@@ -159,12 +166,14 @@ static void *_fws_thread_run(void *arg) {
 			return NULL;
 		}
 
-		size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
-		char *path_p = file.path + path_size - (sizeof(".html") - 1);
-		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-			pthread_mutex_lock(&nft_lock);
-			net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
-			pthread_mutex_unlock(&nft_lock);
+		if (config->nft == 1) {
+			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
+			char *path_p = file.path + path_size - (sizeof(".html") - 1);
+			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+				pthread_mutex_lock(&nft_lock);
+				net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+				pthread_mutex_unlock(&nft_lock);
+			}
 		}
 
 		if (status_code != 0) {

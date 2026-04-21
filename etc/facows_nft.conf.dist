@@ -40,7 +40,6 @@ table inet facows {
 		ct state established,related accept;
 
 		tcp dport {%d, %d} accept;
-		# tcp dport {[PORT], [PORT], ...} accept;
-		# E.g., tcp dport {1234, 5678} accept;
+		tcp dport {%s} accept;
 	}
 }

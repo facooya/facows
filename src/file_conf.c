@@ -22,6 +22,7 @@
 #define CONF_KEYS(KEY) \
 	KEY(HTTP_PORT) \
 	KEY(HTTPS_PORT) \
+	KEY(ALLOW_PORTS) \
 	KEY(NFT) \
 	KEY(TC) \
 	KEY(DOMAIN) \
@@ -40,6 +41,8 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 	int ret = 0;
 	int conf_fd = -1;
 	char *conf_buf = NULL;
+
+	conf->allow_ports[0] = '\0';
 
 	conf_fd = open(path, O_RDONLY);
 	if (conf_fd < 0) {
@@ -109,9 +112,19 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 						case HTTP_PORT:
 							conf->http_port = (uint16_t) strtol(p, NULL, 10);
 							break;
-
 						case HTTPS_PORT:
 							conf->https_port = (uint16_t) strtol(p, NULL, 10);
+							break;
+
+						case ALLOW_PORTS:
+							const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
+							if (p2 == NULL) {
+								printf("facows.conf: error: very large value, lower than %d\n", sizeof(conf->allow_ports)-1);
+								return -1;
+							}
+							size_t n = p2 - p;
+							memcpy(conf->allow_ports, p, n);
+							conf->allow_ports[n] = '\0';
 							break;
 
 						case NFT:
