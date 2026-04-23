@@ -25,6 +25,7 @@
 	KEY(ALLOW_PORTS) \
 	KEY(NFT) \
 	KEY(TC) \
+	KEY(TC_BANDWIDTH) \
 	KEY(DOMAIN) \
 	KEY(WEB_ROOT) \
 	KEY(WEB_LOG) \
@@ -138,6 +139,11 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 							}
 							break;
 
+						case TC_BANDWIDTH:
+							if (_tool_conf_str_set(conf->tc_bandwidth, p, sizeof(conf->tc_bandwidth)) < 0) {
+								return -1;
+							}
+							break;
 						case DOMAIN:
 							if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
 								return -1;

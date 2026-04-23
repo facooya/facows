@@ -32,8 +32,8 @@ struct fws_nft {
 
 struct fws_tc {
 	uint8_t modprobe;
+	char ifb_name[8];
 	char net_name[16];
-	char ifb_name[16];
 };
 
 struct fws_http_res {

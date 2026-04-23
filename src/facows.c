@@ -48,7 +48,7 @@ int main() {
 	}
 	if (config.tc == 1) {
 		struct fws_tc tc;
-		net_tc_init(&tc);
+		net_tc_init(&tc, config.tc_bandwidth);
 	}
 
 	SSL_CTX *ssl_ctx;
