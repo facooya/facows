@@ -14,7 +14,7 @@ sudo apt install git make libssl-dev nftables
 - `git` - For the `git clone`
 - `make` - Build for facows
 - `libssl-dev` - Open ssl library for C
-- `nftables` - Network filter for IP black
+- `nftables` - Network filter for IP ban
 
 Register nftables to systemd:
 ```bash

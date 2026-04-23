@@ -47,7 +47,8 @@ int main() {
 		net_nft_init(&config);
 	}
 	if (config.tc == 1) {
-		net_tc_init();
+		struct fws_tc tc;
+		net_tc_init(&tc);
 	}
 
 	SSL_CTX *ssl_ctx;
@@ -109,6 +110,7 @@ int main() {
 		system("nft delete table inet facows;");
 	}
 	if (config.tc == 1) {
+		// TODO: struct tc
 		system(
 			"tc qdisc del dev ifb0 root;"
 			"tc qdisc del dev eno1 ingress;"

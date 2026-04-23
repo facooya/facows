@@ -11,14 +11,17 @@
 HTTP_PORT 80
 HTTPS_PORT 443
 
-# More allow port here. E.g., ALLOW_PORTS [PORT], [PORT], ...
-# ALLOW_PORTS 80, 443
-
 # Net filter table enable for dos and flood attack.
 NFT false
 
+# More allow ports, if nft true. E.g., ALLOW_PORTS [PORT], [PORT], ...
+# ALLOW_PORTS 80, 443
+
 # Traffic control enable for flood attack.
 TC false
+
+# Set bandwidth, if tc true. If using 100 mega bit per second network, recommend value 90%.
+# TC_BANDWIDTH "90mbit"
 
 # Must not using sub domain, like "www.example.com", only using main domain.
 DOMAIN "example.com"

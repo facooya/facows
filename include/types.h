@@ -15,6 +15,7 @@ struct fws_conf {
 	uint8_t tc;
 	uint16_t http_port;
 	uint16_t https_port;
+	char tc_bandwidth[16];
 	char allow_ports[128];
 	char domain[128];
 	char web_root[128];
@@ -27,6 +28,12 @@ struct fws_nft {
 	uint8_t ip[16];
 	int count;
 	time_t time;
+};
+
+struct fws_tc {
+	uint8_t modprobe;
+	char net_name[16];
+	char ifb_name[16];
 };
 
 struct fws_http_res {
