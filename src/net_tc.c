@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <errno.h>
 #include <time.h>
 #include <string.h>
 #include <fcntl.h>
@@ -20,19 +21,11 @@
 
 #define AWK_NET_PARSE "awk '$2 == \"00000000\" {printf \"%s\", $1}' /proc/net/route"
 
-#define NET_NAME "eno1"
-#define NET_VNAME "ifb0"
-#define BANDWIDTH "90mbit"
-
-#define CMD_SYS_IFB_MOD "lsmod | grep ifb"
-#define CMD_SYS_IFB_NUM "ls -1 /sys/class/net"
-
 #define CMD_IFB_ON "modprobe ifb numifbs=1;"
 #define CMD_IFB_OFF "modprobe -r ifb;"
-#define CMD_IFB_ADD "ip link add name %s type ifb;" // ifb_name
+#define CMD_IFB_ADD "ip link add name %s type ifb;"
 #define CMD_IFB_DEL "ip link del dev %s;"
 #define CMD_IFB_UP "ip link set dev %s up;"
-#define CMD_IFB_DOWN "ip link set dev %s down;"
 
 #define CMD_TC \
 	"tc qdisc replace dev %1$s handle ffff: ingress;" \
@@ -40,7 +33,7 @@
 	"tc filter replace dev %1$s parent ffff: protocol ipv6 flower action mirred egress redirect dev %2$s;" \
 	"tc qdisc replace dev %2$s root cake bandwidth %3$s triple-isolate nat wash ingress;"
 
-#define CMD_TC_DEL "tc qdisc del dev %s ingress" // net_name
+#define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	FILE *sh_file = popen(AWK_NET_PARSE, "r");
@@ -76,7 +69,13 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 			}
 
 			if (memcmp(net_dir->d_name, "ifb", sizeof("ifb")-1) == 0) {
+				errno = 0;
 				long ifb_num = strtol(net_dir->d_name+3, NULL, 10);
+				if (errno != 0) {
+					printf("facows_tc: error: ifb number parsing error\n");
+					return -1;
+				}
+
 				if (ifb_num >= ifb_uniq) {
 					ifb_uniq = ifb_num + 1;
 				}
@@ -118,5 +117,28 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	free(tc_cmd);
 	tc_cmd = NULL;
 
+	return 0;
+}
+
+int net_tc_fini(const struct fws_tc *tc) {
+	if (tc->modprobe == 1) {
+		size_t n = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
+		char *cmd_buf = malloc(n+sizeof(CMD_IFB_OFF));
+		snprintf(cmd_buf, n+1, CMD_TC_DEL, tc->net_name);
+		snprintf(cmd_buf+n, sizeof(CMD_IFB_OFF), CMD_IFB_OFF);
+		system(cmd_buf);
+		free(cmd_buf);
+		cmd_buf = NULL;
+
+	} else {
+		size_t n1 = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
+		size_t n2 = snprintf(NULL, 0, CMD_IFB_DEL, tc->ifb_name);
+		char *cmd_buf = malloc(n1+n2+1);
+		snprintf(cmd_buf, n1+1, CMD_TC_DEL, tc->net_name);
+		snprintf(cmd_buf+n1, n2+1, CMD_IFB_DEL, tc->ifb_name);
+		system(cmd_buf);
+		free(cmd_buf);
+		cmd_buf = NULL;
+	}
 	return 0;
 }

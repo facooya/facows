@@ -46,8 +46,9 @@ int main() {
 	if (config.nft == 1) {
 		net_nft_init(&config);
 	}
+
+	struct fws_tc tc;
 	if (config.tc == 1) {
-		struct fws_tc tc;
 		net_tc_init(&tc, config.tc_bandwidth);
 	}
 
@@ -110,13 +111,7 @@ int main() {
 		system("nft delete table inet facows;");
 	}
 	if (config.tc == 1) {
-		// TODO: struct tc
-		system(
-			"tc qdisc del dev ifb0 root;"
-			"tc qdisc del dev eno1 ingress;"
-			"ip link set dev ifb0 down;"
-			"modprobe -r ifb;"
-		);
+		net_tc_fini(&tc);
 	}
 	printf("\n");
 
