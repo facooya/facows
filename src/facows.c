@@ -44,7 +44,9 @@ int main() {
 	fws_flag = 0;
 
 	if (config.nft == 1) {
-		net_nft_init(&config);
+		if (net_nft_init(&config) < 0) {
+			return 1;
+		}
 	}
 
 	struct fws_tc tc;

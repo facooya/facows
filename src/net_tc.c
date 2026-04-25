@@ -31,7 +31,7 @@
 	"tc qdisc replace dev %1$s handle ffff: ingress;" \
 	"tc filter replace dev %1$s parent ffff: protocol ip flower action mirred egress redirect dev %2$s;" \
 	"tc filter replace dev %1$s parent ffff: protocol ipv6 flower action mirred egress redirect dev %2$s;" \
-	"tc qdisc replace dev %2$s root cake bandwidth %3$s triple-isolate nat wash ingress;"
+	"tc qdisc replace dev %2$s root handle fac0: cake bandwidth %3$s triple-isolate nat wash ingress;"
 
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 

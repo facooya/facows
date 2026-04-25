@@ -12,6 +12,8 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 
+#include <nftables/libnftables.h>
+
 #include "types.h"
 #include "net.h"
 
@@ -24,29 +26,46 @@
 #define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout 1m}"
 #define NFT_BAN6 "nft add element inet facows facows_ban6 {%s timeout 1m}"
 
-void net_nft_init(const struct fws_conf *conf) {
-	struct stat nft_st;
-	stat(NFT_PATH, &nft_st);
-	off_t nft_size = nft_st.st_size;
-	char *nft_raw = malloc(nft_size+1);
-	char *nft_buf = malloc(nft_size+11);
-	char *nft_cmd = malloc(nft_size+11+sizeof(NFT_CMD));
+#define NFT_INIT \
+	"add table inet facows;\n" \
+	"delete table inet facows;\n" \
+	\
+	"table inet facows {\n" \
+		"set facows_ban4 {type ipv4_addr; flags timeout;}\n" \
+		"set facows_ban6 {type ipv6_addr; flags timeout;}\n" \
+		"set facows_flood4 {type ipv4_addr; flags dynamic;}\n" \
+		"set facows_flood6 {type ipv6_addr; flags dynamic;}\n" \
+	\
+		"chain facows_prerouting {\n" \
+			"type filter hook prerouting priority -300; policy accept;\n" \
+			"ip saddr @facows_ban4 drop;\n" \
+			"ip6 saddr @facows_ban6 drop;\n" \
+			"update @facows_flood4 {ip saddr limit rate over %1$d/second burst %2$d packets} update @facows_ban4 {ip saddr timeout 1m} drop;\n" \
+			"update @facows_flood6 {ip6 saddr limit rate over %1$d/second burst %2$d packets} update @facows_ban6 {ip6 saddr timeout 1m} drop;\n" \
+		"}\n" \
+	\
+		"chain facows_input {\n" \
+			"type filter hook input priority 0; policy drop;\n" \
+			"iif \"lo\" accept;\n" \
+			"ct state established,related accept;\n" \
+			"tcp dport {%3$d, %4$d} accept;\n" \
+			"tcp dport {%5$s} accept;\n" \
+		"}\n" \
+	"}\n"
 
-	int nft_fd = open(NFT_PATH, O_RDONLY);
-	read(nft_fd, nft_raw, nft_size+1);
-	nft_raw[nft_size] = '\0';
-	close(nft_fd);
+int net_nft_init(const struct fws_conf *conf) {
+	struct nft_ctx *nft_ctx;
+	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
+	if (nft_ctx == NULL) {
+		printf("facows_nft: can not create nft context\n");
+		return -1;
+	}
+	char nft_buf[1024];
+	snprintf(nft_buf, sizeof(nft_buf), NFT_INIT, 1000, 2000, conf->http_port, conf->https_port, conf->allow_ports);
+	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
+	nft_ctx_free(nft_ctx);
 
-	snprintf(nft_buf, nft_size+11+sizeof(conf->allow_ports), nft_raw, conf->http_port, conf->https_port, conf->allow_ports);
-	snprintf(nft_cmd, nft_size+11+sizeof(conf->allow_ports)+sizeof(NFT_CMD), NFT_CMD, nft_buf);
-	system(nft_cmd);
-
-	free(nft_raw);
-	free(nft_buf);
-	free(nft_cmd);
-	nft_raw = NULL;
-	nft_buf = NULL;
-	nft_cmd = NULL;
+	return 0;
 }
 
 void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n) {
