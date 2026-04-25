@@ -23,7 +23,7 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 
 int net_nft_init(const struct fws_conf *conf);
 int net_nft_fini(void);
-void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n);
+void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n, uint32_t ban_time);
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth);
 int net_tc_fini(const struct fws_tc *tc);

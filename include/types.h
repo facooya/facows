@@ -15,7 +15,10 @@ struct fws_conf {
 	uint8_t tc;
 	uint16_t http_port;
 	uint16_t https_port;
-	char tc_bandwidth[16];
+	uint32_t pps_limit;
+	uint32_t pps_burst;
+	uint32_t ban_time;
+	char bandwidth[16];
 	char allow_ports[128];
 	char domain[128];
 	char web_root[128];

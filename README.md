@@ -49,9 +49,6 @@ sudo mkdir -p /etc/facows/
 sudo cp etc/facows.conf.dist /etc/facows/facows.conf
 sudo mkdir -p /usr/share/facows/
 sudo cp share/error_page.html /usr/share/facows/
-
-sudo cp etc/facows_nft.conf.dist /etc/facows/facows_nft.conf
-sudo cp etc/facows_tc.conf.dist /etc/facows/facows_tc.conf
 ```
 
 **Execute**

@@ -22,10 +22,13 @@
 #define CONF_KEYS(KEY) \
 	KEY(HTTP_PORT) \
 	KEY(HTTPS_PORT) \
-	KEY(ALLOW_PORTS) \
 	KEY(NFT) \
+	KEY(ALLOW_PORTS) \
+	KEY(PPS_LIMIT) \
+	KEY(PPS_BURST) \
+	KEY(BAN_TIME) \
 	KEY(TC) \
-	KEY(TC_BANDWIDTH) \
+	KEY(BANDWIDTH) \
 	KEY(DOMAIN) \
 	KEY(WEB_ROOT) \
 	KEY(WEB_LOG) \
@@ -133,17 +136,27 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 								return -1;
 							}
 							break;
+						case PPS_LIMIT:
+							conf->pps_limit = (uint32_t) strtol(p, NULL, 10);
+							break;
+						case PPS_BURST:
+							conf->pps_burst = (uint32_t) strtol(p, NULL, 10);
+							break;
+						case BAN_TIME:
+							conf->ban_time = (uint32_t) strtol(p, NULL, 10);
+							break;
+
 						case TC:
 							if (_tool_conf_bool_set(&conf->tc, p) < 0) {
 								return -1;
 							}
 							break;
-
-						case TC_BANDWIDTH:
-							if (_tool_conf_str_set(conf->tc_bandwidth, p, sizeof(conf->tc_bandwidth)) < 0) {
+						case BANDWIDTH:
+							if (_tool_conf_str_set(conf->bandwidth, p, sizeof(conf->bandwidth)) < 0) {
 								return -1;
 							}
 							break;
+
 						case DOMAIN:
 							if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
 								return -1;

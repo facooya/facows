@@ -51,7 +51,7 @@ int main() {
 
 	struct fws_tc tc;
 	if (config.tc == 1) {
-		net_tc_init(&tc, config.tc_bandwidth);
+		net_tc_init(&tc, config.bandwidth);
 	}
 
 	SSL_CTX *ssl_ctx;
@@ -170,7 +170,7 @@ static void *_fws_thread_run(void *arg) {
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(&nft_lock);
-				net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft));
+				net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
 				pthread_mutex_unlock(&nft_lock);
 			}
 		}
