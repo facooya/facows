@@ -51,7 +51,8 @@
 			"tcp dport {%3$d, %4$d} accept;\n" \
 			"tcp dport {%5$s} accept;\n" \
 		"}\n" \
-	"}\n"
+	"}"
+#define NFT_FINI "delete table inet facows;"
 
 int net_nft_init(const struct fws_conf *conf) {
 	struct nft_ctx *nft_ctx;
@@ -60,10 +61,28 @@ int net_nft_init(const struct fws_conf *conf) {
 		printf("facows_nft: can not create nft context\n");
 		return -1;
 	}
-	char nft_buf[1024];
-	snprintf(nft_buf, sizeof(nft_buf), NFT_INIT, 1000, 2000, conf->http_port, conf->https_port, conf->allow_ports);
+
+	size_t n = snprintf(NULL, 0, NFT_INIT, 1000, 2000, conf->http_port, conf->https_port, conf->allow_ports);
+	char *nft_buf = malloc(n+1);
+	snprintf(nft_buf, n+1, NFT_INIT, 1000, 2000, conf->http_port, conf->https_port, conf->allow_ports);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
 	nft_ctx_free(nft_ctx);
+	nft_ctx = NULL;
+	free(nft_buf);
+	nft_buf = NULL;
+	return 0;
+}
+
+int net_nft_fini(void) {
+	struct nft_ctx *nft_ctx;
+	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
+	if (nft_ctx == NULL) {
+		printf("facows_nft: can not create nft context\n");
+		return -1;
+	}
+	nft_run_cmd_from_buffer(nft_ctx, NFT_FINI);
+	nft_ctx_free(nft_ctx);
+	nft_ctx = NULL;
 
 	return 0;
 }

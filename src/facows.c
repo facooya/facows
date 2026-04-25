@@ -110,7 +110,7 @@ int main() {
 	close(server_https_fd);
 
 	if (config.nft == 1) {
-		system("nft delete table inet facows;");
+		net_nft_fini();
 	}
 	if (config.tc == 1) {
 		net_tc_fini(&tc);
