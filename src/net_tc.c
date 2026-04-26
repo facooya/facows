@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <libkmod.h>
 
 #include "fac_utils.h"
 #include "types.h"
@@ -36,23 +37,29 @@
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
-	FILE *sh_file = popen(AWK_NET_PARSE, "r");
-	if (sh_file == NULL) {
-		printf("facows_tc: error: can not read network interface name\n");
-		return -1;
-	}
-	if (fgets(tc->net_name, sizeof(tc->net_name), sh_file) == NULL) {
-		printf("facows_tc: error: can not read network interface name\n");
-		return -1;
-	}
-	pclose(sh_file);
+	struct kmod_ctx *kmod_ctx;
+	struct kmod_module *kmod_mod;
 
-	size_t ifb_uniq = 0;
-	if (access("/sys/module/ifb", F_OK) < 0) {
+	kmod_ctx = kmod_new(NULL, NULL);
+	if (kmod_ctx == NULL) {
+		printf("facows_tc: error: fail to create kernel module context\n");
+		return -1;
+	}
+
+	if (kmod_module_new_from_name(kmod_ctx, "ifb", &kmod_mod) < 0) {
+		printf("facows_tc: error: fail to load ifb module\n");
+		kmod_unref(kmod_ctx);
+		kmod_ctx = NULL;
+		return -1;
+	}
+
+	if (kmod_module_get_initstate(kmod_mod) < 0) {
 		tc->modprobe = 1;
+		kmod_module_probe_insert_module(kmod_mod, KMOD_PROBE_APPLY_BLACKLIST, "numifbs=1", NULL, NULL, NULL);
 		memcpy(tc->ifb_name, "ifb0", sizeof("ifb0"));
 
 	} else {
+		size_t ifb_uniq = 0;
 		tc->modprobe = 0;
 		DIR *net_list = opendir("/sys/class/net");
 		if (net_list == NULL) {
@@ -84,16 +91,24 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 		closedir(net_list);
 	}
 
+	kmod_module_unref(kmod_mod);
+	kmod_mod = NULL;
+	kmod_unref(kmod_ctx);
+	kmod_ctx = NULL;
+
+	FILE *sh_file = popen(AWK_NET_PARSE, "r");
+	if (sh_file == NULL) {
+		printf("facows_tc: error: can not read network interface name\n");
+		return -1;
+	}
+	if (fgets(tc->net_name, sizeof(tc->net_name), sh_file) == NULL) {
+		printf("facows_tc: error: can not read network interface name\n");
+		return -1;
+	}
+	pclose(sh_file);
+
 	if (tc->modprobe == 1) {
-		size_t ifb_up_n = snprintf(NULL, 0, CMD_IFB_UP, tc->ifb_name);
-		char *ifb_cmd = malloc(ifb_up_n+sizeof(CMD_IFB_ON));
-		char *p = ifb_cmd;
-		size_t n = snprintf(p, sizeof(CMD_IFB_ON), CMD_IFB_ON);
-		p += n;
-		snprintf(p, ifb_up_n+1, CMD_IFB_UP, tc->ifb_name);
-		system(ifb_cmd);
-		free(ifb_cmd);
-		ifb_cmd = NULL;
+		system("ip link set dev eno1 up;");
 
 	} else {
 		size_t ifb_add_n = snprintf(NULL, 0, CMD_IFB_ADD, tc->ifb_name);
@@ -122,13 +137,24 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 
 int net_tc_fini(const struct fws_tc *tc) {
 	if (tc->modprobe == 1) {
-		size_t n = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
-		char *cmd_buf = malloc(n+sizeof(CMD_IFB_OFF));
-		snprintf(cmd_buf, n+1, CMD_TC_DEL, tc->net_name);
-		snprintf(cmd_buf+n, sizeof(CMD_IFB_OFF), CMD_IFB_OFF);
-		system(cmd_buf);
-		free(cmd_buf);
-		cmd_buf = NULL;
+		struct kmod_ctx *kmod_ctx;
+		struct kmod_module *kmod_mod;
+		kmod_ctx = kmod_new(NULL, NULL);
+		if (kmod_module_new_from_name(kmod_ctx, "ifb", &kmod_mod) < 0) {
+			kmod_unref(kmod_ctx);
+			kmod_ctx = NULL;
+			return -1;
+		}
+
+		kmod_module_remove_module(kmod_mod, 0);
+
+		kmod_module_unref(kmod_mod);
+		kmod_mod = NULL;
+		kmod_unref(kmod_ctx);
+		kmod_ctx = NULL;
+
+		system("tc qdisc del dev eno1 ingress;");
+		return 0;
 
 	} else {
 		size_t n1 = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
@@ -137,8 +163,10 @@ int net_tc_fini(const struct fws_tc *tc) {
 		snprintf(cmd_buf, n1+1, CMD_TC_DEL, tc->net_name);
 		snprintf(cmd_buf+n1, n2+1, CMD_IFB_DEL, tc->ifb_name);
 		system(cmd_buf);
+
 		free(cmd_buf);
 		cmd_buf = NULL;
+		return 0;
 	}
 	return 0;
 }

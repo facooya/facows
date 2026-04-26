@@ -21,7 +21,7 @@ OBJS = $(SRCS:%.c=build/%.o)
 all: build/facows
 
 build/facows: $(OBJS)
-	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables
+	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables -lkmod
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)

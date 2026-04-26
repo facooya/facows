@@ -64,6 +64,7 @@ int net_nft_init(const struct fws_conf *conf) {
 	char *nft_buf = malloc(n+1);
 	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
+
 	nft_ctx_free(nft_ctx);
 	nft_ctx = NULL;
 	free(nft_buf);
@@ -79,9 +80,9 @@ int net_nft_fini(void) {
 		return -1;
 	}
 	nft_run_cmd_from_buffer(nft_ctx, NFT_FINI);
+
 	nft_ctx_free(nft_ctx);
 	nft_ctx = NULL;
-
 	return 0;
 }
 
