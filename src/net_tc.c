@@ -44,34 +44,12 @@
 
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
+static int _mod_init(struct fws_tc *tc);
+
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
-	struct kmod_ctx *kmod_ctx;
-	struct kmod_module *kmod_mod;
-
-	kmod_ctx = kmod_new(NULL, NULL);
-	if (kmod_ctx == NULL) {
-		printf("facows_tc: error: fail to create kernel module context\n");
+	if (_mod_init(tc) < 0) {
 		return -1;
 	}
-
-	if (kmod_module_new_from_name(kmod_ctx, "ifb", &kmod_mod) < 0) {
-		printf("facows_tc: error: fail to load ifb module\n");
-		kmod_unref(kmod_ctx);
-		kmod_ctx = NULL;
-		return -1;
-	}
-
-	if (kmod_module_get_initstate(kmod_mod) < 0) {
-		tc->modprobe = 1;
-		kmod_module_probe_insert_module(kmod_mod, KMOD_PROBE_APPLY_BLACKLIST, "numifbs=0", NULL, NULL, NULL);
-	} else {
-		tc->modprobe = 0;
-	}
-
-	kmod_module_unref(kmod_mod);
-	kmod_mod = NULL;
-	kmod_unref(kmod_ctx);
-	kmod_ctx = NULL;
 
 	struct nl_sock *nl_sock;
 	struct nl_cache *nl_cache;
@@ -171,7 +149,7 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 }
 
 int net_tc_fini(const struct fws_tc *tc) {
-	if (tc->modprobe == 1) {
+	if (tc->mod == 1) {
 		struct kmod_ctx *kmod_ctx;
 		struct kmod_module *kmod_mod;
 		kmod_ctx = kmod_new(NULL, NULL);
@@ -204,4 +182,45 @@ int net_tc_fini(const struct fws_tc *tc) {
 		return 0;
 	}
 	return 0;
+}
+
+static int _mod_init(struct fws_tc *tc) {
+	int ret;
+	struct kmod_ctx *kmod_ctx;
+	struct kmod_module *kmod_mod;
+
+	kmod_ctx = kmod_new(NULL, NULL);
+	if (kmod_ctx == NULL) {
+		printf("facows_tc: error: fail to create kernel module context\n");
+		ret = -1;
+		goto out;
+	}
+
+	ret = kmod_module_new_from_name(kmod_ctx, "ifb", &kmod_mod);
+	if (ret < 0) {
+		printf("facows_tc: error: fail to load ifb module\n");
+		ret = -1;
+		goto out;
+	}
+
+	ret = kmod_module_get_initstate(kmod_mod);
+	if (ret < 0) {
+		tc->mod = 1;
+		ret = kmod_module_probe_insert_module(kmod_mod, KMOD_PROBE_APPLY_BLACKLIST, "numifbs=0", NULL, NULL, NULL);
+		if (ret < 0) {
+			printf("facows_tc: error: fail to insert module\n");
+			ret = -1;
+			goto out;
+		}
+	} else {
+		tc->mod = 0;
+	}
+
+	ret = 0;
+out:
+	kmod_module_unref(kmod_mod);
+	kmod_mod = NULL;
+	kmod_unref(kmod_ctx);
+	kmod_ctx = NULL;
+	return ret;
 }
