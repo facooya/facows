@@ -18,6 +18,8 @@
 #include <net/if.h>
 
 #include <netlink/netlink.h>
+#include <netlink/route/route.h>
+#include <netlink/route/nexthop.h>
 #include <netlink/route/link.h>
 #include <netlink/route/qdisc.h>
 #include <netlink/route/classifier.h>
@@ -91,7 +93,8 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	size_t ifb_num = 0;
 	while (1) {
 		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%d", ifb_num);
-		if (rtnl_link_get_by_name(nl_cache, ifb_buf) == NULL) {
+		rtnl_link = rtnl_link_get_by_name(nl_cache, ifb_buf);
+		if (rtnl_link == NULL) {
 			rtnl_link = rtnl_link_alloc();
 			rtnl_link_set_name(rtnl_link, ifb_buf);
 			rtnl_link_set_type(rtnl_link, "ifb");
@@ -102,32 +105,59 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 				return -1;
 			}
 			rtnl_link_put(rtnl_link);
+			rtnl_link = NULL;
 
 			memcpy(tc->ifb_name, ifb_buf, n+1);
 			break;
+		} else {
+			rtnl_link_put(rtnl_link);
+			rtnl_link = NULL;
 		}
 
 		ifb_num++;
 		if (ifb_num > 30) {
 			printf("facows_tc: error: ifb number large");
+			nl_cache_put(nl_cache);
+			nl_cache = NULL;
+			return -1;
+		}
+	}
+
+	struct nl_cache *rtnl_cache;
+	struct rtnl_route *rtnl_route;
+	struct rtnl_nexthop *rtnl_nh;
+	struct nl_object *nl_obj, *nl_obj_tmp;
+
+	rtnl_route_alloc_cache(nl_sock, 0, 0, &rtnl_cache);
+	nl_obj = nl_cache_get_first(rtnl_cache);
+	if (nl_obj == NULL) {
+		printf("facows_tc: error: fail to find main network name\n");
+		return -1;
+	}
+
+	while (1) {
+		rtnl_route = (struct rtnl_route *) nl_obj;
+
+		if (rtnl_route_get_table(rtnl_route) == RT_TABLE_MAIN && nl_addr_get_len(rtnl_route_get_dst(rtnl_route)) == 0) {
+			rtnl_nh = rtnl_route_nexthop_n(rtnl_route, 0);
+			int net_index = rtnl_route_nh_get_ifindex(rtnl_nh);
+			rtnl_link_i2name(nl_cache, net_index, tc->net_name, sizeof(tc->net_name));
+			break;
+		}
+
+		nl_obj = nl_cache_get_next(nl_obj);
+		if (nl_obj == NULL) {
+			printf("facows_tc: error: not found main network name\n");
 			return -1;
 		}
 	}
 
 	nl_cache_put(nl_cache);
+	nl_cache = NULL;
+	nl_cache_put(rtnl_cache);
+	rtnl_cache = NULL;
 	nl_socket_free(nl_sock);
 	nl_sock = NULL;
-
-	FILE *sh_file = popen(AWK_NET_PARSE, "r");
-	if (sh_file == NULL) {
-		printf("facows_tc: error: can not read network interface name\n");
-		return -1;
-	}
-	if (fgets(tc->net_name, sizeof(tc->net_name), sh_file) == NULL) {
-		printf("facows_tc: error: can not read network interface name\n");
-		return -1;
-	}
-	pclose(sh_file);
 
 	size_t n = snprintf(NULL, 0, CMD_TC, tc->net_name, tc->ifb_name, bandwidth);
 	char *tc_cmd = malloc(n+1);
