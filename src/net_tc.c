@@ -15,6 +15,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <libkmod.h>
+#include <net/if.h>
+
+#include <netlink/netlink.h>
+#include <netlink/route/link.h>
+#include <netlink/route/qdisc.h>
+#include <netlink/route/classifier.h>
+#include <netlink/route/cls/flower.h>
+#include <netlink/route/act/mirred.h>
 
 #include "fac_utils.h"
 #include "types.h"
@@ -22,8 +30,6 @@
 
 #define AWK_NET_PARSE "awk '$2 == \"00000000\" {printf \"%s\", $1}' /proc/net/route"
 
-#define CMD_IFB_ON "modprobe ifb numifbs=1;"
-#define CMD_IFB_OFF "modprobe -r ifb;"
 #define CMD_IFB_ADD "ip link add name %s type ifb;"
 #define CMD_IFB_DEL "ip link del dev %s;"
 #define CMD_IFB_UP "ip link set dev %s up;"
@@ -55,46 +61,62 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 
 	if (kmod_module_get_initstate(kmod_mod) < 0) {
 		tc->modprobe = 1;
-		kmod_module_probe_insert_module(kmod_mod, KMOD_PROBE_APPLY_BLACKLIST, "numifbs=1", NULL, NULL, NULL);
-		memcpy(tc->ifb_name, "ifb0", sizeof("ifb0"));
-
+		kmod_module_probe_insert_module(kmod_mod, KMOD_PROBE_APPLY_BLACKLIST, "numifbs=0", NULL, NULL, NULL);
 	} else {
-		size_t ifb_uniq = 0;
 		tc->modprobe = 0;
-		DIR *net_list = opendir("/sys/class/net");
-		if (net_list == NULL) {
-			printf("facows_tc: error: can not open directory /sys/class/net\n");
-			return -1;
-		}
-
-		while (1) {
-			struct dirent *net_dir = readdir(net_list);
-
-			if (net_dir == NULL) {
-				snprintf(tc->ifb_name, sizeof(tc->ifb_name), "ifb%d", ifb_uniq);
-				break;
-			}
-
-			if (memcmp(net_dir->d_name, "ifb", sizeof("ifb")-1) == 0) {
-				errno = 0;
-				long ifb_num = strtol(net_dir->d_name+3, NULL, 10);
-				if (errno != 0) {
-					printf("facows_tc: error: ifb number parsing error\n");
-					return -1;
-				}
-
-				if (ifb_num >= ifb_uniq) {
-					ifb_uniq = ifb_num + 1;
-				}
-			}
-		}
-		closedir(net_list);
 	}
 
 	kmod_module_unref(kmod_mod);
 	kmod_mod = NULL;
 	kmod_unref(kmod_ctx);
 	kmod_ctx = NULL;
+
+	struct nl_sock *nl_sock;
+	struct nl_cache *nl_cache;
+	struct rtnl_link *rtnl_link;
+	nl_sock = nl_socket_alloc();
+	if (nl_sock == NULL) {
+		printf("facows_tc: error: fail to net link socket\n");
+		return -1;
+	}
+	if (nl_connect(nl_sock, NETLINK_ROUTE) < 0) {
+		printf("facows_tc: error: fail to net link connection\n");
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
+		return -1;
+	}
+	rtnl_link_alloc_cache(nl_sock, 0, &nl_cache);
+
+	char ifb_buf[8];
+	size_t ifb_num = 0;
+	while (1) {
+		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%d", ifb_num);
+		if (rtnl_link_get_by_name(nl_cache, ifb_buf) == NULL) {
+			rtnl_link = rtnl_link_alloc();
+			rtnl_link_set_name(rtnl_link, ifb_buf);
+			rtnl_link_set_type(rtnl_link, "ifb");
+			rtnl_link_set_flags(rtnl_link, IFF_UP);
+			if (rtnl_link_add(nl_sock, rtnl_link, NLM_F_CREATE) < 0) {
+				printf("facows_tc: error: can not add net link\n");
+				rtnl_link_put(rtnl_link);
+				return -1;
+			}
+			rtnl_link_put(rtnl_link);
+
+			memcpy(tc->ifb_name, ifb_buf, n+1);
+			break;
+		}
+
+		ifb_num++;
+		if (ifb_num > 30) {
+			printf("facows_tc: error: ifb number large");
+			return -1;
+		}
+	}
+
+	nl_cache_put(nl_cache);
+	nl_socket_free(nl_sock);
+	nl_sock = NULL;
 
 	FILE *sh_file = popen(AWK_NET_PARSE, "r");
 	if (sh_file == NULL) {
@@ -106,23 +128,6 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 		return -1;
 	}
 	pclose(sh_file);
-
-	if (tc->modprobe == 1) {
-		system("ip link set dev eno1 up;");
-
-	} else {
-		size_t ifb_add_n = snprintf(NULL, 0, CMD_IFB_ADD, tc->ifb_name);
-		size_t ifb_up_n = snprintf(NULL, 0, CMD_IFB_UP, tc->ifb_name);
-		size_t n = ifb_add_n + ifb_up_n;
-		char *ifb_cmd = malloc(n+1);
-		char *p = ifb_cmd;
-		n = snprintf(p, ifb_add_n+1, CMD_IFB_ADD, tc->ifb_name);
-		p += n;
-		snprintf(p, ifb_up_n+1, CMD_IFB_UP, tc->ifb_name);
-		system(ifb_cmd);
-		free(ifb_cmd);
-		ifb_cmd = NULL;
-	}
 
 	size_t n = snprintf(NULL, 0, CMD_TC, tc->net_name, tc->ifb_name, bandwidth);
 	char *tc_cmd = malloc(n+1);

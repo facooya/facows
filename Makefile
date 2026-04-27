@@ -21,11 +21,11 @@ OBJS = $(SRCS:%.c=build/%.o)
 all: build/facows
 
 build/facows: $(OBJS)
-	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables -lkmod
+	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables -lkmod -lnl-route-3 -lnl-3
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)
-	gcc -Isrc -Iinclude -Ilib -c $< -o $@
+	gcc -Isrc -Iinclude -Ilib -I/usr/include/libnl3 -c $< -o $@
 
 build/:
 	mkdir -p $@

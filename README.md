@@ -9,7 +9,7 @@ Testing ...
 ### Dependancy Install
 ```bash
 sudo apt update
-sudo apt install git make libssl-dev nftables libnftables-dev libkmod-dev
+sudo apt install git make libssl-dev nftables libnftables-dev libkmod-dev libnl-3-dev libnl-route-3-dev
 ```
 - `git` - For the `git clone`
 - `make` - Build for facows
@@ -17,6 +17,7 @@ sudo apt install git make libssl-dev nftables libnftables-dev libkmod-dev
 - `nftables` - Network filter for IP ban
 - `libnftables-dev` - Network filter library in C
 - `libkmod-dev` - Kernel module control for IFB in C
+- `libnl-3-dev`, `libnl-route-3-dev` - Net link in C
 
 Register nftables to systemd:
 ```bash

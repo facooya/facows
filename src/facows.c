@@ -33,7 +33,6 @@ static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
-	// { init
 	struct fws_conf config;
 	if (file_conf_read(&config, CONF_PATH) != 0) {
 		return 1;
@@ -73,7 +72,8 @@ int main() {
 	socklen_t client_addr_size = sizeof(client_addr);
 
 	pthread_mutex_init(&nft_lock, NULL);
-	// }
+
+	printf("Facows start\n");
 
 	while (1) {
 		if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
