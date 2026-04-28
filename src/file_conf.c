@@ -59,6 +59,10 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 
 	size_t conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
+	if (conf_buf == NULL) {
+		ret = -1;
+		goto out;
+	}
 	if (read(conf_fd, conf_buf, conf_len-1) < 0) {
 		ret = -1;
 		goto out;
@@ -123,7 +127,7 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 						case ALLOW_PORTS:
 							const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
 							if (p2 == NULL) {
-								printf("facows.conf: error: very large value, lower than %d\n", sizeof(conf->allow_ports)-1);
+								printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
 								return -1;
 							}
 							size_t n = p2 - p;
@@ -211,7 +215,7 @@ static int _tool_conf_str_set(char *member, const char *val, size_t member_n) {
 
 	const char *p2 = memchr(p1, '"', member_n-1);
 	if (p2 == NULL) {
-		printf("facows.conf: error: very large value, lower than %d\n", member_n-1);
+		printf("facows.conf: error: very large value, lower than %zu\n", member_n-1);
 		return -1;
 	}
 

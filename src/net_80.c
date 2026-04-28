@@ -14,7 +14,6 @@
 
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	char recv_buf[8192] = {0};
-	char res_buf[1024] = {0};
 
 	// { recv
 	int recv_size;
@@ -126,7 +125,14 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 	char host_buf[512];
 	net_host_build(host_buf, &http_req, config);
 
-	snprintf(res_buf, sizeof(res_buf), RES_301, host_buf, http_req.uri);
+	size_t res_n = snprintf(NULL, 0, RES_301, host_buf, http_req.uri);
+	char *res_buf = malloc(res_n+1);
+	if (res_buf == NULL) {
+		return -1;
+	}
+	snprintf(res_buf, res_n+1, RES_301, host_buf, http_req.uri);
 	send(client_80_fd, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)), 0);
+	free(res_buf);
+	res_buf = NULL;
 	return 0;
 }

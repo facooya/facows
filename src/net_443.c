@@ -26,7 +26,7 @@
 #define HTTP_MSG_500 "Internal Server Error"
 #define HTTP_MSG_501 "Not Implemented"
 
-#define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n"
+#define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n"
 
 int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	SSL_library_init();
@@ -71,10 +71,14 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 
 int net_443_write(SSL *ssl, const char *path) {
 	int fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		return -1;
+	}
 	char file_buf[4096];
 	ssize_t read_size;
-	while (read_size = read(fd, file_buf, sizeof(file_buf))) {
+	while ((read_size = read(fd, file_buf, sizeof(file_buf))) > 0) {
 		if (SSL_write(ssl, file_buf, read_size) <= 0) {
+			close(fd);
 			return 1;
 		}
 	}
@@ -84,7 +88,7 @@ int net_443_write(SSL *ssl, const char *path) {
 
 int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
 	char res_buf[8192];
-	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nDate: %s\r\n\r\n", http_res->code, http_res->content, size, http_res->date);
+	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nDate: %s\r\n\r\n", http_res->code, http_res->content, size, http_res->date);
 	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
 	return 0;
 }

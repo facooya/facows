@@ -94,6 +94,9 @@ int main() {
 			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 			struct fws_args *args = malloc(sizeof(struct fws_args));
+			if (args == NULL) {
+				return 1;
+			}
 			args->fd = client_fd;
 			args->ssl_ctx = ssl_ctx;
 			args->fws_conf = &config;
@@ -197,6 +200,7 @@ static void *_fws_thread_run(void *arg) {
 	SSL_free(ssl);
 	close(client_fd);
 	free(arg);
+	arg = NULL;
 
 	return NULL;
 }

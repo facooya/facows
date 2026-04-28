@@ -65,9 +65,7 @@ static void _file_init(struct fws_file *file) {
 }
 
 static int _uri_path_build(struct fws_file *file) {
-	struct stat path_stat;
 	char *p1;
-	char *p2;
 
 	// dir
 	if (*(file->uri_path+(file->uri_path_n-1)) == '/') {
@@ -192,4 +190,6 @@ static int _raw_path_build(char *raw_path, const char *uri_path, const char *web
 			p2++;
 		}
 	}
+
+	return 0;
 }

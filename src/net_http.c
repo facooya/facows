@@ -24,7 +24,7 @@ static void _http_init(struct fws_http_req *http_req);
 static int _line_parse(const char *req_buf, struct fws_http_req *http_req);
 static void _uri_parse(struct fws_http_req *http_req);
 static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
-static int _err_check(const struct fws_http_req *http_req);
+//static int _err_check(const struct fws_http_req *http_req);
 static void _res_init(struct fws_http_res *http_res);
 
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
@@ -82,12 +82,15 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 }
 
 void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, SSL *ssl) {
-	char res_buf[2048];
 	char host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	snprintf(res_buf, sizeof(res_buf), RES_301, host_buf, file->uri_path);
+	size_t n = snprintf(NULL, 0, RES_301, host_buf, file->uri_path);
+	char *res_buf = malloc(n+1);
+	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
+	free(res_buf);
+	res_buf = NULL;
 }
 
 static void _res_init(struct fws_http_res *http_res) {
@@ -159,6 +162,7 @@ static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
 	memcpy(http_req->version, p1, n);
 	http_req->version[n] = '\0';
 	// }
+	return 0;
 }
 
 static void _uri_parse(struct fws_http_req *http_req) {
@@ -335,7 +339,7 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	return 0;
 }
 
-static int _err_check(const struct fws_http_req *http_req) {
+/*static int _err_check(const struct fws_http_req *http_req) {
 	if (memcmp(http_req->method, "GET", fac_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed
@@ -349,4 +353,5 @@ static int _err_check(const struct fws_http_req *http_req) {
 	if (http_req->subdomain[0] == '\0') {
 		return 1; // 400 bad
 	}
-}
+	return 0;
+}*/

@@ -4,6 +4,7 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -22,6 +23,9 @@ int net_server_init(uint16_t port) {
 	const int opt = 1;
 
 	int server_fd = socket(AF_INET6, SOCK_STREAM, 0);
+	if (server_fd < 0) {
+		return -1;
+	}
 	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin6_family = AF_INET6;
@@ -29,6 +33,7 @@ int net_server_init(uint16_t port) {
 	server_addr.sin6_port = htons(port);
 
 	if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+		close(server_fd);
 		return -1;
 	}
 	listen(server_fd, 128);
