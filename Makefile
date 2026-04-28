@@ -25,7 +25,7 @@ build/facows: $(OBJS)
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)
-	gcc -Isrc -Iinclude -Ilib -I/usr/include/libnl3 -c $< -o $@
+	gcc -Wall -Wextra -fanalyzer -Isrc -Iinclude -Ilib -I/usr/include/libnl3 -c $< -o $@
 
 build/:
 	mkdir -p $@

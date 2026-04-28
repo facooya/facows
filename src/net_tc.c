@@ -45,32 +45,38 @@
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 static int _mod_init(struct fws_tc *tc);
+static int _sock_alloc(struct nl_sock **sock);
+//static int _ifb_add(const struct nl_sock *sock);
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
-	if (_mod_init(tc) < 0) {
+	int ret;
+
+	ret = _mod_init(tc);
+	if (ret < 0) {
 		return -1;
 	}
 
 	struct nl_sock *nl_sock;
+	ret = _sock_alloc(&nl_sock);
+	if (ret < 0) {
+		return -1;
+	}
+
+	/*ret = _ifb_add(nl_sock);
+	if (ret < 0) {
+		return -1;
+	}*/
+	//ret = _net_find(nl_sock);
+
+	// TODO: improve out
 	struct nl_cache *nl_cache;
 	struct rtnl_link *rtnl_link;
-	nl_sock = nl_socket_alloc();
-	if (nl_sock == NULL) {
-		printf("facows_tc: error: fail to net link socket\n");
-		return -1;
-	}
-	if (nl_connect(nl_sock, NETLINK_ROUTE) < 0) {
-		printf("facows_tc: error: fail to net link connection\n");
-		nl_socket_free(nl_sock);
-		nl_sock = NULL;
-		return -1;
-	}
 	rtnl_link_alloc_cache(nl_sock, 0, &nl_cache);
 
 	char ifb_buf[8];
 	size_t ifb_num = 0;
 	while (1) {
-		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%d", ifb_num);
+		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%zu", ifb_num);
 		rtnl_link = rtnl_link_get_by_name(nl_cache, ifb_buf);
 		if (rtnl_link == NULL) {
 			rtnl_link = rtnl_link_alloc();
@@ -104,7 +110,7 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	struct nl_cache *rtnl_cache;
 	struct rtnl_route *rtnl_route;
 	struct rtnl_nexthop *rtnl_nh;
-	struct nl_object *nl_obj, *nl_obj_tmp;
+	struct nl_object *nl_obj;
 
 	rtnl_route_alloc_cache(nl_sock, 0, 0, &rtnl_cache);
 	nl_obj = nl_cache_get_first(rtnl_cache);
@@ -134,6 +140,7 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	nl_cache = NULL;
 	nl_cache_put(rtnl_cache);
 	rtnl_cache = NULL;
+
 	nl_socket_free(nl_sock);
 	nl_sock = NULL;
 
@@ -224,3 +231,21 @@ out:
 	kmod_ctx = NULL;
 	return ret;
 }
+
+static int _sock_alloc(struct nl_sock **sock) {
+	*sock = nl_socket_alloc();
+	if (*sock == NULL) {
+		printf("facows_tc: error: fail to net link socket\n");
+		return -1;
+	}
+	if (nl_connect(*sock, NETLINK_ROUTE) < 0) {
+		printf("facows_tc: error: fail to net link connection\n");
+		nl_socket_free(*sock);
+		*sock = NULL;
+		return -1;
+	}
+	return 0;
+}
+
+/*static int _ifb_add(const struct nl_sock *sock) {
+}*/
