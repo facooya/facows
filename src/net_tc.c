@@ -30,12 +30,6 @@
 #include "types.h"
 #include "net.h"
 
-#define AWK_NET_PARSE "awk '$2 == \"00000000\" {printf \"%s\", $1}' /proc/net/route"
-
-#define CMD_IFB_ADD "ip link add name %s type ifb;"
-#define CMD_IFB_DEL "ip link del dev %s;"
-#define CMD_IFB_UP "ip link set dev %s up;"
-
 #define CMD_TC \
 	"tc qdisc replace dev %1$s handle ffff: ingress;" \
 	"tc filter replace dev %1$s parent ffff: protocol ip flower action mirred egress redirect dev %2$s;" \
@@ -56,7 +50,8 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 		return -1;
 	}
 
-	struct nl_sock *nl_sock = nl_socket_alloc();
+	struct nl_sock *nl_sock = NULL;
+	nl_sock = nl_socket_alloc();
 	if (nl_sock == NULL) {
 		printf("facows_tc: error: fail to net link socket\n");
 		return -1;
@@ -116,11 +111,50 @@ int net_tc_fini(const struct fws_tc *tc) {
 		return 0;
 
 	} else {
-		size_t n1 = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
-		size_t n2 = snprintf(NULL, 0, CMD_IFB_DEL, tc->ifb_name);
-		char *cmd_buf = malloc(n1+n2+1);
-		snprintf(cmd_buf, n1+1, CMD_TC_DEL, tc->net_name);
-		snprintf(cmd_buf+n1, n2+1, CMD_IFB_DEL, tc->ifb_name);
+		int ret = 0;
+		struct nl_sock *nl_sock = NULL;
+		nl_sock = nl_socket_alloc();
+		if (nl_sock == NULL) {
+			printf("facows_tc: error: fail to allocate net socket\n");
+			return -1;
+		}
+	
+		ret = nl_connect(nl_sock, NETLINK_ROUTE);
+		if (ret < 0) {
+			printf("facows_tc: error: fail to connect net link\n");
+			nl_socket_free(nl_sock);
+			nl_sock = NULL;
+			return -1;
+		}
+
+		struct rtnl_link *rtnl_link = NULL;
+		rtnl_link = rtnl_link_alloc();
+		if (rtnl_link == NULL) {
+			printf("facows_tc: error: fail to allocate net link\n");
+			nl_socket_free(nl_sock);
+			nl_socket_free(nl_sock);
+			nl_sock = NULL;
+			return -1;
+		}
+		rtnl_link_set_name(rtnl_link, tc->ifb_name);
+		ret = rtnl_link_delete(nl_sock, rtnl_link);
+		if (ret < 0) {
+			printf("facows_tc: error: fail to delete network\n");
+			rtnl_link_put(rtnl_link);
+			rtnl_link = NULL;
+			nl_socket_free(nl_sock);
+			nl_sock = NULL;
+			return -1;
+		}
+
+		rtnl_link_put(rtnl_link);
+		rtnl_link = NULL;
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
+
+		size_t n = snprintf(NULL, 0, CMD_TC_DEL, tc->net_name);
+		char *cmd_buf = malloc(n+1);
+		snprintf(cmd_buf, n+1, CMD_TC_DEL, tc->net_name);
 		system(cmd_buf);
 
 		free(cmd_buf);
