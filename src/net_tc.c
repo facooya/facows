@@ -45,10 +45,11 @@
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 static int _mod_init(struct fws_tc *tc);
-static int _ifb_add(struct fws_tc *tc, struct nl_sock *sock);
+static int _ifb_set(struct fws_tc *tc, struct nl_sock *sock);
+static int _net_set(struct fws_tc *tc, struct nl_sock *sock);
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
-	int ret;
+	int ret = 0;
 
 	ret = _mod_init(tc);
 	if (ret < 0) {
@@ -69,50 +70,15 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 		return -1;
 	}
 
-	ret = _ifb_add(tc, nl_sock);
+	ret = _ifb_set(tc, nl_sock);
 	if (ret < 0) {
 		return -1;
 	}
 
-	/*ret = _net_find(nl_sock);
+	ret = _net_set(tc, nl_sock);
 	if (ret < 0) {
 		return -1;
-	}*/
-
-	struct nl_cache *nl_cache, *rtnl_cache;
-	struct rtnl_route *rtnl_route;
-	struct rtnl_nexthop *rtnl_nh;
-	struct nl_object *nl_obj;
-
-	rtnl_link_alloc_cache(nl_sock, 0, &nl_cache);
-	rtnl_route_alloc_cache(nl_sock, 0, 0, &rtnl_cache);
-	nl_obj = nl_cache_get_first(rtnl_cache);
-	if (nl_obj == NULL) {
-		printf("facows_tc: error: fail to find main network name\n");
-		return -1;
 	}
-
-	while (1) {
-		rtnl_route = (struct rtnl_route *) nl_obj;
-
-		if (rtnl_route_get_table(rtnl_route) == RT_TABLE_MAIN && nl_addr_get_len(rtnl_route_get_dst(rtnl_route)) == 0) {
-			rtnl_nh = rtnl_route_nexthop_n(rtnl_route, 0);
-			int net_index = rtnl_route_nh_get_ifindex(rtnl_nh);
-			rtnl_link_i2name(nl_cache, net_index, tc->net_name, sizeof(tc->net_name));
-			break;
-		}
-
-		nl_obj = nl_cache_get_next(nl_obj);
-		if (nl_obj == NULL) {
-			printf("facows_tc: error: not found main network name\n");
-			return -1;
-		}
-	}
-
-	nl_cache_put(nl_cache);
-	nl_cache = NULL;
-	nl_cache_put(rtnl_cache);
-	rtnl_cache = NULL;
 
 	nl_socket_free(nl_sock);
 	nl_sock = NULL;
@@ -130,8 +96,8 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 
 int net_tc_fini(const struct fws_tc *tc) {
 	if (tc->mod == 1) {
-		struct kmod_ctx *kmod_ctx;
-		struct kmod_module *kmod_mod;
+		struct kmod_ctx *kmod_ctx = NULL;
+		struct kmod_module *kmod_mod = NULL;
 		kmod_ctx = kmod_new(NULL, NULL);
 		if (kmod_module_new_from_name(kmod_ctx, "ifb", &kmod_mod) < 0) {
 			kmod_unref(kmod_ctx);
@@ -165,7 +131,7 @@ int net_tc_fini(const struct fws_tc *tc) {
 }
 
 static int _mod_init(struct fws_tc *tc) {
-	int ret;
+	int ret = 0;
 	struct kmod_ctx *kmod_ctx;
 	struct kmod_module *kmod_mod;
 
@@ -205,8 +171,8 @@ out:
 	return ret;
 }
 
-static int _ifb_add(struct fws_tc *tc, struct nl_sock *sock) {
-	int ret;
+static int _ifb_set(struct fws_tc *tc, struct nl_sock *sock) {
+	int ret = 0;
 	struct nl_cache *nl_cache = NULL;
 	struct rtnl_link *rtnl_link = NULL;
 
@@ -216,7 +182,7 @@ static int _ifb_add(struct fws_tc *tc, struct nl_sock *sock) {
 		ret = -1;
 		goto out;
 	}
-	char ifb_buf[8];
+	char ifb_buf[8] = {0};
 	size_t ifb_num = 0;
 	while (1) {
 		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%zu", ifb_num);
@@ -261,5 +227,76 @@ out:
 	rtnl_link = NULL;
 	nl_cache_put(nl_cache);
 	nl_cache = NULL;
+	return ret;
+}
+
+static int _net_set(struct fws_tc *tc, struct nl_sock *sock) {
+	int ret = 0;
+	struct nl_cache *nl_cache, *rtnl_cache = NULL;
+	struct nl_object *nl_obj = NULL;
+
+	ret = rtnl_link_alloc_cache(sock, 0, &nl_cache);
+	if (ret < 0) {
+		printf("facows_tc: error: fail to allocate cache for net link\n");
+		ret = -1;
+		goto out;
+	}
+	ret = rtnl_route_alloc_cache(sock, 0, 0, &rtnl_cache);
+	if (ret < 0) {
+		printf("facows_tc: error: fail to allocate cache for net route\n");
+		ret = -1;
+		goto out;
+	}
+
+	nl_obj = nl_cache_get_first(rtnl_cache);
+	if (nl_obj == NULL) {
+		printf("facows_tc: error: fail to find main network name\n");
+		ret = -1;
+		goto out;
+	}
+
+	while (1) {
+		struct rtnl_route *rtnl_route = NULL;
+		struct nl_addr *nl_addr = NULL;
+
+		rtnl_route = (struct rtnl_route *) nl_obj;
+		int table_idx = rtnl_route_get_table(rtnl_route);
+		nl_addr = rtnl_route_get_dst(rtnl_route);
+		int addr_len = nl_addr_get_len(nl_addr);
+
+		if (table_idx == RT_TABLE_MAIN && addr_len == 0) {
+			struct rtnl_nexthop *rtnl_nh = NULL;
+			rtnl_nh = rtnl_route_nexthop_n(rtnl_route, 0);
+			if (rtnl_nh == NULL) {
+				continue;
+			}
+
+			int net_index = rtnl_route_nh_get_ifindex(rtnl_nh);
+			if (net_index <= 0) {
+				continue;
+			}
+
+			char *i2name = rtnl_link_i2name(nl_cache, net_index, tc->net_name, sizeof(tc->net_name));
+			if (i2name == NULL) {
+				ret = -1;
+				goto out;
+			}
+			break;
+		}
+
+		nl_obj = nl_cache_get_next(nl_obj);
+		if (nl_obj == NULL) {
+			printf("facows_tc: error: not found main network name\n");
+			ret = -1;
+			goto out;
+		}
+	}
+
+	ret = 0;
+out:
+	nl_cache_put(nl_cache);
+	nl_cache = NULL;
+	nl_cache_put(rtnl_cache);
+	rtnl_cache = NULL;
 	return ret;
 }
