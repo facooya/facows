@@ -45,8 +45,7 @@
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 static int _mod_init(struct fws_tc *tc);
-static int _sock_alloc(struct nl_sock **sock);
-//static int _ifb_add(const struct nl_sock *sock);
+static int _ifb_add(struct fws_tc *tc, struct nl_sock *sock);
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	int ret;
@@ -56,62 +55,36 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 		return -1;
 	}
 
-	struct nl_sock *nl_sock;
-	ret = _sock_alloc(&nl_sock);
+	struct nl_sock *nl_sock = nl_socket_alloc();
+	if (nl_sock == NULL) {
+		printf("facows_tc: error: fail to net link socket\n");
+		return -1;
+	}
+
+	ret = nl_connect(nl_sock, NETLINK_ROUTE);
+	if (ret < 0) {
+		printf("facows_tc: error: fail to net link connection\n");
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
+		return -1;
+	}
+
+	ret = _ifb_add(tc, nl_sock);
 	if (ret < 0) {
 		return -1;
 	}
 
-	/*ret = _ifb_add(nl_sock);
+	/*ret = _net_find(nl_sock);
 	if (ret < 0) {
 		return -1;
 	}*/
-	//ret = _net_find(nl_sock);
 
-	// TODO: improve out
-	struct nl_cache *nl_cache;
-	struct rtnl_link *rtnl_link;
-	rtnl_link_alloc_cache(nl_sock, 0, &nl_cache);
-
-	char ifb_buf[8];
-	size_t ifb_num = 0;
-	while (1) {
-		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%zu", ifb_num);
-		rtnl_link = rtnl_link_get_by_name(nl_cache, ifb_buf);
-		if (rtnl_link == NULL) {
-			rtnl_link = rtnl_link_alloc();
-			rtnl_link_set_name(rtnl_link, ifb_buf);
-			rtnl_link_set_type(rtnl_link, "ifb");
-			rtnl_link_set_flags(rtnl_link, IFF_UP);
-			if (rtnl_link_add(nl_sock, rtnl_link, NLM_F_CREATE) < 0) {
-				printf("facows_tc: error: can not add net link\n");
-				rtnl_link_put(rtnl_link);
-				return -1;
-			}
-			rtnl_link_put(rtnl_link);
-			rtnl_link = NULL;
-
-			memcpy(tc->ifb_name, ifb_buf, n+1);
-			break;
-		} else {
-			rtnl_link_put(rtnl_link);
-			rtnl_link = NULL;
-		}
-
-		ifb_num++;
-		if (ifb_num > 30) {
-			printf("facows_tc: error: ifb number large");
-			nl_cache_put(nl_cache);
-			nl_cache = NULL;
-			return -1;
-		}
-	}
-
-	struct nl_cache *rtnl_cache;
+	struct nl_cache *nl_cache, *rtnl_cache;
 	struct rtnl_route *rtnl_route;
 	struct rtnl_nexthop *rtnl_nh;
 	struct nl_object *nl_obj;
 
+	rtnl_link_alloc_cache(nl_sock, 0, &nl_cache);
 	rtnl_route_alloc_cache(nl_sock, 0, 0, &rtnl_cache);
 	nl_obj = nl_cache_get_first(rtnl_cache);
 	if (nl_obj == NULL) {
@@ -232,20 +205,61 @@ out:
 	return ret;
 }
 
-static int _sock_alloc(struct nl_sock **sock) {
-	*sock = nl_socket_alloc();
-	if (*sock == NULL) {
-		printf("facows_tc: error: fail to net link socket\n");
-		return -1;
-	}
-	if (nl_connect(*sock, NETLINK_ROUTE) < 0) {
-		printf("facows_tc: error: fail to net link connection\n");
-		nl_socket_free(*sock);
-		*sock = NULL;
-		return -1;
-	}
-	return 0;
-}
+static int _ifb_add(struct fws_tc *tc, struct nl_sock *sock) {
+	int ret;
+	struct nl_cache *nl_cache = NULL;
+	struct rtnl_link *rtnl_link = NULL;
 
-/*static int _ifb_add(const struct nl_sock *sock) {
-}*/
+	ret = rtnl_link_alloc_cache(sock, 0, &nl_cache);
+	if (ret < 0) {
+		printf("facows_tc: error: fail to allocate link cache\n");
+		ret = -1;
+		goto out;
+	}
+	char ifb_buf[8];
+	size_t ifb_num = 0;
+	while (1) {
+		size_t n = snprintf(ifb_buf, sizeof(ifb_buf), "ifb%zu", ifb_num);
+		rtnl_link = rtnl_link_get_by_name(nl_cache, ifb_buf);
+		if (rtnl_link == NULL) {
+			rtnl_link = rtnl_link_alloc();
+			if (rtnl_link == NULL) {
+				printf("facows_tc: error: fail to allocate memory for link\n");
+				ret = -1;
+				goto out;
+			}
+
+			rtnl_link_set_name(rtnl_link, ifb_buf);
+			rtnl_link_set_type(rtnl_link, "ifb");
+			rtnl_link_set_flags(rtnl_link, IFF_UP);
+			ret = rtnl_link_add(sock, rtnl_link, NLM_F_CREATE);
+			if (ret < 0) {
+				printf("facows_tc: error: can not add net link\n");
+				ret = -1;
+				goto out;
+			}
+
+			memcpy(tc->ifb_name, ifb_buf, n+1);
+			break;
+
+		} else {
+			rtnl_link_put(rtnl_link);
+			rtnl_link = NULL;
+		}
+
+		ifb_num++;
+		if (ifb_num > 30) {
+			printf("facows_tc: error: ifb number large");
+			ret = -1;
+			goto out;
+		}
+	}
+
+	ret = 0;
+out:
+	rtnl_link_put(rtnl_link);
+	rtnl_link = NULL;
+	nl_cache_put(nl_cache);
+	nl_cache = NULL;
+	return ret;
+}
