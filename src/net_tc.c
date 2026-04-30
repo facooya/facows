@@ -16,31 +16,30 @@
 #include <sys/types.h>
 #include <libkmod.h>
 #include <net/if.h>
+#include <linux/if_ether.h>
 
 #include <netlink/netlink.h>
+#include <netlink/route/link.h>
 #include <netlink/route/route.h>
 #include <netlink/route/nexthop.h>
-#include <netlink/route/link.h>
+#include <netlink/route/tc.h>
 #include <netlink/route/qdisc.h>
-#include <netlink/route/classifier.h>
 #include <netlink/route/cls/flower.h>
+#include <netlink/route/action.h>
 #include <netlink/route/act/mirred.h>
 
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
-#define CMD_TC \
-	"tc qdisc replace dev %1$s handle ffff: ingress;" \
-	"tc filter replace dev %1$s parent ffff: protocol ip flower action mirred egress redirect dev %2$s;" \
-	"tc filter replace dev %1$s parent ffff: protocol ipv6 flower action mirred egress redirect dev %2$s;" \
-	"tc qdisc replace dev %2$s root handle fac0: cake bandwidth %3$s triple-isolate nat wash ingress;"
+#define CMD_QDISC_IFB "tc qdisc replace dev %s root handle fac0: cake bandwidth %s triple-isolate nat wash ingress"
 
 #define CMD_TC_DEL "tc qdisc del dev %s ingress;"
 
 static int _mod_init(struct fws_tc *tc);
 static int _ifb_set(struct fws_tc *tc, struct nl_sock *sock);
 static int _net_set(struct fws_tc *tc, struct nl_sock *sock);
+static int _tc_set(const struct fws_tc *tc, struct nl_sock *sock);
 
 int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 	int ret = 0;
@@ -67,22 +66,32 @@ int net_tc_init(struct fws_tc *tc, const char *bandwidth) {
 
 	ret = _ifb_set(tc, nl_sock);
 	if (ret < 0) {
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
 		return -1;
 	}
 
 	ret = _net_set(tc, nl_sock);
 	if (ret < 0) {
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
+		return -1;
+	}
+
+	ret = _tc_set(tc, nl_sock);
+	if (ret < 0) {
+		nl_socket_free(nl_sock);
+		nl_sock = NULL;
 		return -1;
 	}
 
 	nl_socket_free(nl_sock);
 	nl_sock = NULL;
 
-	size_t n = snprintf(NULL, 0, CMD_TC, tc->net_name, tc->ifb_name, bandwidth);
+	size_t n = snprintf(NULL, 0, CMD_QDISC_IFB, tc->ifb_name, bandwidth);
 	char *tc_cmd = malloc(n+1);
-	snprintf(tc_cmd, n+1, CMD_TC, tc->net_name, tc->ifb_name, bandwidth);
+	snprintf(tc_cmd, n+1, CMD_QDISC_IFB, tc->ifb_name, bandwidth);
 	system(tc_cmd);
-
 	free(tc_cmd);
 	tc_cmd = NULL;
 
@@ -118,7 +127,7 @@ int net_tc_fini(const struct fws_tc *tc) {
 			printf("facows_tc: error: fail to allocate net socket\n");
 			return -1;
 		}
-	
+
 		ret = nl_connect(nl_sock, NETLINK_ROUTE);
 		if (ret < 0) {
 			printf("facows_tc: error: fail to connect net link\n");
@@ -305,12 +314,12 @@ static int _net_set(struct fws_tc *tc, struct nl_sock *sock) {
 				continue;
 			}
 
-			int net_index = rtnl_route_nh_get_ifindex(rtnl_nh);
-			if (net_index <= 0) {
+			int net_idx = rtnl_route_nh_get_ifindex(rtnl_nh);
+			if (net_idx <= 0) {
 				continue;
 			}
 
-			char *i2name = rtnl_link_i2name(nl_cache, net_index, tc->net_name, sizeof(tc->net_name));
+			char *i2name = rtnl_link_i2name(nl_cache, net_idx, tc->net_name, sizeof(tc->net_name));
 			if (i2name == NULL) {
 				ret = -1;
 				goto out;
@@ -333,4 +342,75 @@ out:
 	nl_cache_put(rtnl_cache);
 	rtnl_cache = NULL;
 	return ret;
+}
+
+static int _tc_set(const struct fws_tc *tc, struct nl_sock *sock) {
+	int ret = 0;
+	unsigned int net_idx = if_nametoindex(tc->net_name);
+	unsigned int ifb_idx = if_nametoindex(tc->ifb_name);
+	if (net_idx == 0 || ifb_idx == 0) {
+		fprintf(stderr, "net_tc/_tc_set(): unknown interface index\n");
+		return -1;
+	}
+
+	struct rtnl_qdisc *net_qdisc = NULL;
+	struct rtnl_cls *net_cls = NULL;
+	struct rtnl_act *net_act = NULL;
+	struct rtnl_tc *rtnl_tc = NULL;
+
+	/* tc qdisc replace dev NET_NAME handle ffff: ingress */
+	net_qdisc = rtnl_qdisc_alloc();
+	if (net_qdisc == NULL) {
+		return -1;
+	}
+	rtnl_tc = (struct rtnl_tc *) net_qdisc;
+	rtnl_tc_set_ifindex(rtnl_tc, net_idx);
+	rtnl_tc_set_parent(rtnl_tc, TC_H_INGRESS);
+	rtnl_tc_set_handle(rtnl_tc, TC_HANDLE(0xffff, 0));
+	rtnl_tc_set_kind(rtnl_tc, "ingress");
+	ret = rtnl_qdisc_add(sock, net_qdisc, NLM_F_CREATE|NLM_F_REPLACE);
+	if (ret < 0) {
+		rtnl_qdisc_put(net_qdisc);
+		net_qdisc = NULL;
+		return -1;
+	}
+	rtnl_qdisc_put(net_qdisc);
+	net_qdisc = NULL;
+
+
+	/* tc filter replace dev NET_NAME parent ffff: protocol ip pref 1 flower */
+	net_cls = rtnl_cls_alloc();
+	if (net_cls == NULL) {
+		return -1;
+	}
+	rtnl_tc = (struct rtnl_tc *) net_cls;
+	rtnl_tc_set_ifindex(rtnl_tc, net_idx);
+	rtnl_tc_set_parent(rtnl_tc, TC_HANDLE(0xffff,0));
+	rtnl_tc_set_kind(rtnl_tc, "flower");
+	rtnl_cls_set_protocol(net_cls, ETH_P_IP);
+	rtnl_cls_set_prio(net_cls, 1);
+
+	/* action mirred egress redirect dev IFB_NAME */
+	net_act = rtnl_act_alloc();
+	if (net_act == NULL) {
+		return -1;
+	}
+	rtnl_tc_set_kind((struct rtnl_tc*)net_act, "mirred");
+	rtnl_mirred_set_action(net_act, TCA_EGRESS_REDIR);
+	rtnl_mirred_set_ifindex(net_act, ifb_idx);
+	rtnl_mirred_set_policy(net_act, TC_ACT_STOLEN);
+	rtnl_flower_append_action(net_cls, net_act);
+	rtnl_act_put(net_act);
+	net_act = NULL;
+	rtnl_cls_add(sock, net_cls, NLM_F_CREATE|NLM_F_REPLACE);
+
+	/* tc filter replace dev NET_NAME parent ffff: protocol ipv6 pref 2 flower */
+	rtnl_cls_set_protocol(net_cls, ETH_P_IPV6);
+	rtnl_cls_set_prio(net_cls, 2);
+	rtnl_cls_add(sock, net_cls, NLM_F_CREATE|NLM_F_REPLACE);
+	rtnl_cls_put(net_cls);
+	net_cls = NULL;
+
+	/* tc qdisc replace dev IFB_NAME root handle fac0: cake bandwidth BANDWIDTH triple-isolate nat wash ingress */
+	return 0;
 }
