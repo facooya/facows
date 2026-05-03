@@ -27,8 +27,6 @@
 	KEY(PPS_LIMIT) \
 	KEY(PPS_BURST) \
 	KEY(BAN_TIME) \
-	KEY(TC) \
-	KEY(BANDWIDTH) \
 	KEY(DOMAIN) \
 	KEY(WEB_ROOT) \
 	KEY(WEB_LOG) \
@@ -148,17 +146,6 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 							break;
 						case BAN_TIME:
 							conf->ban_time = (uint32_t) strtol(p, NULL, 10);
-							break;
-
-						case TC:
-							if (_tool_conf_bool_set(&conf->tc, p) < 0) {
-								return -1;
-							}
-							break;
-						case BANDWIDTH:
-							if (_tool_conf_str_set(conf->bandwidth, p, sizeof(conf->bandwidth)) < 0) {
-								return -1;
-							}
 							break;
 
 						case DOMAIN:

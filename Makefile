@@ -11,7 +11,6 @@ src/net_80.c \
 src/net_443.c \
 src/net_http.c \
 src/net_nft.c \
-src/net_tc.c \
 \
 src/file.c \
 src/file_conf.c
@@ -21,11 +20,11 @@ OBJS = $(SRCS:%.c=build/%.o)
 all: build/facows
 
 build/facows: $(OBJS)
-	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables -lkmod -lnl-route-3 -lnl-3
+	gcc -pthread -o $@ $^ -lssl -lcrypto -lnftables
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)
-	gcc -Wall -Wextra -fanalyzer -Isrc -Iinclude -Ilib -I/usr/include/libnl3 -c $< -o $@
+	gcc -Wall -Wextra -fanalyzer -Isrc -Iinclude -Ilib -c $< -o $@
 
 build/:
 	mkdir -p $@

@@ -16,8 +16,6 @@ sudo apt install git make libssl-dev nftables libnftables-dev libkmod-dev libnl-
 - `libssl-dev` - Open ssl library in C
 - `nftables` - Network filter for IP ban
 - `libnftables-dev` - Network filter library in C
-- `libkmod-dev` - Kernel module control for IFB in C
-- `libnl-3-dev`, `libnl-route-3-dev` - Net link in C
 
 Register nftables to systemd:
 ```bash
@@ -35,20 +33,17 @@ make
 
 **Configuration**
 > [!WARNING]
-> If `NFT` configuration true, deny all port except Facows port defined by `facows.conf.dist`.
-> Enable `ALLOW_PORTS` and write allow port in `facows.conf.dist`.
-
-> [!CAUTION]
-> If `TC` configuration true, overwirte forced `ifb` module and queue discipline on `tc` by `facows_tc.conf.dist`.
+> If `NFT` configuration true, deny all port except Facows port defined by `facows.conf`.
+> Enable `ALLOW_PORTS` and write allow port in `facows.conf`.
 
 Make install not support yet.  
-Modifiy `facows.conf.dist` domain and SSL path.  
+Modifiy `facows.conf` domain and SSL path.  
 - Log not support yet.
 Locate manually files:
 ```bash
 sudo mkdir -p /var/www/facows/
 sudo mkdir -p /etc/facows/
-sudo cp etc/facows.conf.dist /etc/facows/facows.conf
+sudo cp etc/facows.conf /etc/facows/
 sudo mkdir -p /usr/share/facows/
 sudo cp share/error_page.html /usr/share/facows/
 ```

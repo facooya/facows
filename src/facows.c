@@ -48,11 +48,6 @@ int main() {
 		}
 	}
 
-	struct fws_tc tc;
-	if (config.tc == 1) {
-		net_tc_init(&tc, config.bandwidth);
-	}
-
 	SSL_CTX *ssl_ctx;
 	net_443_init(&ssl_ctx, &config);
 
@@ -114,9 +109,6 @@ int main() {
 
 	if (config.nft == 1) {
 		net_nft_fini();
-	}
-	if (config.tc == 1) {
-		net_tc_fini(&tc);
 	}
 	printf("\n");
 

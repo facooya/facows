@@ -12,13 +12,11 @@
 
 struct fws_conf {
 	uint8_t nft;
-	uint8_t tc;
 	uint16_t http_port;
 	uint16_t https_port;
 	uint32_t pps_limit;
 	uint32_t pps_burst;
 	uint32_t ban_time;
-	char bandwidth[16];
 	char allow_ports[128];
 	char domain[128];
 	char web_root[128];
@@ -31,12 +29,6 @@ struct fws_nft {
 	uint8_t ip[16];
 	int count;
 	time_t time;
-};
-
-struct fws_tc {
-	uint8_t mod;
-	char ifb_name[8];
-	char net_name[16];
 };
 
 struct fws_http_res {
