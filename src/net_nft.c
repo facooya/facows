@@ -38,7 +38,7 @@
 		"set facows_flood6 {type ipv6_addr; flags dynamic;}\n" \
 	\
 		"chain facows_ingress {\n" \
-			"type filter hook ingress device %7$s priority -300; policy accept;\n" \
+			"type filter hook ingress device \"%7$s\" priority -300; policy accept;\n" \
 			"ip saddr @facows_ban4 drop;\n" \
 			"ip6 saddr @facows_ban6 drop;\n" \
 			"update @facows_flood4 {ip saddr limit rate over %1$d/second burst %2$d packets} update @facows_ban4 {ip saddr timeout %3$dm} drop;\n" \
@@ -51,8 +51,7 @@
 			"type filter hook input priority 0; policy drop;\n" \
 			"iif \"lo\" accept;\n" \
 			"ct state established,related accept;\n" \
-			"tcp dport {%4$d, %5$d} accept;\n" \
-			"tcp dport {%6$s} accept;\n" \
+			"tcp dport {%4$d, %5$d %6$s} accept;\n" \
 		"}\n" \
 	"}"
 

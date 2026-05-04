@@ -4,7 +4,6 @@
 - systemd
 - add log
 - check conf port
-- allow port null
 
 ---
 

@@ -13,10 +13,10 @@
 #include "types.h"
 #include "file.h"
 
+#define STR_LEN(str) (sizeof(str) - 1)
 #define TRUE "true"
 #define FALSE "false"
-#define TRUE_N sizeof(TRUE) - 1
-#define FALSE_N sizeof(FALSE) - 1
+#define PREFIX_ALLOW_PORTS ", "
 
 #define CONF_KEY_MAX 16
 #define CONF_KEYS(KEY) \
@@ -129,8 +129,9 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 								return -1;
 							}
 							size_t n = p2 - p;
-							memcpy(conf->allow_ports, p, n);
-							conf->allow_ports[n] = '\0';
+							memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
+							memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);
+							conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
 							break;
 
 						case NFT:
@@ -214,15 +215,15 @@ static int _tool_conf_str_set(char *member, const char *val, size_t member_n) {
 }
 
 static int _tool_conf_bool_set(uint8_t *member, const char *val) {
-	if (memcmp(val, TRUE, TRUE_N) == 0) {
-		if (*(val+TRUE_N) == ' ' || *(val+TRUE_N) == '\n') {
+	if (memcmp(val, TRUE, STR_LEN(TRUE)) == 0) {
+		if (*(val+STR_LEN(TRUE)) == ' ' || *(val+STR_LEN(TRUE)) == '\n') {
 			*member = 1;
 		} else {
 			printf("facows.conf: error: bool type error\n");
 			return -1;
 		}
-	} else if (memcmp(val, FALSE, FALSE_N) == 0) {
-		if (*(val+FALSE_N) == ' ' || *(val+FALSE_N) == '\n') {
+	} else if (memcmp(val, FALSE, STR_LEN(FALSE)) == 0) {
+		if (*(val+STR_LEN(FALSE)) == ' ' || *(val+STR_LEN(FALSE)) == '\n') {
 			*member = 0;
 		} else {
 			printf("facows.conf: error: bool type error\n");
