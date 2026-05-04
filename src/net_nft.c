@@ -17,31 +17,36 @@
 #include "types.h"
 #include "net.h"
 
+#define ROUTE_PATH "/proc/net/route"
 #define IPV4_MAP "::ffff:"
 #define IPV4_MAP_N sizeof(IPV4_MAP) - 1
 
 #define DOS_LIMIT 3
-#define NFT_BAN4 "nft add element inet facows facows_ban4 {%s timeout %dm}"
-#define NFT_BAN6 "nft add element inet facows facows_ban6 {%s timeout %dm}"
+#define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout %dm}"
+#define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout %dm}"
 
 #define NFT_INIT \
+	"add table netdev facows;\n" \
+	"delete table netdev facows;\n" \
 	"add table inet facows;\n" \
 	"delete table inet facows;\n" \
 	\
-	"table inet facows {\n" \
+	"table netdev facows {\n" \
 		"set facows_ban4 {type ipv4_addr; flags timeout;}\n" \
 		"set facows_ban6 {type ipv6_addr; flags timeout;}\n" \
 		"set facows_flood4 {type ipv4_addr; flags dynamic;}\n" \
 		"set facows_flood6 {type ipv6_addr; flags dynamic;}\n" \
 	\
-		"chain facows_prerouting {\n" \
-			"type filter hook prerouting priority -300; policy accept;\n" \
+		"chain facows_ingress {\n" \
+			"type filter hook ingress device %7$s priority -300; policy accept;\n" \
 			"ip saddr @facows_ban4 drop;\n" \
 			"ip6 saddr @facows_ban6 drop;\n" \
 			"update @facows_flood4 {ip saddr limit rate over %1$d/second burst %2$d packets} update @facows_ban4 {ip saddr timeout %3$dm} drop;\n" \
 			"update @facows_flood6 {ip6 saddr limit rate over %1$d/second burst %2$d packets} update @facows_ban6 {ip6 saddr timeout %3$dm} drop;\n" \
 		"}\n" \
+	"}\n" \
 	\
+	"table inet facows {\n" \
 		"chain facows_input {\n" \
 			"type filter hook input priority 0; policy drop;\n" \
 			"iif \"lo\" accept;\n" \
@@ -50,19 +55,29 @@
 			"tcp dport {%6$s} accept;\n" \
 		"}\n" \
 	"}"
-#define NFT_FINI "delete table inet facows;"
+
+#define NFT_FINI "delete table netdev facows; delete table inet facows;"
+
+static int _name_get(char *buf, size_t buf_n);
 
 int net_nft_init(const struct fws_conf *conf) {
-	struct nft_ctx *nft_ctx;
+	int ret = 0;
+	char name_buf[16] = {0};
+	ret = _name_get(name_buf, sizeof(name_buf));
+	if (ret < 0) {
+		return -1;
+	}
+
+	struct nft_ctx *nft_ctx = NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == NULL) {
 		printf("facows_nft: can not create nft context\n");
 		return -1;
 	}
 
-	size_t n = snprintf(NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports);
+	size_t n = snprintf(NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	char *nft_buf = malloc(n+1);
-	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports);
+	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
 
 	nft_ctx_free(nft_ctx);
@@ -134,4 +149,60 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 		nft_list[nft_i].count = 1;
 		nft_list[nft_i].time = cur_sec;
 	}
+}
+
+static int _name_get(char *buf, size_t buf_n) {
+	int ret = 0;
+	int fd = open(ROUTE_PATH, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "net_nft/_name_get(): open failed %s\n", ROUTE_PATH);
+		return -1;
+	}
+
+	char read_buf[4096] = {0};
+	ret = read(fd, read_buf, sizeof(read_buf)-1);
+	if (ret < 0) {
+		fprintf(stderr, "net_nft/_name_get(): read error\n");
+		ret = -1;
+		goto out;
+	}
+	read_buf[ret] = '\0';
+
+	size_t size = ret;
+	const char *p1 = read_buf;
+	while (1) {
+		const char *p2 = NULL;
+		const char *p11 = NULL;
+		const char *p12 = NULL;
+		p2 = memchr(p1, '\n', size);
+		size_t n1 = p2 - p1;
+
+		p11 = p1;
+		p12 = memchr(p11, '\t', n1);
+		size_t n11 = p12 - p11;
+		if (buf_n <= n11) {
+			fprintf(stderr, "net_nft/_name_get(): large interface name\n");
+			ret = -1;
+			goto out;
+		}
+		memcpy(buf, p11, n11);
+		buf[n11] = '\0';
+		p11 += n11 + 1;
+		if (memcmp(p11, "00000000", 8) == 0) {
+			break;
+		}
+
+		size -= n1 + 1;
+		if (size <= 0) {
+			fprintf(stderr, "net_nft/_name_get(): not found device\n");
+			ret = -1;
+			goto out;
+		}
+		p1 += n1 + 1;
+	}
+
+	ret = 0;
+out:
+	close(fd);
+	return ret;
 }
