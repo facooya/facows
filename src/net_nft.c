@@ -153,56 +153,46 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 
 static int _name_get(char *buf, size_t buf_n) {
 	int ret = 0;
-	int fd = open(ROUTE_PATH, O_RDONLY);
-	if (fd < 0) {
+	FILE *fp = NULL;
+	char *glp = NULL;
+	size_t gln = 0;
+
+	fp = fopen(ROUTE_PATH, "r");
+	if (fp == NULL) {
 		fprintf(stderr, "net_nft/_name_get(): open failed %s\n", ROUTE_PATH);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
-	char read_buf[4096] = {0};
-	ret = read(fd, read_buf, sizeof(read_buf)-1);
-	if (ret < 0) {
+	char dst_buf[16];
+	char net_buf[16];
+	while (getline(&glp, &gln, fp) != -1) {
+		if (sscanf(glp, "%15s %15s", net_buf, dst_buf) == 2) {
+			if (memcmp(dst_buf, "00000000", sizeof("00000000")-1) == 0) {
+				snprintf(buf, buf_n, "%s", net_buf);
+				break;
+			}
+		}
+	}
+
+	if (ferror(fp)) {
 		fprintf(stderr, "net_nft/_name_get(): read error\n");
 		ret = -1;
 		goto out;
 	}
-	read_buf[ret] = '\0';
-
-	size_t size = ret;
-	const char *p1 = read_buf;
-	while (1) {
-		const char *p2 = NULL;
-		const char *p11 = NULL;
-		const char *p12 = NULL;
-		p2 = memchr(p1, '\n', size);
-		size_t n1 = p2 - p1;
-
-		p11 = p1;
-		p12 = memchr(p11, '\t', n1);
-		size_t n11 = p12 - p11;
-		if (buf_n <= n11) {
-			fprintf(stderr, "net_nft/_name_get(): large interface name\n");
-			ret = -1;
-			goto out;
-		}
-		memcpy(buf, p11, n11);
-		buf[n11] = '\0';
-		p11 += n11 + 1;
-		if (memcmp(p11, "00000000", 8) == 0) {
-			break;
-		}
-
-		size -= n1 + 1;
-		if (size <= 0) {
-			fprintf(stderr, "net_nft/_name_get(): not found device\n");
-			ret = -1;
-			goto out;
-		}
-		p1 += n1 + 1;
+	if (buf[0] == '\0') {
+		fprintf(stderr, "net_nft/_name_get(): not found\n");
+		ret = -1;
+		goto out;
 	}
 
 	ret = 0;
 out:
-	close(fd);
+	free(glp);
+	glp = NULL;
+	if (fp != NULL) {
+		fclose(fp);
+		fp = NULL;
+	}
 	return ret;
 }
