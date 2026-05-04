@@ -3,7 +3,6 @@
 - reduce root access
 - systemd
 - add log
-- check conf port
 
 ---
 

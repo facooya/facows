@@ -38,6 +38,7 @@
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
 static int _tool_conf_str_set(char *member, const char *val, size_t member_n);
 static int _tool_conf_bool_set(uint8_t *member, const char *val);
+static int _tool_allow_ports_check(const char *p);
 
 int file_conf_read(struct fws_conf *conf, const char *path) {
 	int ret = 0;
@@ -114,18 +115,32 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 						p++;
 					}
 
+					long port = -1;
 					switch (i) {
 						case HTTP_PORT:
-							conf->http_port = (uint16_t) strtol(p, NULL, 10);
+							port = strtol(p, NULL, 10);
+							if (port < 0 || port > 65536) {
+								fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+								return -1;
+							}
+							conf->http_port = (uint16_t) port;
 							break;
 						case HTTPS_PORT:
-							conf->https_port = (uint16_t) strtol(p, NULL, 10);
+							port = strtol(p, NULL, 10);
+							if (port < 0 || port > 65536) {
+								fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+								return -1;
+							}
+							conf->https_port = (uint16_t) port;
 							break;
 
 						case ALLOW_PORTS:
 							const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
 							if (p2 == NULL) {
 								printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
+								return -1;
+							}
+							if (_tool_allow_ports_check(p) < 0) {
 								return -1;
 							}
 							size_t n = p2 - p;
@@ -234,5 +249,25 @@ static int _tool_conf_bool_set(uint8_t *member, const char *val) {
 		return -1;
 	}
 
+	return 0;
+}
+
+static int _tool_allow_ports_check(const char *p) {
+	char *ep = NULL;
+	while (*p != '\n' && *p != '\0') {
+		long port = strtol(p, &ep, 10);
+		if (p != ep) {
+			if (port < 0 || port > 65536) {
+				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+				return -1;
+			}
+			p = ep;
+			if (*p == ',') {
+				p++;
+			}
+		} else {
+			p++;
+		}
+	}
 	return 0;
 }

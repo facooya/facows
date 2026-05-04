@@ -17,7 +17,9 @@
 #include "types.h"
 #include "net.h"
 
+#define STR_LEN(str) (sizeof(str) - 1)
 #define ROUTE_PATH "/proc/net/route"
+#define ROUTE_DST "00000000"
 #define IPV4_MAP "::ffff:"
 #define IPV4_MAP_N sizeof(IPV4_MAP) - 1
 
@@ -61,29 +63,34 @@ static int _name_get(char *buf, size_t buf_n);
 
 int net_nft_init(const struct fws_conf *conf) {
 	int ret = 0;
+	struct nft_ctx *nft_ctx = NULL;
+	char *nft_buf = NULL;
+
 	char name_buf[16] = {0};
-	ret = _name_get(name_buf, sizeof(name_buf));
-	if (ret < 0) {
-		return -1;
+	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
+		ret = -1;
+		goto out;
 	}
 
-	struct nft_ctx *nft_ctx = NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == NULL) {
 		printf("facows_nft: can not create nft context\n");
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	size_t n = snprintf(NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
-	char *nft_buf = malloc(n+1);
+	nft_buf = malloc(n+1);
 	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
 
+	ret = 0;
+out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = NULL;
 	free(nft_buf);
 	nft_buf = NULL;
-	return 0;
+	return ret;
 }
 
 int net_nft_fini(void) {
@@ -167,7 +174,7 @@ static int _name_get(char *buf, size_t buf_n) {
 	char net_buf[16];
 	while (getline(&glp, &gln, fp) != -1) {
 		if (sscanf(glp, "%15s %15s", net_buf, dst_buf) == 2) {
-			if (memcmp(dst_buf, "00000000", sizeof("00000000")-1) == 0) {
+			if (memcmp(dst_buf, ROUTE_DST, STR_LEN(ROUTE_DST)) == 0) {
 				snprintf(buf, buf_n, "%s", net_buf);
 				break;
 			}
