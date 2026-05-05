@@ -8,12 +8,14 @@
 #include <unistd.h>
 #include <poll.h>
 #include <pthread.h>
+#include <pwd.h>
 #include <signal.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
@@ -52,65 +54,95 @@ int main() {
 	net_443_init(&ssl_ctx, &config);
 
 	int server_http_fd = net_server_init(config.http_port);
+	if (server_http_fd < 0) {
+		return 1;
+	}
 	int server_https_fd = net_server_init(config.https_port);
-	if (server_http_fd < 0 || server_https_fd < 0) {
+	if (server_https_fd < 0) {
 		return 1;
 	}
 
-	struct pollfd fds[2];
-	fds[0].fd = server_http_fd;
-	fds[0].events = POLLIN;
-	fds[1].fd = server_https_fd;
-	fds[1].events = POLLIN;
+	pid_t pid = fork();
+	if (pid > 0) {
+		waitpid(pid, NULL, 0);
+		if (config.nft == 1) {
+			net_nft_fini();
+		}
+		exit(0);
 
-	struct sockaddr_in6 client_addr;
-	socklen_t client_addr_size = sizeof(client_addr);
-
-	pthread_mutex_init(&nft_lock, NULL);
-
-	printf("Facows start\n");
-
-	while (1) {
-		if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
-			break;
+	} else if (pid == 0) {
+		struct passwd *pw = NULL;
+		pw = getpwnam("nobody");
+		if (pw == NULL) {
+			close(server_http_fd);
+			close(server_https_fd);
+			_exit(0);
+		}
+		if (setgid(pw->pw_gid) != 0) {
+			close(server_http_fd);
+			close(server_https_fd);
+			_exit(0);
+		}
+		if (setuid(pw->pw_uid) != 0) {
+			close(server_http_fd);
+			close(server_https_fd);
+			_exit(0);
 		}
 
-		if (fds[0].revents & POLLIN) {
-			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+		struct pollfd fds[2];
+		fds[0].fd = server_http_fd;
+		fds[0].events = POLLIN;
+		fds[1].fd = server_https_fd;
+		fds[1].events = POLLIN;
 
-			if (net_80_443_redir(client_http_fd, &config) < 0) {
+		struct sockaddr_in6 client_addr;
+		socklen_t client_addr_size = sizeof(client_addr);
+
+		pthread_mutex_init(&nft_lock, NULL);
+
+		printf("Facows start\n");
+
+		while (1) {
+			if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
+				break;
+			}
+
+			if (fds[0].revents & POLLIN) {
+				int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+				if (net_80_443_redir(client_http_fd, &config) < 0) {
+					close(client_http_fd);
+					continue;
+				}
+
 				close(client_http_fd);
-				continue;
+
+			} else if (fds[1].revents & POLLIN) {
+				int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+
+				struct fws_args *args = malloc(sizeof(struct fws_args));
+				if (args == NULL) {
+					return 1;
+				}
+				args->fd = client_fd;
+				args->ssl_ctx = ssl_ctx;
+				args->fws_conf = &config;
+				args->client_addr = &client_addr;
+
+				pthread_t fws_thread;
+				pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
+				pthread_detach(fws_thread);
 			}
-
-			close(client_http_fd);
-
-		} else if (fds[1].revents & POLLIN) {
-			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
-
-			struct fws_args *args = malloc(sizeof(struct fws_args));
-			if (args == NULL) {
-				return 1;
-			}
-			args->fd = client_fd;
-			args->ssl_ctx = ssl_ctx;
-			args->fws_conf = &config;
-			args->client_addr = &client_addr;
-	
-			pthread_t fws_thread;
-			pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
-			pthread_detach(fws_thread);
 		}
-	}
 
-	pthread_mutex_destroy(&nft_lock);
-	close(server_http_fd);
-	close(server_https_fd);
+		pthread_mutex_destroy(&nft_lock);
+		close(server_http_fd);
+		close(server_https_fd);
+		_exit(0);
 
-	if (config.nft == 1) {
-		net_nft_fini();
+	} else {
+		return 1;
 	}
-	printf("\n");
 
 	return 0;
 }

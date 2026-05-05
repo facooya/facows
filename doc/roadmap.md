@@ -1,6 +1,5 @@
 # Roadmap
 - epoll
-- reduce root access
 - systemd
 - add log
 
