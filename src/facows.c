@@ -26,23 +26,23 @@
 #include "file.h"
 
 #define CONF_PATH "/etc/facows/facows.conf"
+#define NOBODY "nobody"
 
-volatile sig_atomic_t fws_flag;
-pthread_mutex_t nft_lock;
-struct fws_nft nft_list[1024];
+volatile sig_atomic_t fws_flag = -1;
+pthread_mutex_t nft_lock = {0};
+struct fws_nft nft_list[1024] = {0};
 
 static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
-	struct fws_conf config;
+	struct fws_conf config = {0};
 	if (file_conf_read(&config, CONF_PATH) != 0) {
 		return 1;
 	}
 
 	signal(SIGINT, _fws_exit);
 	signal(SIGTERM, _fws_exit);
-	fws_flag = 0;
 
 	if (config.nft == 1) {
 		if (net_nft_init(&config) < 0) {
@@ -50,7 +50,7 @@ int main() {
 		}
 	}
 
-	SSL_CTX *ssl_ctx;
+	SSL_CTX *ssl_ctx = NULL;
 	net_443_init(&ssl_ctx, &config);
 
 	int server_http_fd = net_server_init(config.http_port);
@@ -62,30 +62,54 @@ int main() {
 		return 1;
 	}
 
-	pid_t pid = fork();
-	if (pid > 0) {
-		waitpid(pid, NULL, 0);
-		if (config.nft == 1) {
-			net_nft_fini();
-		}
-		exit(0);
+	int pipe_fd[2] = {-1, -1};
+	if (pipe(pipe_fd) < 0) {
+		fprintf(stderr, "pipe failed\n");
+		return 1;
+	}
+	const int read_fd = pipe_fd[0];
+	const int write_fd = pipe_fd[1];
 
-	} else if (pid == 0) {
+	const pid_t pid = fork();
+	if (pid < 0) {
+		fprintf(stderr, "fork failed\n");
+		return 1;
+	}
+
+	if (pid == 0) {
 		struct passwd *pw = NULL;
-		pw = getpwnam("nobody");
+		pw = getpwnam(NOBODY);
 		if (pw == NULL) {
-			close(server_http_fd);
-			close(server_https_fd);
+			if (server_http_fd >= 0) {
+				close(server_http_fd);
+				server_http_fd = -1;
+			}
+			if (server_https_fd >= 0) {
+				close(server_https_fd);
+				server_https_fd = -1;
+			}
 			_exit(0);
 		}
 		if (setgid(pw->pw_gid) != 0) {
-			close(server_http_fd);
-			close(server_https_fd);
+			if (server_http_fd >= 0) {
+				close(server_http_fd);
+				server_http_fd = -1;
+			}
+			if (server_https_fd >= 0) {
+				close(server_https_fd);
+				server_https_fd = -1;
+			}
 			_exit(0);
 		}
 		if (setuid(pw->pw_uid) != 0) {
-			close(server_http_fd);
-			close(server_https_fd);
+			if (server_http_fd >= 0) {
+				close(server_http_fd);
+				server_http_fd = -1;
+			}
+			if (server_https_fd >= 0) {
+				close(server_https_fd);
+				server_https_fd = -1;
+			}
 			_exit(0);
 		}
 
@@ -97,9 +121,7 @@ int main() {
 
 		struct sockaddr_in6 client_addr;
 		socklen_t client_addr_size = sizeof(client_addr);
-
 		pthread_mutex_init(&nft_lock, NULL);
-
 		printf("Facows start\n");
 
 		while (1) {
@@ -111,11 +133,17 @@ int main() {
 				int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 				if (net_80_443_redir(client_http_fd, &config) < 0) {
-					close(client_http_fd);
+					if (client_http_fd >= 0) {
+						close(client_http_fd);
+						client_http_fd = -1;
+					}
 					continue;
 				}
 
-				close(client_http_fd);
+				if (client_http_fd >= 0) {
+					close(client_http_fd);
+					client_http_fd = -1;
+				}
 
 			} else if (fds[1].revents & POLLIN) {
 				int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
@@ -136,12 +164,21 @@ int main() {
 		}
 
 		pthread_mutex_destroy(&nft_lock);
-		close(server_http_fd);
-		close(server_https_fd);
+		if (server_http_fd >= 0) {
+			close(server_http_fd);
+			server_http_fd = -1;
+		}
+		if (server_https_fd >= 0) {
+			close(server_https_fd);
+			server_https_fd = -1;
+		}
 		_exit(0);
 
 	} else {
-		return 1;
+		waitpid(pid, NULL, 0);
+		if (config.nft == 1) {
+			net_nft_fini();
+		}
 	}
 
 	return 0;
@@ -187,7 +224,10 @@ static void *_fws_thread_run(void *arg) {
 
 			SSL_shutdown(ssl);
 			SSL_free(ssl);
-			close(client_fd);
+			if (client_fd >= 0) {
+				close(client_fd);
+				client_fd = -1;
+			}
 			free(arg);
 			return NULL;
 		}
@@ -222,7 +262,10 @@ static void *_fws_thread_run(void *arg) {
 
 	SSL_shutdown(ssl);
 	SSL_free(ssl);
-	close(client_fd);
+	if (client_fd >= 0) {
+		close(client_fd);
+		client_fd = -1;
+	}
 	free(arg);
 	arg = NULL;
 
