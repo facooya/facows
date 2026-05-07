@@ -107,17 +107,18 @@ int net_nft_fini(void) {
 	return 0;
 }
 
-void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, size_t nft_list_n, uint32_t ban_time) {
+void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time) {
 	char ip_str[INET6_ADDRSTRLEN];
 	char *ip_p = ip_str;
 	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));
+	size_t cmd_n = 0;
 
 	char cmd_ban[256];
 	if (memcmp(ip_str, IPV4_MAP, IPV4_MAP_N) == 0) {
 		ip_p += IPV4_MAP_N;
-		snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN4, ip_p, ban_time);
+		cmd_n = snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN4, ip_p, ban_time);
 	} else {
-		snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN6, ip_p, ban_time);
+		cmd_n = snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN6, ip_p, ban_time);
 	}
 
 	time_t cur_sec = time(NULL);
@@ -148,7 +149,8 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 		nft_list[nft_i].count++;
 
 		if (nft_list[nft_i].count > DOS_LIMIT) {
-			system(cmd_ban);
+			write(write_fd, cmd_ban, cmd_n+1);
+			//system(cmd_ban);
 		}
 
 	} else {

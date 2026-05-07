@@ -62,6 +62,7 @@ struct fws_file {
 
 struct fws_args {
 	int fd;
+	int write_fd;
 	SSL_CTX *ssl_ctx;
 	const struct fws_conf *fws_conf;
 	const struct sockaddr_in6 *client_addr;

@@ -67,8 +67,6 @@ int main() {
 		fprintf(stderr, "pipe failed\n");
 		return 1;
 	}
-	const int read_fd = pipe_fd[0];
-	const int write_fd = pipe_fd[1];
 
 	const pid_t pid = fork();
 	if (pid < 0) {
@@ -113,11 +111,16 @@ int main() {
 			_exit(0);
 		}
 
-		struct pollfd fds[2];
-		fds[0].fd = server_http_fd;
-		fds[0].events = POLLIN;
-		fds[1].fd = server_https_fd;
-		fds[1].events = POLLIN;
+		if (pipe_fd[0] >= 0) {
+			close(pipe_fd[0]);
+			pipe_fd[0] = -1;
+		}
+
+		struct pollfd fws_fd[2];
+		fws_fd[0].fd = server_http_fd;
+		fws_fd[0].events = POLLIN;
+		fws_fd[1].fd = server_https_fd;
+		fws_fd[1].events = POLLIN;
 
 		struct sockaddr_in6 client_addr;
 		socklen_t client_addr_size = sizeof(client_addr);
@@ -125,11 +128,11 @@ int main() {
 		printf("Facows start\n");
 
 		while (1) {
-			if (poll(fds, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
+			if (poll(fws_fd, 2, -1) < 0 && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
 				break;
 			}
 
-			if (fds[0].revents & POLLIN) {
+			if (fws_fd[0].revents & POLLIN != 0) {
 				int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 				if (net_80_443_redir(client_http_fd, &config) < 0) {
@@ -145,7 +148,7 @@ int main() {
 					client_http_fd = -1;
 				}
 
-			} else if (fds[1].revents & POLLIN) {
+			} else if (fws_fd[1].revents & POLLIN != 0) {
 				int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 				struct fws_args *args = malloc(sizeof(struct fws_args));
@@ -153,6 +156,7 @@ int main() {
 					return 1;
 				}
 				args->fd = client_fd;
+				args->write_fd = pipe_fd[1];
 				args->ssl_ctx = ssl_ctx;
 				args->fws_conf = &config;
 				args->client_addr = &client_addr;
@@ -172,9 +176,48 @@ int main() {
 			close(server_https_fd);
 			server_https_fd = -1;
 		}
+		if (pipe_fd[1] >= 0) {
+			close(pipe_fd[1]);
+			pipe_fd[1] = -1;
+		}
 		_exit(0);
 
 	} else {
+		if (pipe_fd[1] >= 0) {
+			close(pipe_fd[1]);
+			pipe_fd[1] = -1;
+		}
+
+		struct pollfd nft_fd;
+		nft_fd.fd = pipe_fd[0];
+		nft_fd.events = POLLIN | POLLHUP | POLLERR;
+
+		while (1) {
+			errno = 0;
+			if (poll(&nft_fd, 1, -1) < 0) {
+				if (errno == EINTR && (fws_flag == SIGINT || fws_flag == SIGTERM)) {
+					break;
+				}
+				fprintf(stderr, "poll error\n");
+				return 1;
+			}
+
+			if (nft_fd.revents & (POLLIN|POLLHUP|POLLERR) != 0) {
+				char read_buf[1024] = {0};
+				int read_n = read(nft_fd.fd, &read_buf, sizeof(read_buf));
+				if (read_n < 0) {
+					break;
+				} else {
+					system(read_buf);
+				}
+			}
+		}
+
+		if (pipe_fd[0] >= 0) {
+			close(pipe_fd[0]);
+			pipe_fd[0] = -1;
+		}
+
 		waitpid(pid, NULL, 0);
 		if (config.nft == 1) {
 			net_nft_fini();
@@ -190,6 +233,7 @@ static void *_fws_thread_run(void *arg) {
 	const struct sockaddr_in6 *client_addr = args->client_addr;
 
 	int client_fd = args->fd;
+	int write_fd = args->write_fd;
 	SSL_CTX *ssl_ctx = args->ssl_ctx;
 
 	char request_buf[8192];
@@ -237,7 +281,7 @@ static void *_fws_thread_run(void *arg) {
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(&nft_lock);
-				net_nft_dos_ban(client_addr, nft_list, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
+				net_nft_dos_ban(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
 				pthread_mutex_unlock(&nft_lock);
 			}
 		}
