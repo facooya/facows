@@ -41,14 +41,37 @@ Modifiy `/etc/facows/facows.conf` domain and SSL path.
 - Log not support yet.
 
 **Execute**
+Manual:
 ```bash
 sudo ./build/facows
 ```
 
+System daemon:
+```bash
+sudo useradd -r -s /usr/sbin/nologin facows
+sudo systemctl enable facows
+sudo systemctl start facows
+```
+
 **Exit**
+Manual:
 Program exit `ctrl + c` or `kill PID`.  
 > [!WARNING]
 > Must not `kill -9 PID`. If already used and `NFT true` in `/etc/facows/facows.conf`, try `sudo nft table delete netdev facows; sudo nft table delete inet facows` for network.
+
+System daemon:
+```bash
+sudo systemctl stop facows
+```
+
+**Update**
+System deamon:
+```bash
+sudo systemctl stop facows
+make
+sudo make install
+sudo systemctl restart facows
+```
 
 ---
 

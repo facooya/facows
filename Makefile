@@ -34,6 +34,11 @@ install:
 	mkdir -p /etc/facows
 	mkdir -p /usr/share/facows
 
+	cp build/facows /usr/local/bin/
+
+	cp etc/facows.service /etc/systemd/system/
+	systemctl daemon-reload
+
 	if [ -f /etc/facows/facows.conf ]; \
 		then cp etc/facows.conf /etc/facows/facows.conf.dist; \
 		else cp etc/facows.conf /etc/facows/; fi
