@@ -150,7 +150,6 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 
 		if (nft_list[nft_i].count > DOS_LIMIT) {
 			write(write_fd, cmd_ban, cmd_n+1);
-			//system(cmd_ban);
 		}
 
 	} else {

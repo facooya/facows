@@ -29,29 +29,26 @@ sudo systemctl start nftables
 git clone https://github.com/facooya/facows.git
 cd facows
 make
+sudo make install
 ```
 
 **Configuration**
 > [!WARNING]
-> If `NFT` configuration true, deny all port except Facows port defined by `facows.conf`.
-> Enable `ALLOW_PORTS` and write allow port in `facows.conf`.
+> If `NFT` configuration true, deny all port except Facows port defined by `/etc/facows/facows.conf`.
+> Enable `ALLOW_PORTS` and write allow port in `/etc/facows/facows.conf`.
 
-Make install not support yet.  
-Modifiy `facows.conf` domain and SSL path.  
+Modifiy `/etc/facows/facows.conf` domain and SSL path.  
 - Log not support yet.
-Locate manually files:
-```bash
-sudo mkdir -p /var/www/facows/
-sudo mkdir -p /etc/facows/
-sudo cp etc/facows.conf /etc/facows/
-sudo mkdir -p /usr/share/facows/
-sudo cp share/error_page.html /usr/share/facows/
-```
 
 **Execute**
 ```bash
 sudo ./build/facows
 ```
+
+**Exit**
+Program exit `ctrl + c` or `kill PID`.  
+> [!WARNING]
+> Must not `kill -9 PID`. If already used and `NFT true` in `/etc/facows/facows.conf`, try `sudo nft table delete netdev facows; sudo nft table delete inet facows` for network.
 
 ---
 

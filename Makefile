@@ -29,6 +29,19 @@ build/%.o: %.c | build/
 build/:
 	mkdir -p $@
 
+install:
+	mkdir -p /var/www/facows
+	mkdir -p /etc/facows
+	mkdir -p /usr/share/facows
+
+	if [ -f /etc/facows/facows.conf ]; \
+		then cp etc/facows.conf /etc/facows/facows.conf.dist; \
+		else cp etc/facows.conf /etc/facows/; fi
+
+	if [ -f /usr/share/facows/error_page.html ]; \
+		then cp share/error_page.html /usr/share/facows/error_page.html.dist; \
+		else cp share/error_page.html /usr/share/facows/; fi
+
 clean:
 	find build/ -name "*.o" -delete
 	find build/ -type d -empty -delete

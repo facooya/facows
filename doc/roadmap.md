@@ -1,8 +1,12 @@
 # Roadmap
-- epoll
+## Optimization
+- epoll, io_uring
+- kTLS
+
+## ETC
 - systemd
 - add log
-- nft pipe
+- 429 rate limit
 
 ---
 
