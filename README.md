@@ -1,6 +1,21 @@
 # Facows
 Testing ...
 
+**Limitations**
+- Only SSL, must have ssl certificate and private key.
+- Not support PHP, only static files.
+- Only http 1.1
+- Support on linux
+- Poll method
+- Only html extendsion for clean url, but forced.
+
+**Features**
+- Support configuration file
+- Support regist to system daemon
+- If NFT true in conf file, ip ban of dos or flood attack.
+- URL redirect from http to https
+- Redirect html extenstion for clean url
+
 ### Default Path
 - Web root: `/var/www/facows/`
 - Log: `/var/log/facows/`

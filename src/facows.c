@@ -132,7 +132,7 @@ int main() {
 				break;
 			}
 
-			if (fws_fd[0].revents & POLLIN != 0) {
+			if ((fws_fd[0].revents & POLLIN) != 0) {
 				int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 				if (net_80_443_redir(client_http_fd, &config) < 0) {
@@ -148,7 +148,7 @@ int main() {
 					client_http_fd = -1;
 				}
 
-			} else if (fws_fd[1].revents & POLLIN != 0) {
+			} else if ((fws_fd[1].revents & POLLIN) != 0) {
 				int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 				struct fws_args *args = malloc(sizeof(struct fws_args));
@@ -202,7 +202,7 @@ int main() {
 				return 1;
 			}
 
-			if (nft_fd.revents & (POLLIN|POLLHUP|POLLERR) != 0) {
+			if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
 				char read_buf[1024] = {0};
 				int read_n = read(nft_fd.fd, &read_buf, sizeof(read_buf));
 				if (read_n < 0) {
