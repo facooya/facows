@@ -26,7 +26,10 @@
 #include "file.h"
 
 #define CONF_PATH "/etc/facows/facows.conf"
-#define NOBODY "nobody"
+#define USER_WWW_DATA "www-data"
+#define USER_APACHE "apache"
+#define USER_HTTP "http"
+#define USER_NOBODY "nobody"
 
 volatile sig_atomic_t fws_flag = -1;
 pthread_mutex_t nft_lock = {0};
@@ -36,13 +39,13 @@ static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
+	signal(SIGINT, _fws_exit);
+	signal(SIGTERM, _fws_exit);
+
 	struct fws_conf config = {0};
 	if (file_conf_read(&config, CONF_PATH) != 0) {
 		return 1;
 	}
-
-	signal(SIGINT, _fws_exit);
-	signal(SIGTERM, _fws_exit);
 
 	if (config.nft == 1) {
 		if (net_nft_init(&config) < 0) {
@@ -75,40 +78,28 @@ int main() {
 	}
 
 	if (pid == 0) {
+		int ret = 0;
 		struct passwd *pw = NULL;
-		pw = getpwnam(NOBODY);
-		if (pw == NULL) {
-			if (server_http_fd >= 0) {
-				close(server_http_fd);
-				server_http_fd = -1;
-			}
-			if (server_https_fd >= 0) {
-				close(server_https_fd);
-				server_https_fd = -1;
-			}
-			_exit(0);
+		if ((pw = getpwnam(USER_WWW_DATA)) != NULL) {
+
+		} else if ((pw = getpwnam(USER_APACHE)) != NULL) {
+
+		} else if ((pw = getpwnam(USER_HTTP)) != NULL) {
+
+		} else if ((pw = getpwnam(USER_NOBODY)) != NULL) {
+
+		} else {
+			ret = 1;
+			goto c_out;
 		}
+
 		if (setgid(pw->pw_gid) != 0) {
-			if (server_http_fd >= 0) {
-				close(server_http_fd);
-				server_http_fd = -1;
-			}
-			if (server_https_fd >= 0) {
-				close(server_https_fd);
-				server_https_fd = -1;
-			}
-			_exit(0);
+			ret = 1;
+			goto c_out;
 		}
 		if (setuid(pw->pw_uid) != 0) {
-			if (server_http_fd >= 0) {
-				close(server_http_fd);
-				server_http_fd = -1;
-			}
-			if (server_https_fd >= 0) {
-				close(server_https_fd);
-				server_https_fd = -1;
-			}
-			_exit(0);
+			ret = 1;
+			goto c_out;
 		}
 
 		if (pipe_fd[0] >= 0) {
@@ -153,7 +144,9 @@ int main() {
 
 				struct fws_args *args = malloc(sizeof(struct fws_args));
 				if (args == NULL) {
-					return 1;
+					pthread_mutex_destroy(&nft_lock);
+					ret = 1;
+					goto c_out;
 				}
 				args->fd = client_fd;
 				args->write_fd = pipe_fd[1];
@@ -166,8 +159,10 @@ int main() {
 				pthread_detach(fws_thread);
 			}
 		}
-
 		pthread_mutex_destroy(&nft_lock);
+
+		ret = 0;
+c_out:
 		if (server_http_fd >= 0) {
 			close(server_http_fd);
 			server_http_fd = -1;
@@ -176,11 +171,15 @@ int main() {
 			close(server_https_fd);
 			server_https_fd = -1;
 		}
+		if (pipe_fd[0] >= 0) {
+			close(pipe_fd[0]);
+			pipe_fd[0] = -1;
+		}
 		if (pipe_fd[1] >= 0) {
 			close(pipe_fd[1]);
 			pipe_fd[1] = -1;
 		}
-		_exit(0);
+		_exit(ret);
 
 	} else {
 		if (pipe_fd[1] >= 0) {
