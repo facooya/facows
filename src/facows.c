@@ -31,20 +31,28 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
+pthread_mutex_t nft_lock = PTHREAD_MUTEX_INITIALIZER;
+
 volatile sig_atomic_t fws_flag = -1;
-pthread_mutex_t nft_lock = {0};
 struct fws_nft nft_list[1024] = {0};
 
 static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
+	int pipe_fd[2] = {-1, -1};
+	int server_http_fd = -1;
+	int server_https_fd = -1;
+
+	int ret = 0;
+
 	signal(SIGINT, _fws_exit);
 	signal(SIGTERM, _fws_exit);
 
 	struct fws_conf config = {0};
 	if (file_conf_read(&config, CONF_PATH) != 0) {
-		return 1;
+		ret = 1;
+		goto out;
 	}
 
 	if (config.nft == 1) {
@@ -56,41 +64,39 @@ int main() {
 	SSL_CTX *ssl_ctx = NULL;
 	net_443_init(&ssl_ctx, &config);
 
-	int server_http_fd = net_server_init(config.http_port);
-	if (server_http_fd < 0) {
-		return 1;
+	if ((server_http_fd = net_server_init(config.http_port)) < 0) {
+		ret = 1;
+		goto out;
 	}
-	int server_https_fd = net_server_init(config.https_port);
-	if (server_https_fd < 0) {
-		return 1;
+	if ((server_https_fd = net_server_init(config.https_port)) < 0) {
+		ret = 1;
+		goto out;
 	}
 
-	int pipe_fd[2] = {-1, -1};
 	if (pipe(pipe_fd) < 0) {
 		fprintf(stderr, "pipe failed\n");
-		return 1;
+		ret = 1;
+		goto out;
 	}
 
 	const pid_t pid = fork();
 	if (pid < 0) {
 		fprintf(stderr, "fork failed\n");
-		return 1;
+		ret = 1;
+		goto out;
 	}
 
 	if (pid == 0) {
-		int ret = 0;
 		struct passwd *pw = NULL;
-		if ((pw = getpwnam(USER_WWW_DATA)) != NULL) {
-
-		} else if ((pw = getpwnam(USER_APACHE)) != NULL) {
-
-		} else if ((pw = getpwnam(USER_HTTP)) != NULL) {
-
-		} else if ((pw = getpwnam(USER_NOBODY)) != NULL) {
-
-		} else {
-			ret = 1;
-			goto c_out;
+		const char *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
+		for (int i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
+			if ((pw = getpwnam(user_name[i])) != NULL) {
+				break;
+			}
+			if ((i+1) == (sizeof(user_name)/sizeof(user_name[0]))) {
+				ret = 1;
+				goto c_out;
+			}
 		}
 
 		if (setgid(pw->pw_gid) != 0) {
@@ -115,7 +121,6 @@ int main() {
 
 		struct sockaddr_in6 client_addr;
 		socklen_t client_addr_size = sizeof(client_addr);
-		pthread_mutex_init(&nft_lock, NULL);
 		printf("Facows start\n");
 
 		while (1) {
@@ -144,7 +149,6 @@ int main() {
 
 				struct fws_args *args = malloc(sizeof(struct fws_args));
 				if (args == NULL) {
-					pthread_mutex_destroy(&nft_lock);
 					ret = 1;
 					goto c_out;
 				}
@@ -159,18 +163,9 @@ int main() {
 				pthread_detach(fws_thread);
 			}
 		}
-		pthread_mutex_destroy(&nft_lock);
 
 		ret = 0;
 c_out:
-		if (server_http_fd >= 0) {
-			close(server_http_fd);
-			server_http_fd = -1;
-		}
-		if (server_https_fd >= 0) {
-			close(server_https_fd);
-			server_https_fd = -1;
-		}
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
 			pipe_fd[0] = -1;
@@ -198,7 +193,8 @@ c_out:
 					break;
 				}
 				fprintf(stderr, "poll error\n");
-				return 1;
+				ret = 1;
+				goto p_out;
 			}
 
 			if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
@@ -221,9 +217,40 @@ c_out:
 		if (config.nft == 1) {
 			net_nft_fini();
 		}
+
+		ret = 0;
+p_out:
+		if (pipe_fd[0] >= 0) {
+			close(pipe_fd[0]);
+			pipe_fd[0] = -1;
+		}
+		if (pipe_fd[1] >= 0) {
+			close(pipe_fd[1]);
+			pipe_fd[1] = -1;
+		}
+		goto out;
 	}
 
-	return 0;
+	ret = 0;
+out:
+	pthread_mutex_destroy(&nft_lock);
+	if (server_http_fd >= 0) {
+		close(server_http_fd);
+		server_http_fd = -1;
+	}
+	if (server_https_fd >= 0) {
+		close(server_https_fd);
+		server_https_fd = -1;
+	}
+	if (pipe_fd[0] >= 0) {
+		close(pipe_fd[0]);
+		pipe_fd[0] = -1;
+	}
+	if (pipe_fd[1] >= 0) {
+		close(pipe_fd[1]);
+		pipe_fd[1] = -1;
+	}
+	return ret;
 }
 
 static void *_fws_thread_run(void *arg) {
