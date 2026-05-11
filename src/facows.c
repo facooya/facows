@@ -31,7 +31,7 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
-pthread_mutex_t nft_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t nft_lock = {0};
 
 volatile sig_atomic_t fws_flag = -1;
 struct fws_nft nft_list[1024] = {0};
@@ -87,23 +87,27 @@ int main() {
 	}
 
 	if (pid == 0) {
+		int nft_lock_flag = -1;
 		struct passwd *pw = NULL;
 		const char *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
-		for (int i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
+		for (size_t i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
 			if ((pw = getpwnam(user_name[i])) != NULL) {
 				break;
 			}
 			if ((i+1) == (sizeof(user_name)/sizeof(user_name[0]))) {
+				fprintf(stderr, "user not found\n");
 				ret = 1;
 				goto c_out;
 			}
 		}
 
 		if (setgid(pw->pw_gid) != 0) {
+			fprintf(stderr, "set group failed\n");
 			ret = 1;
 			goto c_out;
 		}
 		if (setuid(pw->pw_uid) != 0) {
+			fprintf(stderr, "set user failed\n");
 			ret = 1;
 			goto c_out;
 		}
@@ -121,6 +125,12 @@ int main() {
 
 		struct sockaddr_in6 client_addr;
 		socklen_t client_addr_size = sizeof(client_addr);
+		if (pthread_mutex_init(&nft_lock, NULL) != 0) {
+			fprintf(stderr, "mutex init failed\n");
+			ret = 1;
+			goto c_out;
+		}
+		nft_lock_flag = 1;
 		printf("Facows start\n");
 
 		while (1) {
@@ -166,6 +176,18 @@ int main() {
 
 		ret = 0;
 c_out:
+		if (nft_lock_flag >= 0) {
+			pthread_mutex_destroy(&nft_lock);
+			nft_lock_flag = -1;
+		}
+		if (server_http_fd >= 0) {
+			close(server_http_fd);
+			server_http_fd = -1;
+		}
+		if (server_https_fd >= 0) {
+			close(server_https_fd);
+			server_https_fd = -1;
+		}
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
 			pipe_fd[0] = -1;
@@ -200,7 +222,7 @@ c_out:
 			if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
 				char read_buf[1024] = {0};
 				int read_n = read(nft_fd.fd, &read_buf, sizeof(read_buf));
-				if (read_n < 0) {
+				if (read_n <= 0) {
 					break;
 				} else {
 					system(read_buf);
@@ -233,7 +255,6 @@ p_out:
 
 	ret = 0;
 out:
-	pthread_mutex_destroy(&nft_lock);
 	if (server_http_fd >= 0) {
 		close(server_http_fd);
 		server_http_fd = -1;

@@ -1,5 +1,4 @@
 # Issues
-- early exit error using child out
 
 ---
 
