@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
+#include <nftables/libnftables.h>
 
 #include "fac_utils.h"
 #include "types.h"
@@ -204,6 +205,14 @@ c_out:
 			pipe_fd[1] = -1;
 		}
 
+		struct nft_ctx *nft_ctx = NULL;
+		nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
+		if (nft_ctx == NULL) {
+			fprintf(stderr, "nft context allocation error\n");
+			ret = 1;
+			goto p_out;
+		}
+
 		struct pollfd nft_fd;
 		nft_fd.fd = pipe_fd[0];
 		nft_fd.events = POLLIN | POLLHUP | POLLERR;
@@ -225,10 +234,13 @@ c_out:
 				if (read_n <= 0) {
 					break;
 				} else {
-					system(read_buf);
+					nft_run_cmd_from_buffer(nft_ctx, read_buf);
 				}
 			}
 		}
+
+		free(nft_ctx);
+		nft_ctx = NULL;
 
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
@@ -242,6 +254,8 @@ c_out:
 
 		ret = 0;
 p_out:
+		free(nft_ctx);
+		nft_ctx = NULL;
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
 			pipe_fd[0] = -1;

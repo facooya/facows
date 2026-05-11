@@ -4,6 +4,7 @@
 - kTLS
 
 ## ETC
+- child send only IP
 - add log
 - 429 rate limit
 

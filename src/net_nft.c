@@ -24,8 +24,8 @@
 #define IPV4_MAP_N sizeof(IPV4_MAP) - 1
 
 #define DOS_LIMIT 3
-#define NFT_BAN4 "nft add element netdev facows facows_ban4 {%s timeout %dm}"
-#define NFT_BAN6 "nft add element netdev facows facows_ban6 {%s timeout %dm}"
+#define NFT_BAN4 "add element netdev facows facows_ban4 {%s timeout %dm}"
+#define NFT_BAN6 "add element netdev facows facows_ban6 {%s timeout %dm}"
 
 #define NFT_INIT \
 	"add table netdev facows;\n" \
@@ -94,7 +94,7 @@ out:
 }
 
 int net_nft_fini(void) {
-	struct nft_ctx *nft_ctx;
+	struct nft_ctx *nft_ctx = NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == NULL) {
 		printf("facows_nft: can not create nft context\n");
@@ -108,7 +108,7 @@ int net_nft_fini(void) {
 }
 
 void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time) {
-	char ip_str[INET6_ADDRSTRLEN];
+	char ip_str[INET6_ADDRSTRLEN] = {0};
 	char *ip_p = ip_str;
 	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));
 	size_t cmd_n = 0;
