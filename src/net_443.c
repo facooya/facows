@@ -170,9 +170,3 @@ int net_443_err_write(SSL *ssl, int code) {
 	SSL_write(ssl, err_html, fac_memclen(err_html, '\0', sizeof(err_html)));
 	return 0;
 }
-
-void net_443_err_exit(SSL *ssl, int client_fd, void *arg) {
-	SSL_free(ssl);
-	close(client_fd);
-	free(arg);
-}

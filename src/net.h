@@ -15,7 +15,6 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size);
 int net_443_write(SSL *ssl, const char *path);
 int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size);
 int net_443_err_write(SSL *ssl, int code);
-void net_443_err_exit(SSL *ssl, int client_fd, void *arg);
 
 int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
 int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t path_n);
@@ -24,5 +23,6 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 int net_nft_init(const struct fws_conf *conf);
 int net_nft_fini(void);
 void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time);
+void net_nft_dos_ip_send(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n);
 
 #endif

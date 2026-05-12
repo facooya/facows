@@ -94,17 +94,21 @@ out:
 }
 
 int net_nft_fini(void) {
+	int ret = 0;
 	struct nft_ctx *nft_ctx = NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == NULL) {
 		printf("facows_nft: can not create nft context\n");
-		return -1;
+		ret = -1;
+		goto out;
 	}
 	nft_run_cmd_from_buffer(nft_ctx, NFT_FINI);
 
+	ret = 0;
+out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = NULL;
-	return 0;
+	return ret;
 }
 
 void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time) {
@@ -150,6 +154,47 @@ void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft
 
 		if (nft_list[nft_i].count > DOS_LIMIT) {
 			write(write_fd, cmd_ban, cmd_n+1);
+		}
+
+	} else {
+		nft_list[nft_i].count = 1;
+		nft_list[nft_i].time = cur_sec;
+	}
+}
+
+void net_nft_dos_ip_send(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n) {
+	char ip_buf[INET6_ADDRSTRLEN] = {0};
+	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_buf, INET6_ADDRSTRLEN);
+
+	time_t cur_sec = time(NULL);
+	int nft_i = -1;
+	for (size_t i=0; i<nft_list_n; i++) {
+		if (memcmp(nft_list[i].ip, client_addr->sin6_addr.s6_addr, 16) == 0) {
+			nft_i = i;
+			break;
+		}
+	}
+
+	if (nft_i < 0) {
+		for (size_t i=0; i<nft_list_n; i++) {
+			if (nft_list[i].time != cur_sec) {
+				nft_i = i;
+				break;
+			}
+		}
+
+		if (nft_i < 0) {
+			nft_i = nft_list_n;
+		}
+
+		memcpy(nft_list[nft_i].ip, client_addr->sin6_addr.s6_addr, 16);
+	}
+
+	if (nft_list[nft_i].time == cur_sec) {
+		nft_list[nft_i].count++;
+
+		if (nft_list[nft_i].count > DOS_LIMIT) {
+			write(write_fd, ip_buf, INET6_ADDRSTRLEN);
 		}
 
 	} else {

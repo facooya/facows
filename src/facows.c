@@ -32,6 +32,9 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
+#define IPV4_MAP "::ffff:"
+#define IPV4_MAP_N sizeof(IPV4_MAP) - 1
+
 pthread_mutex_t nft_lock = {0};
 
 volatile sig_atomic_t fws_flag = -1;
@@ -229,18 +232,16 @@ c_out:
 			}
 
 			if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
-				char read_buf[1024] = {0};
-				int read_n = read(nft_fd.fd, &read_buf, sizeof(read_buf));
+				char read_buf[INET6_ADDRSTRLEN] = {0};
+				int read_n = read(nft_fd.fd, read_buf, INET6_ADDRSTRLEN);
 				if (read_n <= 0) {
 					break;
 				} else {
-					nft_run_cmd_from_buffer(nft_ctx, read_buf);
+					printf("%s\n", read_buf);
+					//nft_run_cmd_from_buffer(nft_ctx, read_buf);
 				}
 			}
 		}
-
-		free(nft_ctx);
-		nft_ctx = NULL;
 
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
@@ -254,7 +255,7 @@ c_out:
 
 		ret = 0;
 p_out:
-		free(nft_ctx);
+		nft_ctx_free(nft_ctx);
 		nft_ctx = NULL;
 		if (pipe_fd[0] >= 0) {
 			close(pipe_fd[0]);
@@ -269,6 +270,8 @@ p_out:
 
 	ret = 0;
 out:
+	SSL_CTX_free(ssl_ctx);
+	ssl_ctx = NULL;
 	if (server_http_fd >= 0) {
 		close(server_http_fd);
 		server_http_fd = -1;
@@ -297,44 +300,42 @@ static void *_fws_thread_run(void *arg) {
 	int write_fd = args->write_fd;
 	SSL_CTX *ssl_ctx = args->ssl_ctx;
 
+	SSL *ssl = NULL;
+
+	int ssl_flag = 1;
 	char request_buf[8192];
 
-	SSL *ssl = SSL_new(ssl_ctx);
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) {
+		ssl_flag = -1;
+		goto out;
+	}
+
 	SSL_set_fd(ssl, client_fd);
 	if (SSL_accept(ssl) <= 0) {
-		net_443_err_exit(ssl, client_fd, arg);
-		return NULL;
+		ssl_flag = -1;
+		goto out;
 	}
 
 	while (1) {
-		// { net
 		if (net_443_read(ssl, request_buf, sizeof(request_buf)) != 0) {
-			net_443_err_exit(ssl, client_fd, arg);
-			return NULL;
+			ssl_flag = -1;
+			goto out;
 		}
 
 		struct fws_http_req http;
 		if (net_http_req_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
-			net_443_err_exit(ssl, client_fd, arg);
-			return NULL;
+			ssl_flag = -1;
+			goto out;
 		}
-		// }
 
-		// { file
 		struct fws_file file;
 		int status_code = file_parse(&file, &http, config->web_root, sizeof(config->web_root));
 
 		if (status_code == 301) {
 			net_http_path_redir(&http, config, &file, ssl);
-
-			SSL_shutdown(ssl);
-			SSL_free(ssl);
-			if (client_fd >= 0) {
-				close(client_fd);
-				client_fd = -1;
-			}
-			free(arg);
-			return NULL;
+			ssl_flag = -1;
+			goto out;
 		}
 
 		if (config->nft == 1) {
@@ -342,31 +343,36 @@ static void *_fws_thread_run(void *arg) {
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(&nft_lock);
-				net_nft_dos_ban(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
+				//net_nft_dos_ban(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
+				net_nft_dos_ip_send(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
 				pthread_mutex_unlock(&nft_lock);
 			}
 		}
 
 		if (status_code != 0) {
 			if (net_443_err_write(ssl, status_code) != 0) {
-				net_443_err_exit(ssl, client_fd, arg);
-				return NULL;
+				ssl_flag = -1;
+				goto out;
 			}
 
 		} else {
 			struct fws_http_res http_res;
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
 			if (net_443_res_write(ssl, &http_res, file.size) != 0) {
-				net_443_err_exit(ssl, client_fd, arg);
-				return NULL;
+				ssl_flag = -1;
+				goto out;
 			}
 			net_443_write(ssl, file.path);
 		}
-		// }
 	}
 
-	SSL_shutdown(ssl);
+out:
+	if (ssl_flag >= 0) {
+		SSL_shutdown(ssl);
+		ssl_flag = -1;
+	}
 	SSL_free(ssl);
+	ssl = NULL;
 	if (client_fd >= 0) {
 		close(client_fd);
 		client_fd = -1;
