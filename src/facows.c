@@ -32,9 +32,6 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
-#define IPV4_MAP "::ffff:"
-#define IPV4_MAP_N sizeof(IPV4_MAP) - 1
-
 pthread_mutex_t nft_lock = {0};
 
 volatile sig_atomic_t fws_flag = -1;
@@ -232,13 +229,11 @@ c_out:
 			}
 
 			if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
-				char read_buf[INET6_ADDRSTRLEN] = {0};
-				int read_n = read(nft_fd.fd, read_buf, INET6_ADDRSTRLEN);
-				if (read_n <= 0) {
+				char ip_buf[INET6_ADDRSTRLEN] = {0};
+				if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
 					break;
 				} else {
-					printf("%s\n", read_buf);
-					//nft_run_cmd_from_buffer(nft_ctx, read_buf);
+					net_nft_dos_ban(nft_ctx, ip_buf, config.ban_time);
 				}
 			}
 		}
@@ -343,7 +338,6 @@ static void *_fws_thread_run(void *arg) {
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(&nft_lock);
-				//net_nft_dos_ban(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(struct fws_nft), config->ban_time);
 				net_nft_dos_ip_send(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
 				pthread_mutex_unlock(&nft_lock);
 			}

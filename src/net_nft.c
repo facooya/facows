@@ -11,7 +11,6 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
-
 #include <nftables/libnftables.h>
 
 #include "types.h"
@@ -111,55 +110,34 @@ out:
 	return ret;
 }
 
-void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time) {
-	char ip_str[INET6_ADDRSTRLEN] = {0};
-	char *ip_p = ip_str;
-	inet_ntop(AF_INET6, client_addr->sin6_addr.s6_addr, ip_str, sizeof(ip_str));
+void net_nft_dos_ban(struct nft_ctx *nft_ctx, const char *ip_buf, uint32_t ban_time) {
+	const char *ip_p = ip_buf;
+	char *nft_buf = NULL;
 	size_t cmd_n = 0;
 
-	char cmd_ban[256];
-	if (memcmp(ip_str, IPV4_MAP, IPV4_MAP_N) == 0) {
+	if (memcmp(ip_buf, IPV4_MAP, IPV4_MAP_N) == 0) {
 		ip_p += IPV4_MAP_N;
-		cmd_n = snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN4, ip_p, ban_time);
-	} else {
-		cmd_n = snprintf(cmd_ban, sizeof(cmd_ban), NFT_BAN6, ip_p, ban_time);
-	}
-
-	time_t cur_sec = time(NULL);
-	int nft_i = -1;
-	for (size_t i=0; i<nft_list_n; i++) {
-		if (memcmp(nft_list[i].ip, client_addr->sin6_addr.s6_addr, 16) == 0) {
-			nft_i = i;
-			break;
+		cmd_n = snprintf(NULL, 0, NFT_BAN4, ip_p, ban_time);
+		nft_buf = malloc(cmd_n+1);
+		if (nft_buf == NULL) {
+			goto out;
 		}
-	}
-
-	if (nft_i < 0) {
-		for (size_t i=0; i<nft_list_n; i++) {
-			if (nft_list[i].time != cur_sec) {
-				nft_i = i;
-				break;
-			}
-		}
-
-		if (nft_i < 0) {
-			nft_i = nft_list_n;
-		}
-
-		memcpy(nft_list[nft_i].ip, client_addr->sin6_addr.s6_addr, 16);
-	}
-
-	if (nft_list[nft_i].time == cur_sec) {
-		nft_list[nft_i].count++;
-
-		if (nft_list[nft_i].count > DOS_LIMIT) {
-			write(write_fd, cmd_ban, cmd_n+1);
-		}
+		snprintf(nft_buf, cmd_n+1, NFT_BAN4, ip_p, ban_time);
 
 	} else {
-		nft_list[nft_i].count = 1;
-		nft_list[nft_i].time = cur_sec;
+		cmd_n = snprintf(NULL, 0, NFT_BAN6, ip_p, ban_time);
+		nft_buf = malloc(cmd_n+1);
+		if (nft_buf == NULL) {
+			goto out;
+		}
+		snprintf(nft_buf, cmd_n+1, NFT_BAN6, ip_p, ban_time);
 	}
+
+	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
+
+out:
+	free(nft_buf);
+	nft_buf = NULL;
 }
 
 void net_nft_dos_ip_send(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n) {

@@ -6,6 +6,8 @@
 #ifndef FWS_NET_H
 #define FWS_NET_H
 
+struct nft_ctx;
+
 int net_server_init(uint16_t port);
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf);
 int net_80_443_redir(int client_80_fd, const struct fws_conf *config);
@@ -22,7 +24,7 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 
 int net_nft_init(const struct fws_conf *conf);
 int net_nft_fini(void);
-void net_nft_dos_ban(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n, uint32_t ban_time);
+void net_nft_dos_ban(struct nft_ctx *nft_ctx, const char *ip_buf, uint32_t ban_time);
 void net_nft_dos_ip_send(const struct sockaddr_in6 *client_addr, struct fws_nft *nft_list, int write_fd, size_t nft_list_n);
 
 #endif
