@@ -12,11 +12,15 @@
 
 struct fws_conf {
 	uint8_t nft;
+	uint8_t hsts;
+
 	uint16_t http_port;
 	uint16_t https_port;
 	uint32_t pps_limit;
 	uint32_t pps_burst;
 	uint32_t ban_time;
+	uint32_t hsts_max_age;
+
 	char allow_ports[128];
 	char domain[128];
 	char web_root[128];

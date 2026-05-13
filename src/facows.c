@@ -62,6 +62,8 @@ int main() {
 		}
 	}
 
+	printf("HSTS %d, %d\n", config.hsts, config.hsts_max_age);
+
 	SSL_CTX *ssl_ctx = NULL;
 	net_443_init(&ssl_ctx, &config);
 

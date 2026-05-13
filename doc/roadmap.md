@@ -3,10 +3,16 @@
 - epoll, io_uring
 - kTLS
 
+## Defense
+- 429 rate limit
+- 80 access 1 per 1d
+- html not found request count 3 per 1s, if found html count 3 per 1s
+
 ## ETC
 - add log
-- 429 rate limit
 - reduce header
+- file conf change switch to lookup table
+- header for hsts
 
 ---
 

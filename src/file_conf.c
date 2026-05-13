@@ -31,7 +31,9 @@
 	KEY(WEB_ROOT) \
 	KEY(WEB_LOG) \
 	KEY(SSL_CERT) \
-	KEY(SSL_KEY)
+	KEY(SSL_KEY) \
+	KEY(HSTS) \
+	KEY(HSTS_MAX_AGE)
 #define CONF_KEYS_ENUM(key) key,
 #define CONF_KEYS_ARR(key) #key,
 
@@ -162,6 +164,15 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 							break;
 						case BAN_TIME:
 							conf->ban_time = (uint32_t) strtol(p, NULL, 10);
+							break;
+
+						case HSTS:
+							if (_tool_conf_bool_set(&conf->hsts, p) < 0) {
+								return -1;
+							}
+							break;
+						case HSTS_MAX_AGE:
+							conf->hsts_max_age = (uint32_t) strtol(p, NULL, 10);
 							break;
 
 						case DOMAIN:
