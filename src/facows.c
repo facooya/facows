@@ -62,8 +62,6 @@ int main() {
 		}
 	}
 
-	printf("HSTS %d, %d\n", config.hsts, config.hsts_max_age);
-
 	SSL_CTX *ssl_ctx = NULL;
 	net_443_init(&ssl_ctx, &config);
 
@@ -346,7 +344,7 @@ static void *_fws_thread_run(void *arg) {
 		}
 
 		if (status_code != 0) {
-			if (net_443_err_write(ssl, status_code) != 0) {
+			if (net_443_err_write(ssl, status_code) < 0) {
 				ssl_flag = -1;
 				goto out;
 			}

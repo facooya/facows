@@ -91,6 +91,10 @@ static int _uri_path_build(struct fws_file *file) {
 	}
 
 	// extension
+	int size = file->uri_path_n - (sizeof(".html") - 1);
+	if (size <= 0) {
+		return 0;
+	}
 	p1 = file->uri_path + file->uri_path_n - (sizeof(".html") - 1);
 	if (memcmp(p1, ".html", sizeof(".html")-1) == 0) {
 		file->uri_path_n -= (sizeof(".html") - 1);

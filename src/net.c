@@ -42,7 +42,7 @@ int net_server_init(uint16_t port) {
 }
 
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
-	char port[8];
+	char port[8] = {0};
 	port[0] = '\0';
 	if (conf->https_port != 443) {
 		snprintf(port, sizeof(port), ":%hu", conf->https_port);
@@ -61,6 +61,9 @@ void net_host_build(char *host_buf, const struct fws_http_req *http_req, const s
 	memcpy(p, conf->domain, n);
 	p += n;
 	*p = '\0';
+
 	n = fac_memclen(port, '\0', sizeof(port));
-	memcpy(p, port, n+1);
+	memcpy(p, port, n);
+	p += n;
+	*p = '\0';
 }

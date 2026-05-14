@@ -8,12 +8,14 @@
 #include <fcntl.h>
 #include <openssl/ssl.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
 #define SHARE_DIR "/usr/share/facows/"
+#define SHARE_ERR_HTML "/usr/share/facows/error_page.html"
 
 #define HTTP_MSG_200 "OK"
 #define HTTP_MSG_400 "Bad Request"
@@ -27,6 +29,21 @@
 #define HTTP_MSG_501 "Not Implemented"
 
 #define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n"
+
+static struct {
+	int code;
+	const char *msg;
+} http_msg[] = {
+	{500, HTTP_MSG_500},
+	{400, HTTP_MSG_400},
+	{403, HTTP_MSG_403},
+	{404, HTTP_MSG_404},
+	{405, HTTP_MSG_405},
+	{414, HTTP_MSG_414},
+	{429, HTTP_MSG_429},
+	{431, HTTP_MSG_431},
+	{501, HTTP_MSG_501}
+};
 
 int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	SSL_library_init();
@@ -94,79 +111,78 @@ int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
 }
 
 int net_443_err_write(SSL *ssl, int code) {
-	const char path_err_page[] = "/error_page.html";
-	char err_html[1024] = {0};
-	char err_html_temp[1024] = {0};
-	char res[1024] = {0};
-	char v_path[1024];
-	v_path[0] = '\0';
-	char path[1024];
-	path[0] = '\0';
+	char *html_fmt = NULL;
+	char *html_buf = NULL;
+	char *res_buf = NULL;
+	int html_fd = -1;
 
-	memcpy(v_path, SHARE_DIR, sizeof(SHARE_DIR)-1);
-	memcpy(v_path+sizeof(SHARE_DIR)-1, path_err_page, sizeof(path_err_page));
-	realpath(v_path, path);
+	int ret = 0;
 
-	int fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		return 1;
+	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
+	if (html_fd < 0) {
+		ret = -1;
+		goto out;
 	}
-	read(fd, err_html_temp, sizeof(err_html_temp));
-	close(fd);
-
-	switch (code) {
-		case 400:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_400);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_400, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 403:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_403);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_403, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 404:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_404);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_404, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 405:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_405);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_405, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 414:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_414);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_414, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 429:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_429);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_429, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 431:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_431);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_431, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 500:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		case 501:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_501);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_501, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
-
-		default:
-			snprintf(err_html, sizeof(err_html), err_html_temp, code, code, HTTP_MSG_500);
-			snprintf(res, sizeof(res), HTTP_ERR_RES, code, HTTP_MSG_500, fac_memclen(err_html, '\0', sizeof(err_html)));
-			break;
+	struct stat html_stat = {0};
+	if (fstat(html_fd, &html_stat) < 0) {
+		ret = -1;
+		goto out;
+	}
+	html_fmt = malloc(html_stat.st_size+1);
+	if (html_fmt == NULL) {
+		ret = -1;
+		goto out;
+	}
+	if (read(html_fd, html_fmt, html_stat.st_size) <= 0) {
+		ret = -1;
+		goto out;
+	}
+	html_fmt[html_stat.st_size] = '\0';
+	if (html_fd >= 0) {
+		close(html_fd);
+		html_fd = -1;
 	}
 
-	SSL_write(ssl, res, fac_memclen(res, '\0', sizeof(res)));
-	SSL_write(ssl, err_html, fac_memclen(err_html, '\0', sizeof(err_html)));
-	return 0;
+	size_t msg_idx = 0;
+	size_t html_n = 0;
+	size_t res_n = 0;
+	for (size_t i=0; i<(sizeof(http_msg)/sizeof(http_msg[0])); i++) {
+		if (http_msg[i].code == code) {
+			msg_idx = i;
+			break;
+		}
+	}
+
+	html_n = snprintf(NULL, 0, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
+	html_buf = malloc(html_n+1);
+	if (html_buf == NULL) {
+		ret = -1;
+		goto out;
+	}
+	snprintf(html_buf, html_n+1, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
+
+	res_n = snprintf(NULL, 0, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+	res_buf = malloc(res_n+1);
+	if (res_buf == NULL) {
+		ret = -1;
+		goto out;
+	}
+	snprintf(res_buf, res_n+1, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+
+	SSL_write(ssl, res_buf, res_n);
+	SSL_write(ssl, html_buf, html_n);
+
+	ret = 0;
+out:
+	free(res_buf);
+	res_buf = NULL;
+	free(html_buf);
+	html_buf = NULL;
+	free(html_fmt);
+	html_fmt = NULL;
+	if (html_fd >= 0) {
+		close(html_fd);
+		html_fd = -1;
+	}
+	return ret;
 }
