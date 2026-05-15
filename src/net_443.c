@@ -29,8 +29,9 @@
 #define HTTP_MSG_501 "Not Implemented"
 
 #define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n"
+#define HTTP_RES "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nDate: %s\r\n\r\n"
 
-static struct {
+static const struct {
 	int code;
 	const char *msg;
 } http_msg[] = {
@@ -51,11 +52,11 @@ int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	ssl_method = TLS_server_method();
 	*ssl_ctx = SSL_CTX_new(ssl_method);
 	if (SSL_CTX_use_certificate_file(*ssl_ctx, config->ssl_cert, SSL_FILETYPE_PEM) <= 0) {
-		printf("SSL ERROR certificate\n");
+		fprintf(stderr, "ssl certification error\n");
 		return 1;
 	}
 	if (SSL_CTX_use_PrivateKey_file(*ssl_ctx, config->ssl_key, SSL_FILETYPE_PEM) <= 0) {
-		printf("SSL ERROR private key\n");
+		fprintf(stderr, "ssl private key error\n");
 		return 1;
 	}
 	return 0;
@@ -87,27 +88,50 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 }
 
 int net_443_write(SSL *ssl, const char *path) {
+	int ret = 0;
+
 	int fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 	char file_buf[4096];
 	ssize_t read_size;
 	while ((read_size = read(fd, file_buf, sizeof(file_buf))) > 0) {
 		if (SSL_write(ssl, file_buf, read_size) <= 0) {
-			close(fd);
-			return 1;
+			ret = 1;
+			goto out;
 		}
 	}
-	close(fd);
-	return 0;
+
+	ret = 0;
+out:
+	if (fd >= 0) {
+		close(fd);
+		fd = -1;
+	}
+	return ret;
 }
 
 int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
-	char res_buf[8192];
-	snprintf(res_buf, sizeof(res_buf), "HTTP/1.1 %d OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nDate: %s\r\n\r\n", http_res->code, http_res->content, size, http_res->date);
-	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
-	return 0;
+	char *res_buf = NULL;
+	int ret = 0;
+
+	size_t n = snprintf(NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
+	res_buf = malloc(n+1);
+	if (res_buf == NULL) {
+		ret = -1;
+		goto out;
+	}
+
+	snprintf(res_buf, n+1, HTTP_RES, http_res->content, size, http_res->date);
+	SSL_write(ssl, res_buf, n);
+
+	ret = 0;
+out:
+	free(res_buf);
+	res_buf = NULL;
+	return ret;
 }
 
 int net_443_err_write(SSL *ssl, int code) {
