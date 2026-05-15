@@ -13,7 +13,7 @@
 #include "types.h"
 #include "net.h"
 
-#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+#define RES_301 "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64
@@ -88,7 +88,7 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 	size_t n = snprintf(NULL, 0, RES_301, host_buf, file->uri_path);
 	char *res_buf = malloc(n+1);
 	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
-	SSL_write(ssl, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)));
+	SSL_write(ssl, res_buf, n);
 	free(res_buf);
 	res_buf = NULL;
 }
