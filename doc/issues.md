@@ -1,5 +1,4 @@
 # Issues
-- race condition
 - ctrl+c terminate issue before dos attack
 
 ---

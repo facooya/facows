@@ -45,9 +45,9 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 
 	time_t raw_time;
 	time(&raw_time);
-	struct tm *tm;
-	tm = gmtime(&raw_time);
-	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", tm);
+	struct tm tm;
+	gmtime_r(&raw_time, &tm);
+	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", &tm);
 
 	http_res->code = 200;
 	http_res->connection = 0;
