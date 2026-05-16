@@ -190,6 +190,7 @@ c_out:
 		ts.tv_sec = 0;
 		ts.tv_nsec = 100000000;
 		while (fws_thread_n > 0) {
+			printf("A\n");
 			nanosleep(&ts, NULL);
 		}
 		if (nft_lock_flag >= 0) {
