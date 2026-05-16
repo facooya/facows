@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <openssl/ssl.h>
 
 #ifndef FWS_TYPES_H
@@ -68,8 +69,8 @@ struct fws_args {
 	int fd;
 	int write_fd;
 	SSL_CTX *ssl_ctx;
+	struct sockaddr_in6 client_addr;
 	const struct fws_conf *fws_conf;
-	const struct sockaddr_in6 *client_addr;
 };
 
 #endif

@@ -132,7 +132,7 @@ int main() {
 		fws_fd[1].fd = server_https_fd;
 		fws_fd[1].events = POLLIN;
 
-		struct sockaddr_in6 client_addr;
+		struct sockaddr_in6 client_addr = {0};
 		socklen_t client_addr_size = sizeof(client_addr);
 		if (pthread_mutex_init(&nft_lock, NULL) != 0) {
 			fprintf(stderr, "mutex init failed\n");
@@ -174,8 +174,8 @@ int main() {
 				args->fd = client_fd;
 				args->write_fd = pipe_write_fd;
 				args->ssl_ctx = ssl_ctx;
+				args->client_addr = client_addr;
 				args->fws_conf = &config;
-				args->client_addr = &client_addr;
 
 				++fws_thread_n;
 				pthread_t fws_thread;
@@ -304,7 +304,7 @@ out:
 static void *_fws_thread_run(void *arg) {
 	const struct fws_args *args = (struct fws_args *) arg;
 	const struct fws_conf *config = args->fws_conf;
-	const struct sockaddr_in6 *client_addr = args->client_addr;
+	const struct sockaddr_in6 client_addr = args->client_addr;
 
 	int client_fd = args->fd;
 	int write_fd = args->write_fd;
@@ -358,7 +358,7 @@ static void *_fws_thread_run(void *arg) {
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(&nft_lock);
-				net_nft_dos_ip_send(client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
+				net_nft_dos_ip_send(&client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
 				pthread_mutex_unlock(&nft_lock);
 			}
 		}
