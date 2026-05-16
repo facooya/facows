@@ -70,7 +70,8 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 		if (read_ret <= 0) {
 			const int err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
-				continue;
+				break;
+
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
 				return 400;
 			}

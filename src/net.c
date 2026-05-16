@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <errno.h>
 
 #include "fac_utils.h"
 #include "types.h"
@@ -32,7 +33,9 @@ int net_server_init(uint16_t port) {
 	server_addr.sin6_addr = in6addr_any;
 	server_addr.sin6_port = htons(port);
 
+	errno = 0;
 	if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+		printf("%d\n", errno);
 		close(server_fd);
 		return -1;
 	}

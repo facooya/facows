@@ -68,8 +68,10 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 		ret = -1;
 		goto out;
 	}
-	close(conf_fd);
-	conf_fd = -1;
+	if (conf_fd >= 0) {
+		close(conf_fd);
+		conf_fd = -1;
+	}
 
 	conf_buf[conf_len-1] = '\n';
 	conf_buf[conf_len] = '\0';

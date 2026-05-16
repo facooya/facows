@@ -20,11 +20,11 @@ OBJS = $(SRCS:%.c=build/%.o)
 all: build/facows
 
 build/facows: $(OBJS)
-	gcc -flto -fanalyzer -fstack-protector-all -fsanitize=address,undefined -pthread -o $@ $^ -lssl -lcrypto -lnftables
+	gcc -flto -fanalyzer -fstack-protector-all -fsanitize=thread,undefined -pthread -o $@ $^ -lssl -lcrypto -lnftables
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)
-	gcc -Wall -Wextra -flto -fanalyzer -fstack-protector-all -fsanitize=address,undefined -Isrc -Iinclude -Ilib -c $< -o $@
+	gcc -Wall -Wextra -flto -fanalyzer -fstack-protector-all -fsanitize=thread,undefined -Isrc -Iinclude -Ilib -c $< -o $@
 
 build/:
 	mkdir -p $@

@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 #include <unistd.h>
 #include <poll.h>
 #include <pthread.h>
@@ -35,13 +36,17 @@
 pthread_mutex_t nft_lock = {0};
 
 volatile sig_atomic_t fws_flag = -1;
+atomic_int fws_thread_n = 0;
 struct fws_nft nft_list[1024] = {0};
 
 static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
+	SSL_CTX *ssl_ctx = NULL;
 	int pipe_fd[2] = {-1, -1};
+	int pipe_read_fd = -1;
+	int pipe_write_fd = -1;
 	int server_http_fd = -1;
 	int server_https_fd = -1;
 
@@ -62,14 +67,15 @@ int main() {
 		}
 	}
 
-	SSL_CTX *ssl_ctx = NULL;
 	net_443_init(&ssl_ctx, &config);
 
 	if ((server_http_fd = net_server_init(config.http_port)) < 0) {
+		fprintf(stderr, "http socket failed\n");
 		ret = 1;
 		goto out;
 	}
 	if ((server_https_fd = net_server_init(config.https_port)) < 0) {
+		fprintf(stderr, "https socket failed\n");
 		ret = 1;
 		goto out;
 	}
@@ -79,6 +85,8 @@ int main() {
 		ret = 1;
 		goto out;
 	}
+	pipe_read_fd = pipe_fd[0];
+	pipe_write_fd = pipe_fd[1];
 
 	const pid_t pid = fork();
 	if (pid < 0) {
@@ -113,9 +121,9 @@ int main() {
 			goto c_out;
 		}
 
-		if (pipe_fd[0] >= 0) {
-			close(pipe_fd[0]);
-			pipe_fd[0] = -1;
+		if (pipe_read_fd >= 0) {
+			close(pipe_read_fd);
+			pipe_read_fd = -1;
 		}
 
 		struct pollfd fws_fd[2];
@@ -164,11 +172,12 @@ int main() {
 					goto c_out;
 				}
 				args->fd = client_fd;
-				args->write_fd = pipe_fd[1];
+				args->write_fd = pipe_write_fd;
 				args->ssl_ctx = ssl_ctx;
 				args->fws_conf = &config;
 				args->client_addr = &client_addr;
 
+				++fws_thread_n;
 				pthread_t fws_thread;
 				pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
 				pthread_detach(fws_thread);
@@ -177,9 +186,23 @@ int main() {
 
 		ret = 0;
 c_out:
+		struct timespec ts;
+		ts.tv_sec = 0;
+		ts.tv_nsec = 100000000;
+		while (fws_thread_n > 0) {
+			nanosleep(&ts, NULL);
+		}
 		if (nft_lock_flag >= 0) {
 			pthread_mutex_destroy(&nft_lock);
 			nft_lock_flag = -1;
+		}
+		if (pipe_read_fd >= 0) {
+			close(pipe_read_fd);
+			pipe_read_fd = -1;
+		}
+		if (pipe_write_fd >= 0) {
+			close(pipe_write_fd);
+			pipe_write_fd = -1;
 		}
 		if (server_http_fd >= 0) {
 			close(server_http_fd);
@@ -189,20 +212,12 @@ c_out:
 			close(server_https_fd);
 			server_https_fd = -1;
 		}
-		if (pipe_fd[0] >= 0) {
-			close(pipe_fd[0]);
-			pipe_fd[0] = -1;
-		}
-		if (pipe_fd[1] >= 0) {
-			close(pipe_fd[1]);
-			pipe_fd[1] = -1;
-		}
 		_exit(ret);
 
 	} else {
-		if (pipe_fd[1] >= 0) {
-			close(pipe_fd[1]);
-			pipe_fd[1] = -1;
+		if (pipe_write_fd >= 0) {
+			close(pipe_write_fd);
+			pipe_write_fd = -1;
 		}
 
 		struct nft_ctx *nft_ctx = NULL;
@@ -214,7 +229,7 @@ c_out:
 		}
 
 		struct pollfd nft_fd;
-		nft_fd.fd = pipe_fd[0];
+		nft_fd.fd = pipe_read_fd;
 		nft_fd.events = POLLIN | POLLHUP | POLLERR;
 
 		while (1) {
@@ -238,9 +253,9 @@ c_out:
 			}
 		}
 
-		if (pipe_fd[0] >= 0) {
-			close(pipe_fd[0]);
-			pipe_fd[0] = -1;
+		if (pipe_read_fd >= 0) {
+			close(pipe_read_fd);
+			pipe_read_fd = -1;
 		}
 
 		waitpid(pid, NULL, 0);
@@ -252,13 +267,13 @@ c_out:
 p_out:
 		nft_ctx_free(nft_ctx);
 		nft_ctx = NULL;
-		if (pipe_fd[0] >= 0) {
-			close(pipe_fd[0]);
-			pipe_fd[0] = -1;
+		if (pipe_read_fd >= 0) {
+			close(pipe_read_fd);
+			pipe_read_fd = -1;
 		}
-		if (pipe_fd[1] >= 0) {
-			close(pipe_fd[1]);
-			pipe_fd[1] = -1;
+		if (pipe_write_fd >= 0) {
+			close(pipe_write_fd);
+			pipe_write_fd = -1;
 		}
 		goto out;
 	}
@@ -267,6 +282,14 @@ p_out:
 out:
 	SSL_CTX_free(ssl_ctx);
 	ssl_ctx = NULL;
+	if (pipe_read_fd >= 0) {
+		close(pipe_read_fd);
+		pipe_read_fd = -1;
+	}
+	if (pipe_write_fd >= 0) {
+		close(pipe_write_fd);
+		pipe_write_fd = -1;
+	}
 	if (server_http_fd >= 0) {
 		close(server_http_fd);
 		server_http_fd = -1;
@@ -274,14 +297,6 @@ out:
 	if (server_https_fd >= 0) {
 		close(server_https_fd);
 		server_https_fd = -1;
-	}
-	if (pipe_fd[0] >= 0) {
-		close(pipe_fd[0]);
-		pipe_fd[0] = -1;
-	}
-	if (pipe_fd[1] >= 0) {
-		close(pipe_fd[1]);
-		pipe_fd[1] = -1;
 	}
 	return ret;
 }
@@ -305,6 +320,11 @@ static void *_fws_thread_run(void *arg) {
 		ssl_flag = -1;
 		goto out;
 	}
+
+	struct timeval tv;
+	tv.tv_sec = 2;
+	tv.tv_usec = 0;
+	setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
 	SSL_set_fd(ssl, client_fd);
 	if (SSL_accept(ssl) <= 0) {
@@ -373,6 +393,7 @@ out:
 	}
 	free(arg);
 	arg = NULL;
+	--fws_thread_n;
 
 	return NULL;
 }
