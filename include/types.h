@@ -4,6 +4,7 @@
  */
 
 #include <stdint.h>
+#include <stdatomic.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <openssl/ssl.h>
@@ -71,6 +72,8 @@ struct fws_args {
 	SSL_CTX *ssl_ctx;
 	struct sockaddr_in6 client_addr;
 	const struct fws_conf *fws_conf;
+	atomic_int *fws_thread_n;
+	pthread_mutex_t *nft_lock;
 };
 
 #endif

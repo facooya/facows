@@ -24,6 +24,7 @@
 
 #include "fac_utils.h"
 #include "types.h"
+#include "fws.h"
 #include "net.h"
 #include "file.h"
 
@@ -34,12 +35,9 @@
 #define USER_NOBODY "nobody"
 
 pthread_mutex_t nft_lock = {0};
-
 volatile sig_atomic_t fws_flag = -1;
 atomic_int fws_thread_n = 0;
-struct fws_nft nft_list[1024] = {0};
 
-static void *_fws_thread_run(void *arg);
 static void _fws_exit(int sig);
 
 int main() {
@@ -176,23 +174,25 @@ int main() {
 				args->ssl_ctx = ssl_ctx;
 				args->client_addr = client_addr;
 				args->fws_conf = &config;
+				args->fws_thread_n = &fws_thread_n;
+				args->nft_lock = &nft_lock;
 
-				++fws_thread_n;
+				fws_thread_n++;
 				pthread_t fws_thread;
-				pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
+				pthread_create(&fws_thread, NULL, fws_thread_run, (void*)args);
 				pthread_detach(fws_thread);
 			}
 		}
 
 		ret = 0;
 c_out:
-		struct timespec ts;
-		ts.tv_sec = 0;
-		ts.tv_nsec = 100000000;
+		struct timespec thread_ts = {0};
+		thread_ts.tv_sec = 0;
+		thread_ts.tv_nsec = 100000000;
 		while (fws_thread_n > 0) {
-			printf("A\n");
-			nanosleep(&ts, NULL);
+			nanosleep(&thread_ts, NULL);
 		}
+
 		if (nft_lock_flag >= 0) {
 			pthread_mutex_destroy(&nft_lock);
 			nft_lock_flag = -1;
@@ -300,103 +300,6 @@ out:
 		server_https_fd = -1;
 	}
 	return ret;
-}
-
-static void *_fws_thread_run(void *arg) {
-	const struct fws_args *args = (struct fws_args *) arg;
-	const struct fws_conf *config = args->fws_conf;
-	const struct sockaddr_in6 client_addr = args->client_addr;
-
-	int client_fd = args->fd;
-	int write_fd = args->write_fd;
-	SSL_CTX *ssl_ctx = args->ssl_ctx;
-
-	SSL *ssl = NULL;
-
-	int ssl_flag = 1;
-	char request_buf[8192];
-
-	ssl = SSL_new(ssl_ctx);
-	if (ssl == NULL) {
-		ssl_flag = -1;
-		goto out;
-	}
-
-	struct timeval tv;
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
-
-	SSL_set_fd(ssl, client_fd);
-	if (SSL_accept(ssl) <= 0) {
-		ssl_flag = -1;
-		goto out;
-	}
-
-	while (1) {
-		if (net_443_read(ssl, request_buf, sizeof(request_buf)) != 0) {
-			ssl_flag = -1;
-			goto out;
-		}
-
-		struct fws_http_req http;
-		if (net_http_req_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
-			ssl_flag = -1;
-			goto out;
-		}
-
-		struct fws_file file;
-		int status_code = file_parse(&file, &http, config->web_root, sizeof(config->web_root));
-
-		if (status_code == 301) {
-			net_http_path_redir(&http, config, &file, ssl);
-			ssl_flag = -1;
-			goto out;
-		}
-
-		if (config->nft == 1) {
-			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
-			char *path_p = file.path + path_size - (sizeof(".html") - 1);
-			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-				pthread_mutex_lock(&nft_lock);
-				net_nft_dos_ip_send(&client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
-				pthread_mutex_unlock(&nft_lock);
-			}
-		}
-
-		if (status_code != 0) {
-			if (net_443_err_write(ssl, status_code) < 0) {
-				ssl_flag = -1;
-				goto out;
-			}
-
-		} else {
-			struct fws_http_res http_res;
-			net_http_res_build(&http_res, file.path, sizeof(file.path));
-			if (net_443_res_write(ssl, &http_res, file.size) != 0) {
-				ssl_flag = -1;
-				goto out;
-			}
-			net_443_write(ssl, file.path);
-		}
-	}
-
-out:
-	if (ssl_flag >= 0) {
-		SSL_shutdown(ssl);
-		ssl_flag = -1;
-	}
-	SSL_free(ssl);
-	ssl = NULL;
-	if (client_fd >= 0) {
-		close(client_fd);
-		client_fd = -1;
-	}
-	free(arg);
-	arg = NULL;
-	--fws_thread_n;
-
-	return NULL;
 }
 
 static void _fws_exit(int sig) {

@@ -8,6 +8,7 @@ Testing ...
 - Support on linux
 - Poll method
 - Only html extendsion for clean url, but forced.
+- Not support upload/download for large files, because socket timeout 2 seconds.
 
 **Features**
 - Support configuration file
