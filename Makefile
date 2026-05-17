@@ -6,7 +6,7 @@ SRCS = \
 lib/fac_utils.c \
 \
 src/facows.c \
-src/fws_thread.c \
+src/fws.c \
 \
 src/net.c \
 src/net_80.c \
