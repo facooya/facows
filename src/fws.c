@@ -164,9 +164,75 @@ out:
 	_exit(ret);
 }
 
+int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *fws_flag, pid_t pid, const struct fws_conf *conf) {
+	int ret = 0;
+
+	if (pipe_write_fd >= 0) {
+		close(pipe_write_fd);
+		pipe_write_fd = -1;
+	}
+
+	struct nft_ctx *nft_ctx = NULL;
+	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
+	if (nft_ctx == NULL) {
+		fprintf(stderr, "nft context allocation error\n");
+		ret = -1;
+		goto out;
+	}
+
+	struct pollfd nft_fd = {0};
+	nft_fd.fd = pipe_read_fd;
+	nft_fd.events = POLLIN | POLLHUP | POLLERR;
+
+	while (1) {
+		errno = 0;
+		if (poll(&nft_fd, 1, -1) < 0) {
+			if (errno == EINTR && (*fws_flag == SIGINT || *fws_flag == SIGTERM)) {
+				break;
+			}
+			fprintf(stderr, "poll error\n");
+			ret = -1;
+			goto out;
+		}
+
+		if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
+			char ip_buf[INET6_ADDRSTRLEN] = {0};
+			if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
+				break;
+			} else {
+				net_nft_dos_ban(nft_ctx, ip_buf, conf->ban_time);
+			}
+		}
+	}
+
+	if (pipe_read_fd >= 0) {
+		close(pipe_read_fd);
+		pipe_read_fd = -1;
+	}
+
+	waitpid(pid, NULL, 0);
+	if (conf->nft == 1) {
+		net_nft_fini();
+	}
+
+	ret = 0;
+out:
+	nft_ctx_free(nft_ctx);
+	nft_ctx = NULL;
+	if (pipe_read_fd >= 0) {
+		close(pipe_read_fd);
+		pipe_read_fd = -1;
+	}
+	if (pipe_write_fd >= 0) {
+		close(pipe_write_fd);
+		pipe_write_fd = -1;
+	}
+	return ret;
+}
+
 static void *_fws_thread_run(void *arg) {
 	const struct fws_args *args = (struct fws_args *) arg;
-	const struct fws_conf *config = args->fws_conf;
+	const struct fws_conf *conf = args->fws_conf;
 	const struct sockaddr_in6 client_addr = args->client_addr;
 
 	int client_fd = args->fd;
@@ -202,21 +268,21 @@ static void *_fws_thread_run(void *arg) {
 		}
 
 		struct fws_http_req http = {0};
-		if (net_http_req_parse(request_buf, &http, config->domain, sizeof(config->domain)) != 0) {
+		if (net_http_req_parse(request_buf, &http, conf->domain, sizeof(conf->domain)) != 0) {
 			ssl_flag = -1;
 			goto out;
 		}
 
 		struct fws_file file = {0};
-		int status_code = file_parse(&file, &http, config->web_root, sizeof(config->web_root));
+		int status_code = file_parse(&file, &http, conf->web_root, sizeof(conf->web_root));
 
 		if (status_code == 301) {
-			net_http_path_redir(&http, config, &file, ssl);
+			net_http_path_redir(&http, conf, &file, ssl);
 			ssl_flag = -1;
 			goto out;
 		}
 
-		if (config->nft == 1) {
+		if (conf->nft == 1) {
 			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
