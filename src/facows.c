@@ -36,6 +36,8 @@ static void _fws_exit(int sig);
 
 int main() {
 	SSL_CTX *ssl_ctx = NULL;
+	struct fws_parent_ctx *parent_ctx = NULL;
+	struct fws_child_ctx *child_ctx = NULL;
 	int pipe_fd[2] = {-1, -1};
 	int pipe_read_fd = -1;
 	int pipe_write_fd = -1;
@@ -88,16 +90,49 @@ int main() {
 	}
 
 	if (pid == 0) {
-		fws_child_run(server_http_fd, server_https_fd, pipe_read_fd, pipe_write_fd, &fws_flag, ssl_ctx, &conf);
-	} else {
-		if (fws_parent_run(pipe_read_fd, pipe_write_fd, &fws_flag, pid, &conf) < 0) {
+		child_ctx = malloc(sizeof(struct fws_child_ctx));
+		if (child_ctx == NULL) {
 			ret = 1;
 			goto out;
 		}
+		child_ctx->server_http_fd = server_http_fd;
+		child_ctx->server_https_fd = server_https_fd;
+		child_ctx->pipe_read_fd = pipe_read_fd;
+		child_ctx->pipe_write_fd = pipe_write_fd;
+		child_ctx->ssl_ctx = ssl_ctx;
+		child_ctx->fws_flag = &fws_flag;
+		child_ctx->conf = &conf;
+
+		fws_child_run(child_ctx);
+		free(child_ctx);
+		child_ctx = NULL;
+
+	} else {
+		parent_ctx = malloc(sizeof(struct fws_parent_ctx));
+		if (parent_ctx == NULL) {
+			ret = 1;
+			goto out;
+		}
+		parent_ctx->pipe_read_fd = pipe_read_fd;
+		parent_ctx->pipe_write_fd = pipe_write_fd;
+		parent_ctx->fws_flag = &fws_flag;
+		parent_ctx->pid = pid;
+		parent_ctx->conf = &conf;
+
+		if (fws_parent_run(parent_ctx) < 0) {
+			ret = 1;
+			goto out;
+		}
+		free(parent_ctx);
+		parent_ctx = NULL;
 	}
 
 	ret = 0;
 out:
+	free(child_ctx);
+	child_ctx = NULL;
+	free(parent_ctx);
+	parent_ctx = NULL;
 	SSL_CTX_free(ssl_ctx);
 	ssl_ctx = NULL;
 	if (pipe_read_fd >= 0) {

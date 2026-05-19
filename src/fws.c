@@ -38,12 +38,16 @@ atomic_int fws_thread_n = 0;
 
 struct fws_nft nft_list[1024] = {0};
 
-static void *_fws_thread_run(void *arg);
+static void *_fws_thread_run(void *thread_args);
 
-void fws_child_run(int server_http_fd, int server_https_fd, int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *fws_flag, SSL_CTX *ssl_ctx, const struct fws_conf *conf) {
+void fws_child_run(struct fws_child_ctx *child_ctx) {
+	struct passwd *pw = NULL;
+	int client_http_fd = -1;
+	int client_fd = -1;
+
 	int ret = 0;
 	int nft_lock_flag = -1;
-	struct passwd *pw = NULL;
+
 	const char *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
 	for (size_t i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
 		if ((pw = getpwnam(user_name[i])) != NULL) {
@@ -67,15 +71,15 @@ void fws_child_run(int server_http_fd, int server_https_fd, int pipe_read_fd, in
 		goto out;
 	}
 
-	if (pipe_read_fd >= 0) {
-		close(pipe_read_fd);
-		pipe_read_fd = -1;
+	if (child_ctx->pipe_read_fd >= 0) {
+		close(child_ctx->pipe_read_fd);
+		child_ctx->pipe_read_fd = -1;
 	}
 
 	struct pollfd fws_fd[2];
-	fws_fd[0].fd = server_http_fd;
+	fws_fd[0].fd = child_ctx->server_http_fd;
 	fws_fd[0].events = POLLIN;
-	fws_fd[1].fd = server_https_fd;
+	fws_fd[1].fd = child_ctx->server_https_fd;
 	fws_fd[1].events = POLLIN;
 
 	struct sockaddr_in6 client_addr = {0};
@@ -89,14 +93,14 @@ void fws_child_run(int server_http_fd, int server_https_fd, int pipe_read_fd, in
 	printf("Facows start\n");
 
 	while (1) {
-		if (poll(fws_fd, 2, -1) < 0 && (*fws_flag == SIGINT || *fws_flag == SIGTERM)) {
+		if (poll(fws_fd, 2, -1) < 0 && (*child_ctx->fws_flag == SIGINT || *child_ctx->fws_flag == SIGTERM)) {
 			break;
 		}
 
 		if ((fws_fd[0].revents & POLLIN) != 0) {
-			int client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+			client_http_fd = accept(child_ctx->server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
-			if (net_80_443_redir(client_http_fd, conf) < 0) {
+			if (net_80_443_redir(client_http_fd, child_ctx->conf) < 0) {
 				if (client_http_fd >= 0) {
 					close(client_http_fd);
 					client_http_fd = -1;
@@ -110,24 +114,24 @@ void fws_child_run(int server_http_fd, int server_https_fd, int pipe_read_fd, in
 			}
 
 		} else if ((fws_fd[1].revents & POLLIN) != 0) {
-			int client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+			client_fd = accept(child_ctx->server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
-			struct fws_args *args = malloc(sizeof(struct fws_args));
-			if (args == NULL) {
+			struct fws_thread_ctx *thread_ctx = malloc(sizeof(struct fws_thread_ctx));
+			if (thread_ctx == NULL) {
 				ret = 1;
 				goto out;
 			}
-			args->fd = client_fd;
-			args->write_fd = pipe_write_fd;
-			args->ssl_ctx = ssl_ctx;
-			args->client_addr = client_addr;
-			args->fws_conf = conf;
-			args->fws_thread_n = &fws_thread_n;
-			args->nft_lock = &nft_lock;
+			thread_ctx->fd = client_fd;
+			thread_ctx->write_fd = child_ctx->pipe_write_fd;
+			thread_ctx->ssl_ctx = child_ctx->ssl_ctx;
+			thread_ctx->client_addr = client_addr;
+			thread_ctx->fws_conf = child_ctx->conf;
+			thread_ctx->fws_thread_n = &fws_thread_n;
+			thread_ctx->nft_lock = &nft_lock;
 
 			fws_thread_n++;
 			pthread_t fws_thread;
-			pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)args);
+			pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)thread_ctx);
 			pthread_detach(fws_thread);
 		}
 	}
@@ -141,35 +145,46 @@ out:
 		nanosleep(&thread_ts, NULL);
 	}
 
+	SSL_CTX_free(child_ctx->ssl_ctx);
+	child_ctx->ssl_ctx = NULL;
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
 		nft_lock_flag = -1;
 	}
-	if (pipe_read_fd >= 0) {
-		close(pipe_read_fd);
-		pipe_read_fd = -1;
+	if (client_http_fd >= 0) {
+		close(client_http_fd);
+		client_http_fd = -1;
 	}
-	if (pipe_write_fd >= 0) {
-		close(pipe_write_fd);
-		pipe_write_fd = -1;
+	if (client_fd >= 0) {
+		close(client_fd);
+		client_fd = -1;
 	}
-	if (server_http_fd >= 0) {
-		close(server_http_fd);
-		server_http_fd = -1;
+
+	if (child_ctx->pipe_read_fd >= 0) {
+		close(child_ctx->pipe_read_fd);
+		child_ctx->pipe_read_fd = -1;
 	}
-	if (server_https_fd >= 0) {
-		close(server_https_fd);
-		server_https_fd = -1;
+	if (child_ctx->pipe_write_fd >= 0) {
+		close(child_ctx->pipe_write_fd);
+		child_ctx->pipe_write_fd = -1;
+	}
+	if (child_ctx->server_http_fd >= 0) {
+		close(child_ctx->server_http_fd);
+		child_ctx->server_http_fd = -1;
+	}
+	if (child_ctx->server_https_fd >= 0) {
+		close(child_ctx->server_https_fd);
+		child_ctx->server_https_fd = -1;
 	}
 	_exit(ret);
 }
 
-int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *fws_flag, pid_t pid, const struct fws_conf *conf) {
+int fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 	int ret = 0;
 
-	if (pipe_write_fd >= 0) {
-		close(pipe_write_fd);
-		pipe_write_fd = -1;
+	if (parent_ctx->pipe_write_fd >= 0) {
+		close(parent_ctx->pipe_write_fd);
+		parent_ctx->pipe_write_fd = -1;
 	}
 
 	struct nft_ctx *nft_ctx = NULL;
@@ -181,16 +196,15 @@ int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *f
 	}
 
 	struct pollfd nft_fd = {0};
-	nft_fd.fd = pipe_read_fd;
+	nft_fd.fd = parent_ctx->pipe_read_fd;
 	nft_fd.events = POLLIN | POLLHUP | POLLERR;
 
 	while (1) {
 		errno = 0;
 		if (poll(&nft_fd, 1, -1) < 0) {
-			if (errno == EINTR && (*fws_flag == SIGINT || *fws_flag == SIGTERM)) {
+			if (errno == EINTR && (*parent_ctx->fws_flag == SIGINT || *parent_ctx->fws_flag == SIGTERM)) {
 				break;
 			}
-			fprintf(stderr, "poll error\n");
 			ret = -1;
 			goto out;
 		}
@@ -200,18 +214,18 @@ int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *f
 			if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
 				break;
 			} else {
-				net_nft_dos_ban(nft_ctx, ip_buf, conf->ban_time);
+				net_nft_dos_ban(nft_ctx, ip_buf, parent_ctx->conf->ban_time);
 			}
 		}
 	}
 
-	if (pipe_read_fd >= 0) {
-		close(pipe_read_fd);
-		pipe_read_fd = -1;
+	if (parent_ctx->pipe_read_fd >= 0) {
+		close(parent_ctx->pipe_read_fd);
+		parent_ctx->pipe_read_fd = -1;
 	}
 
-	waitpid(pid, NULL, 0);
-	if (conf->nft == 1) {
+	waitpid(parent_ctx->pid, NULL, 0);
+	if (parent_ctx->conf->nft == 1) {
 		net_nft_fini();
 	}
 
@@ -219,25 +233,25 @@ int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *f
 out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = NULL;
-	if (pipe_read_fd >= 0) {
-		close(pipe_read_fd);
-		pipe_read_fd = -1;
+	if (parent_ctx->pipe_read_fd >= 0) {
+		close(parent_ctx->pipe_read_fd);
+		parent_ctx->pipe_read_fd = -1;
 	}
-	if (pipe_write_fd >= 0) {
-		close(pipe_write_fd);
-		pipe_write_fd = -1;
+	if (parent_ctx->pipe_write_fd >= 0) {
+		close(parent_ctx->pipe_write_fd);
+		parent_ctx->pipe_write_fd = -1;
 	}
 	return ret;
 }
 
-static void *_fws_thread_run(void *arg) {
-	const struct fws_args *args = (struct fws_args *) arg;
-	const struct fws_conf *conf = args->fws_conf;
-	const struct sockaddr_in6 client_addr = args->client_addr;
+static void *_fws_thread_run(void *thread_args) {
+	struct fws_thread_ctx *thread_ctx = (struct fws_thread_ctx *) thread_args;
+	const struct fws_conf *conf = thread_ctx->fws_conf;
+	const struct sockaddr_in6 client_addr = thread_ctx->client_addr;
 
-	int client_fd = args->fd;
-	int write_fd = args->write_fd;
-	SSL_CTX *ssl_ctx = args->ssl_ctx;
+	int client_fd = thread_ctx->fd;
+	int write_fd = thread_ctx->write_fd;
+	SSL_CTX *ssl_ctx = thread_ctx->ssl_ctx;
 
 	SSL *ssl = NULL;
 
@@ -286,9 +300,9 @@ static void *_fws_thread_run(void *arg) {
 			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-				pthread_mutex_lock(args->nft_lock);
+				pthread_mutex_lock(thread_ctx->nft_lock);
 				net_nft_dos_ip_send(&client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
-				pthread_mutex_unlock(args->nft_lock);
+				pthread_mutex_unlock(thread_ctx->nft_lock);
 			}
 		}
 
@@ -320,9 +334,9 @@ out:
 		close(client_fd);
 		client_fd = -1;
 	}
-	(*args->fws_thread_n)--;
-	free(arg);
-	arg = NULL;
 
+	(*thread_ctx->fws_thread_n)--;
+	free(thread_args);
+	thread_args = NULL;
 	return NULL;
 }

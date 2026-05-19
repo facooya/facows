@@ -6,7 +6,7 @@
 #ifndef FWS_H
 #define FWS_H
 
-void fws_child_run(int server_http_fd, int server_https_fd, int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *fws_flag, SSL_CTX *ssl_ctx, const struct fws_conf *conf);
-int fws_parent_run(int pipe_read_fd, int pipe_write_fd, volatile sig_atomic_t *fws_flag, pid_t pid, const struct fws_conf *conf);
+void fws_child_run(struct fws_child_ctx *child_ctx);
+int fws_parent_run(struct fws_parent_ctx *parent_ctx);
 
 #endif

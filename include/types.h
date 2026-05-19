@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stdatomic.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <openssl/ssl.h>
@@ -66,7 +67,7 @@ struct fws_file {
 	off_t size;
 };
 
-struct fws_args {
+struct fws_thread_ctx {
 	int fd;
 	int write_fd;
 	SSL_CTX *ssl_ctx;
@@ -74,6 +75,24 @@ struct fws_args {
 	const struct fws_conf *fws_conf;
 	atomic_int *fws_thread_n;
 	pthread_mutex_t *nft_lock;
+};
+
+struct fws_parent_ctx {
+	int pipe_read_fd;
+	int pipe_write_fd;
+	volatile sig_atomic_t *fws_flag;
+	pid_t pid;
+	const struct fws_conf *conf;
+};
+
+struct fws_child_ctx {
+	int server_http_fd;
+	int server_https_fd;
+	int pipe_read_fd;
+	int pipe_write_fd;
+	SSL_CTX *ssl_ctx;
+	volatile sig_atomic_t *fws_flag;
+	const struct fws_conf *conf;
 };
 
 #endif
