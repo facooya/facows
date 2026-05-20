@@ -45,10 +45,10 @@ int net_server_init(uint16_t port) {
 }
 
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
-	char port[8] = {0};
-	port[0] = '\0';
+	char port_buf[8] = {0};
+	memset(port_buf, '\0', sizeof(port_buf));
 	if (conf->https_port != 443) {
-		snprintf(port, sizeof(port), ":%hu", conf->https_port);
+		snprintf(port_buf, sizeof(port_buf), ":%hu", conf->https_port);
 	}
 
 	size_t n = fac_memclen(http_req->subdomain, '\0', sizeof(http_req->subdomain));
@@ -65,8 +65,8 @@ void net_host_build(char *host_buf, const struct fws_http_req *http_req, const s
 	p += n;
 	*p = '\0';
 
-	n = fac_memclen(port, '\0', sizeof(port));
-	memcpy(p, port, n);
+	n = fac_memclen(port_buf, '\0', sizeof(port_buf));
+	memcpy(p, port_buf, n);
 	p += n;
 	*p = '\0';
 }

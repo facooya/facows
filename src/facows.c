@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
+#include <assert.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -35,14 +36,11 @@ volatile sig_atomic_t fws_flag = -1;
 static void _fws_exit(int sig);
 
 int main() {
-	SSL_CTX *ssl_ctx = NULL;
 	struct fws_parent_ctx *parent_ctx = NULL;
 	struct fws_child_ctx *child_ctx = NULL;
 	int pipe_fd[2] = {-1, -1};
 	int pipe_read_fd = -1;
 	int pipe_write_fd = -1;
-	int server_http_fd = -1;
-	int server_https_fd = -1;
 
 	int ret = 0;
 
@@ -50,28 +48,16 @@ int main() {
 	signal(SIGTERM, _fws_exit);
 
 	struct fws_conf conf = {0};
-	if (file_conf_read(&conf, CONF_PATH) != 0) {
+	if (file_conf_read(&conf, CONF_PATH) < 0) {
 		ret = 1;
 		goto out;
 	}
 
+	assert(conf.nft == 0 || conf.nft == 1);
 	if (conf.nft == 1) {
 		if (net_nft_init(&conf) < 0) {
 			return 1;
 		}
-	}
-
-	net_443_init(&ssl_ctx, &conf);
-
-	if ((server_http_fd = net_server_init(conf.http_port)) < 0) {
-		fprintf(stderr, "http socket failed\n");
-		ret = 1;
-		goto out;
-	}
-	if ((server_https_fd = net_server_init(conf.https_port)) < 0) {
-		fprintf(stderr, "https socket failed\n");
-		ret = 1;
-		goto out;
 	}
 
 	if (pipe(pipe_fd) < 0) {
@@ -95,11 +81,8 @@ int main() {
 			ret = 1;
 			goto out;
 		}
-		child_ctx->server_http_fd = server_http_fd;
-		child_ctx->server_https_fd = server_https_fd;
 		child_ctx->pipe_read_fd = pipe_read_fd;
 		child_ctx->pipe_write_fd = pipe_write_fd;
-		child_ctx->ssl_ctx = ssl_ctx;
 		child_ctx->fws_flag = &fws_flag;
 		child_ctx->conf = &conf;
 
@@ -133,8 +116,6 @@ out:
 	child_ctx = NULL;
 	free(parent_ctx);
 	parent_ctx = NULL;
-	SSL_CTX_free(ssl_ctx);
-	ssl_ctx = NULL;
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;
@@ -142,14 +123,6 @@ out:
 	if (pipe_write_fd >= 0) {
 		close(pipe_write_fd);
 		pipe_write_fd = -1;
-	}
-	if (server_http_fd >= 0) {
-		close(server_http_fd);
-		server_http_fd = -1;
-	}
-	if (server_https_fd >= 0) {
-		close(server_https_fd);
-		server_https_fd = -1;
 	}
 	return ret;
 }

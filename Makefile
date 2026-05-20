@@ -2,8 +2,8 @@
 #
 # Copyright 2026 Facooya and Fanone Facooya
 
-CFLAGS_C2O = -Wall -Wextra -fanalyzer
-CFLAGS_O2B = -fanalyzer
+CFLAGS_C2O = -Wall -Wextra -Wanalyzer-too-complex -fanalyzer
+CFLAGS_O2B = -Wall -Wextra
 CFLAGS_RUN_C2O = -Wall -Wextra -flto -fstack-protector-all -fsanitize=address,undefined
 CFLAGS_RUN_O2B = -flto -fstack-protector-all -fsanitize=address,undefined
 

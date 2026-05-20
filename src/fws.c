@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
+#include <assert.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -41,12 +42,28 @@ struct fws_nft nft_list[1024] = {0};
 static void *_fws_thread_run(void *thread_args);
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
+	SSL_CTX *ssl_ctx = NULL;
 	struct passwd *pw = NULL;
+	int server_http_fd = -1;
+	int server_https_fd = -1;
 	int client_http_fd = -1;
 	int client_fd = -1;
 
 	int ret = 0;
 	int nft_lock_flag = -1;
+
+	net_443_init(&ssl_ctx, child_ctx->conf);
+
+	if ((server_http_fd = net_server_init(child_ctx->conf->http_port)) < 0) {
+		fprintf(stderr, "http socket failed\n");
+		ret = 1;
+		goto out;
+	}
+	if ((server_https_fd = net_server_init(child_ctx->conf->https_port)) < 0) {
+		fprintf(stderr, "https socket failed\n");
+		ret = 1;
+		goto out;
+	}
 
 	const char *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
 	for (size_t i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
@@ -76,10 +93,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 		child_ctx->pipe_read_fd = -1;
 	}
 
+	assert(server_http_fd >= 0 && server_https_fd >= 0);
 	struct pollfd fws_fd[2];
-	fws_fd[0].fd = child_ctx->server_http_fd;
+	fws_fd[0].fd = server_http_fd;
 	fws_fd[0].events = POLLIN;
-	fws_fd[1].fd = child_ctx->server_https_fd;
+	fws_fd[1].fd = server_https_fd;
 	fws_fd[1].events = POLLIN;
 
 	struct sockaddr_in6 client_addr = {0};
@@ -92,13 +110,14 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	nft_lock_flag = 1;
 	printf("Facows start\n");
 
+	assert(child_ctx->fws_flag != NULL);
 	while (1) {
 		if (poll(fws_fd, 2, -1) < 0 && (*child_ctx->fws_flag == SIGINT || *child_ctx->fws_flag == SIGTERM)) {
 			break;
 		}
 
 		if ((fws_fd[0].revents & POLLIN) != 0) {
-			client_http_fd = accept(child_ctx->server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 			if (net_80_443_redir(client_http_fd, child_ctx->conf) < 0) {
 				if (client_http_fd >= 0) {
@@ -114,7 +133,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			}
 
 		} else if ((fws_fd[1].revents & POLLIN) != 0) {
-			client_fd = accept(child_ctx->server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 			struct fws_thread_ctx *thread_ctx = malloc(sizeof(struct fws_thread_ctx));
 			if (thread_ctx == NULL) {
@@ -123,7 +142,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			}
 			thread_ctx->fd = client_fd;
 			thread_ctx->write_fd = child_ctx->pipe_write_fd;
-			thread_ctx->ssl_ctx = child_ctx->ssl_ctx;
+			thread_ctx->ssl_ctx = ssl_ctx;
 			thread_ctx->client_addr = client_addr;
 			thread_ctx->fws_conf = child_ctx->conf;
 			thread_ctx->fws_thread_n = &fws_thread_n;
@@ -145,8 +164,8 @@ out:
 		nanosleep(&thread_ts, NULL);
 	}
 
-	SSL_CTX_free(child_ctx->ssl_ctx);
-	child_ctx->ssl_ctx = NULL;
+	SSL_CTX_free(ssl_ctx);
+	ssl_ctx = NULL;
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
 		nft_lock_flag = -1;
@@ -160,6 +179,14 @@ out:
 		client_fd = -1;
 	}
 
+	if (server_http_fd >= 0) {
+		close(server_http_fd);
+		server_http_fd = -1;
+	}
+	if (server_https_fd >= 0) {
+		close(server_https_fd);
+		server_https_fd = -1;
+	}
 	if (child_ctx->pipe_read_fd >= 0) {
 		close(child_ctx->pipe_read_fd);
 		child_ctx->pipe_read_fd = -1;
@@ -167,14 +194,6 @@ out:
 	if (child_ctx->pipe_write_fd >= 0) {
 		close(child_ctx->pipe_write_fd);
 		child_ctx->pipe_write_fd = -1;
-	}
-	if (child_ctx->server_http_fd >= 0) {
-		close(child_ctx->server_http_fd);
-		child_ctx->server_http_fd = -1;
-	}
-	if (child_ctx->server_https_fd >= 0) {
-		close(child_ctx->server_https_fd);
-		child_ctx->server_https_fd = -1;
 	}
 	_exit(ret);
 }
