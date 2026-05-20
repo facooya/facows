@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -38,6 +39,7 @@
 #define CONF_KEYS_ARR(key) #key,
 
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
+static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf);
 static int _tool_conf_str_set(char *member, const char *val, size_t member_n);
 static int _tool_conf_bool_set(uint8_t *member, const char *val);
 static int _tool_allow_ports_check(const char *p);
@@ -55,8 +57,11 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 		goto out;
 	}
 
-	struct stat conf_stat;
-	fstat(conf_fd, &conf_stat);
+	struct stat conf_stat = {0};
+	if (fstat(conf_fd, &conf_stat) < 0) {
+		ret = -1;
+		goto out;
+	}
 
 	size_t conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
@@ -67,10 +72,6 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 	if (read(conf_fd, conf_buf, conf_len-1) < 0) {
 		ret = -1;
 		goto out;
-	}
-	if (conf_fd >= 0) {
-		close(conf_fd);
-		conf_fd = -1;
 	}
 
 	conf_buf[conf_len-1] = '\n';
@@ -93,6 +94,8 @@ out:
 }
 
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len) {
+	assert(conf != NULL);
+	assert(conf_buf != NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
@@ -110,103 +113,24 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 			}
 
 			size_t key_len = fac_memclen(keys[i], '\0', CONF_KEY_MAX);
-			if (conf_key_len == key_len) {
-				if (memcmp(p, keys[i], key_len) == 0) {
-					p += conf_key_len;
-					total_n += conf_key_len;
-					while (*p == ' ') {
-						total_n++;
-						p++;
-					}
-
-					long port = -1;
-					switch (i) {
-						case HTTP_PORT:
-							port = strtol(p, NULL, 10);
-							if (port < 0 || port > 65536) {
-								fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
-								return -1;
-							}
-							conf->http_port = (uint16_t) port;
-							break;
-						case HTTPS_PORT:
-							port = strtol(p, NULL, 10);
-							if (port < 0 || port > 65536) {
-								fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
-								return -1;
-							}
-							conf->https_port = (uint16_t) port;
-							break;
-
-						case ALLOW_PORTS:
-							const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
-							if (p2 == NULL) {
-								printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
-								return -1;
-							}
-							if (_tool_allow_ports_check(p) < 0) {
-								return -1;
-							}
-							size_t n = p2 - p;
-							memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
-							memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);
-							conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
-							break;
-
-						case NFT:
-							if (_tool_conf_bool_set(&conf->nft, p) < 0) {
-								return -1;
-							}
-							break;
-						case PPS_LIMIT:
-							conf->pps_limit = (uint32_t) strtol(p, NULL, 10);
-							break;
-						case PPS_BURST:
-							conf->pps_burst = (uint32_t) strtol(p, NULL, 10);
-							break;
-						case BAN_TIME:
-							conf->ban_time = (uint32_t) strtol(p, NULL, 10);
-							break;
-
-						case HSTS:
-							if (_tool_conf_bool_set(&conf->hsts, p) < 0) {
-								return -1;
-							}
-							break;
-						case HSTS_MAX_AGE:
-							conf->hsts_max_age = (uint32_t) strtol(p, NULL, 10);
-							break;
-
-						case DOMAIN:
-							if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
-								return -1;
-							}
-							break;
-						case WEB_ROOT:
-							if (_tool_conf_str_set(conf->web_root, p, sizeof(conf->web_root)) < 0) {
-								return -1;
-							}
-							break;
-						case WEB_LOG:
-							if (_tool_conf_str_set(conf->web_log, p, sizeof(conf->web_log)) < 0) {
-								return -1;
-							}
-							break;
-						case SSL_CERT:
-							if (_tool_conf_str_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) < 0) {
-								return -1;
-							}
-							break;
-						case SSL_KEY:
-							if (_tool_conf_str_set(conf->ssl_key, p, sizeof(conf->ssl_key)) < 0) {
-								return -1;
-							}
-							break;
-					}
-
-					break;
-				}
+			if (conf_key_len != key_len) {
+				continue;
 			}
+			if (memcmp(p, keys[i], key_len) != 0) {
+				continue;
+			}
+
+			p += conf_key_len;
+			total_n += conf_key_len;
+			while (*p == ' ') {
+				total_n++;
+				p++;
+			}
+
+			if (_conf_parse_value(i, p, conf) < 0) {
+				return -1;
+			}
+			break;
 		}
 
 next_line:
@@ -217,6 +141,98 @@ next_line:
 			total_n++;
 			p++;
 		}
+	}
+
+	return 0;
+}
+
+static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
+	assert(p != NULL);
+	enum {CONF_KEYS(CONF_KEYS_ENUM)};
+	long port = -1;
+	switch (i) {
+		case HTTP_PORT:
+			port = strtol(p, NULL, 10);
+			if (port < 0 || port >= 65536) {
+				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+				return -1;
+			}
+			conf->http_port = (uint16_t) port;
+			break;
+		case HTTPS_PORT:
+			port = strtol(p, NULL, 10);
+			if (port < 0 || port >= 65536) {
+				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+				return -1;
+			}
+			conf->https_port = (uint16_t) port;
+			break;
+
+		case ALLOW_PORTS:
+			const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
+			if (p2 == NULL) {
+				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
+				return -1;
+			}
+			if (_tool_allow_ports_check(p) < 0) {
+				return -1;
+			}
+			size_t n = p2 - p;
+			assert(n + STR_LEN(PREFIX_ALLOW_PORTS) < sizeof(conf->allow_ports));
+			memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
+			memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);
+			conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
+			break;
+
+		case NFT:
+			if (_tool_conf_bool_set(&conf->nft, p) < 0) {
+				return -1;
+			}
+			break;
+		case PPS_LIMIT:
+			conf->pps_limit = (uint32_t) strtol(p, NULL, 10);
+			break;
+		case PPS_BURST:
+			conf->pps_burst = (uint32_t) strtol(p, NULL, 10);
+			break;
+		case BAN_TIME:
+			conf->ban_time = (uint32_t) strtol(p, NULL, 10);
+			break;
+
+		case HSTS:
+			if (_tool_conf_bool_set(&conf->hsts, p) < 0) {
+				return -1;
+			}
+			break;
+		case HSTS_MAX_AGE:
+			conf->hsts_max_age = (uint32_t) strtol(p, NULL, 10);
+			break;
+
+		case DOMAIN:
+			if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
+				return -1;
+			}
+			break;
+		case WEB_ROOT:
+			if (_tool_conf_str_set(conf->web_root, p, sizeof(conf->web_root)) < 0) {
+				return -1;
+			}
+			break;
+		case WEB_LOG:
+			if (_tool_conf_str_set(conf->web_log, p, sizeof(conf->web_log)) < 0) {
+				return -1;
+			}
+			break;
+		case SSL_CERT:
+			if (_tool_conf_str_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) < 0) {
+				return -1;
+			}
+			break;
+		case SSL_KEY:
+			if (_tool_conf_str_set(conf->ssl_key, p, sizeof(conf->ssl_key)) < 0) {
+				return -1;
+			}
+			break;
 	}
 
 	return 0;
@@ -266,19 +282,23 @@ static int _tool_conf_bool_set(uint8_t *member, const char *val) {
 }
 
 static int _tool_allow_ports_check(const char *p) {
+	assert(p != NULL);
 	char *ep = NULL;
 	while (*p != '\n' && *p != '\0') {
 		long port = strtol(p, &ep, 10);
-		if (p != ep) {
-			if (port < 0 || port > 65536) {
-				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
-				return -1;
-			}
-			p = ep;
-			if (*p == ',') {
-				p++;
-			}
-		} else {
+		if (p == ep) {
+			p++;
+			continue;
+		}
+
+		assert(port > 0 || port < 65536);
+		if (port < 0 || port >= 65536) {
+			fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+			return -1;
+		}
+
+		p = ep;
+		if (*p == ',') {
 			p++;
 		}
 	}

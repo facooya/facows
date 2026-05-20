@@ -86,11 +86,8 @@ struct fws_parent_ctx {
 };
 
 struct fws_child_ctx {
-	//int server_http_fd;
-	//int server_https_fd;
 	int pipe_read_fd;
 	int pipe_write_fd;
-	//SSL_CTX *ssl_ctx;
 	volatile sig_atomic_t *fws_flag;
 	const struct fws_conf *conf;
 };
