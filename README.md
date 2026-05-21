@@ -2,10 +2,10 @@
 Testing ...
 
 **Limitations**
+- Linux only
 - Only SSL, must have ssl certificate and private key.
 - Not support PHP, only static files.
 - Only http 1.1
-- Support on linux
 - Poll method
 - Only html extendsion for clean url, but forced.
 - Not support upload/download for large files, because socket timeout 2 seconds.

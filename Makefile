@@ -2,10 +2,14 @@
 #
 # Copyright 2026 Facooya and Fanone Facooya
 
-CFLAGS_C2O = -Wall -Wextra -Werror
-CFLAGS_O2B = -Wall -Wextra -Werror
-CFLAGS_RUN_C2O = -Wall -Wextra -flto -fstack-protector-all -fsanitize=address,undefined
-CFLAGS_RUN_O2B = -flto -fstack-protector-all -fsanitize=address,undefined
+SAN_A = address,undefined
+SAN_T = thread,undefined
+
+CC = gcc
+CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -std=c11 -D_GNU_SOURCE
+CFLAGS_O2B = -g
+CFLAGS_RUN_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_A) -std=c11 -D_GUN_SOURCE
+CFLAGS_RUN_O2B = -g -fstack-protector-all -fsanitize=$(SAN_T)
 
 SRCS = \
 lib/fac_utils.c \
@@ -28,11 +32,11 @@ DEPS = $(OBJS:.o=.d)
 all: build/facows
 
 build/facows: $(OBJS)
-	gcc $(CFLAGS_O2B) -pthread -o $@ $^ -lssl -lcrypto -lnftables
+	$(CC) $(CFLAGS_O2B) -pthread -o $@ $^ -lssl -lcrypto -lnftables
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)
-	gcc -MMD -MP $(CFLAGS_C2O) -Isrc -Iinclude -Ilib -c $< -o $@
+	$(CC) $(CFLAGS_C2O) -MMD -MP -Isrc -Iinclude -Ilib -c $< -o $@
 
 build/:
 	mkdir -p $@

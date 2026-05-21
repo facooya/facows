@@ -89,6 +89,7 @@ out:
 	if (conf_fd >= 0) {
 		close(conf_fd);
 		conf_fd = -1;
+		(void)conf_fd;
 	}
 	return ret;
 }
@@ -99,6 +100,7 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
+	size_t n = 0;
 	const char *p = conf_buf;
 	size_t total_n = 0;
 	while (total_n < conf_len) {
@@ -134,7 +136,7 @@ static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_
 		}
 
 next_line:
-		size_t n = fac_memclen(p, '\n', conf_len - total_n);
+		n = fac_memclen(p, '\n', conf_len - total_n);
 		total_n += n + 1;
 		p += n + 1;
 		while (*p == '\n') {
@@ -149,6 +151,8 @@ next_line:
 static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 	assert(p != NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
+	const char *p2 = NULL;
+	size_t n = 0;
 	long port = -1;
 	switch (i) {
 		case HTTP_PORT:
@@ -169,7 +173,7 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 			break;
 
 		case ALLOW_PORTS:
-			const char *p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
+			p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
 			if (p2 == NULL) {
 				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
 				return -1;
@@ -177,7 +181,7 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 			if (_tool_allow_ports_check(p) < 0) {
 				return -1;
 			}
-			size_t n = p2 - p;
+			n = p2 - p;
 			assert(n + STR_LEN(PREFIX_ALLOW_PORTS) < sizeof(conf->allow_ports));
 			memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
 			memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);

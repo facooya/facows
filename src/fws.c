@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <unistd.h>
 #include <poll.h>
+#include <threads.h>
 #include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
@@ -49,6 +50,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	int client_http_fd = -1;
 	int client_fd = -1;
 
+	struct timespec thread_ts = {0};
 	int ret = 0;
 	int nft_lock_flag = -1;
 
@@ -157,7 +159,6 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 	ret = 0;
 out:
-	struct timespec thread_ts = {0};
 	thread_ts.tv_sec = 0;
 	thread_ts.tv_nsec = 100000000;
 	while (fws_thread_n > 0) {
