@@ -81,7 +81,7 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 		total_read_size += read_ret;
 		if (total_read_size >= 4095) {
 			return 431;
-		} else if (fac_memstr(dst_buf, "\r\n\r\n", total_read_size) != NULL) {
+		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != NULL) {
 			break;
 		}
 	}

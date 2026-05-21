@@ -31,7 +31,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 
 		if (recv_total_size >= 8191) {
 			return -1;
-		} else if (fac_memstr(recv_buf, "\r\n\r\n", recv_total_size) != NULL) {
+		} else if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != NULL) {
 			break;
 		}
 
@@ -69,7 +69,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 
 	// { parse host
 	p1 = recv_buf;
-	p2 = fac_memstr(p1, "\r\n", 1024);
+	p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
 	if (p2 == NULL) {
 		return -1;
 	}
@@ -112,7 +112,7 @@ int net_80_443_redir(int client_80_fd, const struct fws_conf *config) {
 			break;
 		}
 
-		p2 = fac_memstr(p1, "\r\n", 1024);
+		p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
 		if (p2 == NULL) {
 			return -1;
 		}

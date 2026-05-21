@@ -72,7 +72,7 @@ static int _uri_path_build(struct fws_file *file) {
 		return 1;
 	}
 
-	p1 = fac_memrchr(file->uri_path, '/', file->uri_path_n);
+	p1 = memrchr(file->uri_path, '/', file->uri_path_n);
 	if (p1 == NULL) {
 		return -1;
 	}
