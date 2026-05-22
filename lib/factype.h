@@ -12,13 +12,10 @@ typedef signed short int fac_s16;
 typedef unsigned short int fac_u16;
 typedef signed int fac_s32;
 typedef unsigned int fac_u32;
-
-#if defined(__x86_64__) && defined(__LP64__)
 typedef signed long int fac_s64;
 typedef unsigned long int fac_u64;
-#else
-typedef signed long long int fac_s64;
-typedef unsigned long long int fac_u64;
-#endif
+
+_Static_assert(sizeof(int) == 4, "factype: error: int not 4-byte");
+_Static_assert(sizeof(long int) == 8, "factype: error: long not 8-byte");
 
 #endif
