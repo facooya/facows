@@ -1,6 +1,5 @@
 # Roadmap
 ## Optimization
-- change from fac library to gnu function
 - epoll, io_uring
 - kTLS
 

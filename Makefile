@@ -6,10 +6,8 @@ SAN_A = address,undefined
 SAN_T = thread,undefined
 
 CC = gcc
-CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -std=c11 -D_GNU_SOURCE
-CFLAGS_O2B = -g
-CFLAGS_RUN_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_A) -std=c11 -D_GUN_SOURCE
-CFLAGS_RUN_O2B = -g -fstack-protector-all -fsanitize=$(SAN_T)
+CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_A) -std=c11 -D_GNU_SOURCE
+CFLAGS_O2B = -g -fstack-protector-all -fsanitize=$(SAN_A)
 
 SRCS = \
 lib/fac_utils.c \

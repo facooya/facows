@@ -3,26 +3,27 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
-#include <stdint.h>
+#ifndef FWS_TYPES_H
+#define FWS_TYPES_H
+
 #include <stdatomic.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <openssl/ssl.h>
 
-#ifndef FWS_TYPES_H
-#define FWS_TYPES_H
+#include "factype.h"
 
 struct fws_conf {
-	uint8_t nft;
-	uint8_t hsts;
+	fac_u8 nft;
+	fac_u8 hsts;
 
-	uint16_t http_port;
-	uint16_t https_port;
-	uint32_t pps_limit;
-	uint32_t pps_burst;
-	uint32_t ban_time;
-	uint32_t hsts_max_age;
+	fac_u32 http_port;
+	fac_u32 https_port;
+	fac_u32 pps_limit;
+	fac_u32 pps_burst;
+	fac_u32 ban_time;
+	fac_u32 hsts_max_age;
 
 	char allow_ports[128];
 	char domain[128];
@@ -33,7 +34,7 @@ struct fws_conf {
 };
 
 struct fws_nft {
-	uint8_t ip[16];
+	fac_u8 ip[16];
 	int count;
 	time_t time;
 };

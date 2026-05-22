@@ -5,23 +5,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdatomic.h>
 #include <unistd.h>
-#include <poll.h>
-#include <pthread.h>
-#include <pwd.h>
 #include <signal.h>
 #include <assert.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
 #include <sys/types.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <string.h>
-#include <nftables/libnftables.h>
 
 #include "fac_utils.h"
 #include "types.h"
