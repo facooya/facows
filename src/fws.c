@@ -144,11 +144,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			}
 			thread_ctx->fd = client_fd;
 			thread_ctx->write_fd = child_ctx->pipe_write_fd;
-			thread_ctx->ssl_ctx = ssl_ctx;
+			thread_ctx->ssl_ctx = (U8 *) ssl_ctx;
 			thread_ctx->client_addr = client_addr;
 			thread_ctx->fws_conf = child_ctx->conf;
 			thread_ctx->fws_thread_n = &fws_thread_n;
-			thread_ctx->nft_lock = &nft_lock;
+			thread_ctx->nft_lock = (U8 *) &nft_lock;
 
 			fws_thread_n++;
 			pthread_t fws_thread;
@@ -268,10 +268,11 @@ static void *_fws_thread_run(void *thread_args) {
 	struct fws_thread_ctx *thread_ctx = (struct fws_thread_ctx *) thread_args;
 	const struct fws_conf *conf = thread_ctx->fws_conf;
 	const struct sockaddr_in6 client_addr = thread_ctx->client_addr;
+	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock;
 
 	int client_fd = thread_ctx->fd;
 	int write_fd = thread_ctx->write_fd;
-	SSL_CTX *ssl_ctx = thread_ctx->ssl_ctx;
+	SSL_CTX *ssl_ctx = (SSL_CTX *) thread_ctx->ssl_ctx;
 
 	SSL *ssl = NULL;
 
@@ -320,9 +321,9 @@ static void *_fws_thread_run(void *thread_args) {
 			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
 			char *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-				pthread_mutex_lock(thread_ctx->nft_lock);
+				pthread_mutex_lock(nft_lock);
 				net_nft_dos_ip_send(&client_addr, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
-				pthread_mutex_unlock(thread_ctx->nft_lock);
+				pthread_mutex_unlock(nft_lock);
 			}
 		}
 

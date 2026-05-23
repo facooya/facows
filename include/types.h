@@ -70,10 +70,10 @@ struct fws_thread_ctx {
 	I32 write_fd;
 	_Atomic I32 *fws_thread_n;
 
-	SSL_CTX *ssl_ctx;
+	U8 *ssl_ctx;
 	struct sockaddr_in6 client_addr;
 	const struct fws_conf *fws_conf;
-	pthread_mutex_t *nft_lock;
+	const U8 *nft_lock;
 };
 
 struct fws_parent_ctx {
