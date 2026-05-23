@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <sys/types.h>
 
+#include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
 #include "fws.h"
@@ -18,7 +19,7 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
-volatile sig_atomic_t fws_flag = -1;
+volatile _Atomic I32 fws_flag = -1;
 
 static void _fws_exit(int sig);
 
