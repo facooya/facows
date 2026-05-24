@@ -10,6 +10,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
@@ -19,7 +20,7 @@
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
-int net_server_init(uint16_t port) {
+int net_server_init(U16 port) {
 	struct sockaddr_in6 server_addr;
 	const int opt = 1;
 

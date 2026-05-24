@@ -6,8 +6,6 @@
 #ifndef FWS_TYPES_H
 #define FWS_TYPES_H
 
-#include <netinet/in.h>
-
 #include "factype.h"
 
 struct fws_conf {
@@ -68,10 +66,10 @@ struct fws_thread_ctx {
 	I32 write_fd;
 	_Atomic I32 *fws_thread_n;
 
-	U8 *ssl_ctx_opq;
-	struct sockaddr_in6 client_addr;
+	const U8 *ssl_ctx_opq;
+	U8 client_ip[16];
 	const struct fws_conf *fws_conf;
-	const U8 *nft_lock;
+	const U8 *nft_lock_opq;
 };
 
 struct fws_parent_ctx {

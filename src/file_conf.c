@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
 #include "file.h"
@@ -42,7 +43,7 @@
 static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
 static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf);
 static int _tool_conf_str_set(char *member, const char *val, size_t member_n);
-static int _tool_conf_bool_set(uint8_t *member, const char *val);
+static int _tool_conf_bool_set(U8 *member, const char *val);
 static int _tool_allow_ports_check(const char *p);
 
 int file_conf_read(struct fws_conf *conf, const char *path) {
@@ -162,7 +163,7 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
 			}
-			conf->http_port = (uint16_t) port;
+			conf->http_port = (U16) port;
 			break;
 		case HTTPS_PORT:
 			port = strtol(p, NULL, 10);
@@ -170,7 +171,7 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
 			}
-			conf->https_port = (uint16_t) port;
+			conf->https_port = (U16) port;
 			break;
 
 		case ALLOW_PORTS:
@@ -195,13 +196,13 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 			}
 			break;
 		case PPS_LIMIT:
-			conf->pps_limit = (uint32_t) strtol(p, NULL, 10);
+			conf->pps_limit = (U32) strtol(p, NULL, 10);
 			break;
 		case PPS_BURST:
-			conf->pps_burst = (uint32_t) strtol(p, NULL, 10);
+			conf->pps_burst = (U32) strtol(p, NULL, 10);
 			break;
 		case BAN_TIME:
-			conf->ban_time = (uint32_t) strtol(p, NULL, 10);
+			conf->ban_time = (U32) strtol(p, NULL, 10);
 			break;
 
 		case HSTS:
@@ -210,7 +211,7 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 			}
 			break;
 		case HSTS_MAX_AGE:
-			conf->hsts_max_age = (uint32_t) strtol(p, NULL, 10);
+			conf->hsts_max_age = (U32) strtol(p, NULL, 10);
 			break;
 
 		case DOMAIN:
@@ -263,7 +264,7 @@ static int _tool_conf_str_set(char *member, const char *val, size_t member_n) {
 	return 0;
 }
 
-static int _tool_conf_bool_set(uint8_t *member, const char *val) {
+static int _tool_conf_bool_set(U8 *member, const char *val) {
 	if (memcmp(val, TRUE, STR_LEN(TRUE)) == 0) {
 		if (*(val+STR_LEN(TRUE)) == ' ' || *(val+STR_LEN(TRUE)) == '\n') {
 			*member = 1;
