@@ -8,6 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <openssl/ssl.h>
 
 #include "fac_utils.h"
 #include "types.h"
@@ -81,7 +82,8 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	return 0;
 }
 
-void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, SSL *ssl) {
+void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, U8 *ssl_opq) {
+	SSL *ssl = (SSL *) ssl_opq;
 	char host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 

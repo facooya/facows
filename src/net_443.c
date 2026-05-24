@@ -46,7 +46,8 @@ static const struct {
 	{501, HTTP_MSG_501}
 };
 
-int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
+int net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
+	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	SSL_library_init();
 	const SSL_METHOD *ssl_method;
 	ssl_method = TLS_server_method();
@@ -62,7 +63,8 @@ int net_443_init(SSL_CTX **ssl_ctx, const struct fws_conf *config) {
 	return 0;
 }
 
-int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
+int net_443_read(U8 *ssl_opq, char *dst_buf, size_t buf_size) {
+	SSL *ssl = (SSL *) ssl_opq;
 	int total_read_size = 0;
 	int read_ret = 0;
 	while (1) {
@@ -88,7 +90,8 @@ int net_443_read(SSL *ssl, char *dst_buf, size_t buf_size) {
 	return 0;
 }
 
-int net_443_write(SSL *ssl, const char *path) {
+int net_443_write(U8 *ssl_opq, const char *path) {
+	SSL *ssl = (SSL *) ssl_opq;
 	int ret = 0;
 
 	int fd = open(path, O_RDONLY);
@@ -114,7 +117,8 @@ out:
 	return ret;
 }
 
-int net_443_res_write(SSL *ssl, struct fws_http_res *http_res, off_t size) {
+int net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, off_t size) {
+	SSL *ssl = (SSL *) ssl_opq;
 	char *res_buf = NULL;
 	int ret = 0;
 
@@ -135,7 +139,8 @@ out:
 	return ret;
 }
 
-int net_443_err_write(SSL *ssl, int code) {
+int net_443_err_write(U8 *ssl_opq, int code) {
+	SSL *ssl = (SSL *) ssl_opq;
 	char *html_fmt = NULL;
 	char *html_buf = NULL;
 	char *res_buf = NULL;

@@ -24,6 +24,7 @@
 #include <string.h>
 #include <nftables/libnftables.h>
 
+#include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
 #include "fws.h"
@@ -54,7 +55,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	int ret = 0;
 	int nft_lock_flag = -1;
 
-	net_443_init(&ssl_ctx, child_ctx->conf);
+	net_443_init((U8**)&ssl_ctx, child_ctx->conf);
 
 	if ((server_http_fd = net_server_init(child_ctx->conf->http_port)) < 0) {
 		fprintf(stderr, "http socket failed\n");
@@ -144,7 +145,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			}
 			thread_ctx->fd = client_fd;
 			thread_ctx->write_fd = child_ctx->pipe_write_fd;
-			thread_ctx->ssl_ctx = (U8 *) ssl_ctx;
+			thread_ctx->ssl_ctx_opq = (U8 *) ssl_ctx;
 			thread_ctx->client_addr = client_addr;
 			thread_ctx->fws_conf = child_ctx->conf;
 			thread_ctx->fws_thread_n = &fws_thread_n;
@@ -272,7 +273,7 @@ static void *_fws_thread_run(void *thread_args) {
 
 	int client_fd = thread_ctx->fd;
 	int write_fd = thread_ctx->write_fd;
-	SSL_CTX *ssl_ctx = (SSL_CTX *) thread_ctx->ssl_ctx;
+	SSL_CTX *ssl_ctx = (SSL_CTX *) thread_ctx->ssl_ctx_opq;
 
 	SSL *ssl = NULL;
 
@@ -297,7 +298,7 @@ static void *_fws_thread_run(void *thread_args) {
 	}
 
 	while (1) {
-		if (net_443_read(ssl, request_buf, sizeof(request_buf)) != 0) {
+		if (net_443_read((U8*)ssl, request_buf, sizeof(request_buf)) != 0) {
 			ssl_flag = -1;
 			goto out;
 		}
@@ -312,7 +313,7 @@ static void *_fws_thread_run(void *thread_args) {
 		int status_code = file_parse(&file, &http, conf->web_root, sizeof(conf->web_root));
 
 		if (status_code == 301) {
-			net_http_path_redir(&http, conf, &file, ssl);
+			net_http_path_redir(&http, conf, &file, (U8*)ssl);
 			ssl_flag = -1;
 			goto out;
 		}
@@ -328,7 +329,7 @@ static void *_fws_thread_run(void *thread_args) {
 		}
 
 		if (status_code != 0) {
-			if (net_443_err_write(ssl, status_code) < 0) {
+			if (net_443_err_write((U8*)ssl, status_code) < 0) {
 				ssl_flag = -1;
 				goto out;
 			}
@@ -336,11 +337,11 @@ static void *_fws_thread_run(void *thread_args) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
-			if (net_443_res_write(ssl, &http_res, file.size) != 0) {
+			if (net_443_res_write((U8*)ssl, &http_res, file.size) != 0) {
 				ssl_flag = -1;
 				goto out;
 			}
-			net_443_write(ssl, file.path);
+			net_443_write((U8*)ssl, file.path);
 		}
 	}
 

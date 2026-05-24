@@ -3,12 +3,13 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
-#include <stdio.h>
-#include <string.h>
-
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 

@@ -6,9 +6,7 @@
 #ifndef FWS_TYPES_H
 #define FWS_TYPES_H
 
-#include <sys/socket.h>
 #include <netinet/in.h>
-#include <openssl/ssl.h>
 
 #include "factype.h"
 
@@ -70,7 +68,7 @@ struct fws_thread_ctx {
 	I32 write_fd;
 	_Atomic I32 *fws_thread_n;
 
-	U8 *ssl_ctx;
+	U8 *ssl_ctx_opq;
 	struct sockaddr_in6 client_addr;
 	const struct fws_conf *fws_conf;
 	const U8 *nft_lock;
