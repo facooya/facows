@@ -6,29 +6,25 @@
 #include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
-#include "fws.h"
 #include "net.h"
 #include "file.h"
+#include "fws.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdatomic.h>
-#include <unistd.h>
-#include <poll.h>
-#include <threads.h>
-#include <pthread.h>
-#include <pwd.h>
+#include <string.h>
 #include <signal.h>
 #include <assert.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <string.h>
+#include <unistd.h>
+#include <poll.h>
+#include <pthread.h>
+#include <pwd.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
 #define USER_WWW_DATA "www-data"
@@ -44,8 +40,8 @@ struct fws_nft nft_list[1024] = {0};
 static void *_fws_thread_run(void *thread_args);
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
-	SSL_CTX *ssl_ctx = NULL;
-	struct passwd *pw = NULL;
+	SSL_CTX *ssl_ctx = FAC_NULL;
+	struct passwd *pw = FAC_NULL;
 	I32 server_http_fd = -1;
 	I32 server_https_fd = -1;
 	I32 client_http_fd = -1;
@@ -70,7 +66,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 	const C8 *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
 	for (U64 i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
-		if ((pw = getpwnam(user_name[i])) != NULL) {
+		if ((pw = getpwnam(user_name[i])) != FAC_NULL) {
 			break;
 		}
 		if ((i+1) == (sizeof(user_name)/sizeof(user_name[0]))) {
@@ -105,7 +101,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 	struct sockaddr_in6 client_addr = {0};
 	socklen_t client_addr_size = sizeof(client_addr);
-	if (pthread_mutex_init(&nft_lock, NULL) != 0) {
+	if (pthread_mutex_init(&nft_lock, FAC_NULL) != 0) {
 		fprintf(stderr, "mutex init failed\n");
 		ret = 1;
 		goto out;
@@ -113,7 +109,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	nft_lock_flag = 1;
 	printf("Facows start\n");
 
-	assert(child_ctx->fws_flag != NULL);
+	assert(child_ctx->fws_flag != FAC_NULL);
 	while (1) {
 		if (poll(fws_fd, 2, -1) < 0 && (*child_ctx->fws_flag == SIGINT || *child_ctx->fws_flag == SIGTERM)) {
 			break;
@@ -139,7 +135,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
 
 			struct fws_thread_ctx *thread_ctx = malloc(sizeof(struct fws_thread_ctx));
-			if (thread_ctx == NULL) {
+			if (thread_ctx == FAC_NULL) {
 				ret = 1;
 				goto out;
 			}
@@ -154,7 +150,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 			fws_thread_n++;
 			pthread_t fws_thread;
-			pthread_create(&fws_thread, NULL, _fws_thread_run, (void*)thread_ctx);
+			pthread_create(&fws_thread, FAC_NULL, _fws_thread_run, (void*)thread_ctx);
 			pthread_detach(fws_thread);
 		}
 	}
@@ -164,11 +160,11 @@ out:
 	thread_ts.tv_sec = 0;
 	thread_ts.tv_nsec = 100000000;
 	while (fws_thread_n > 0) {
-		nanosleep(&thread_ts, NULL);
+		nanosleep(&thread_ts, FAC_NULL);
 	}
 
 	SSL_CTX_free(ssl_ctx);
-	ssl_ctx = NULL;
+	ssl_ctx = FAC_NULL;
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
 		nft_lock_flag = -1;
@@ -209,9 +205,9 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 		parent_ctx->pipe_write_fd = -1;
 	}
 
-	struct nft_ctx *nft_ctx = NULL;
+	struct nft_ctx *nft_ctx = FAC_NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
-	if (nft_ctx == NULL) {
+	if (nft_ctx == FAC_NULL) {
 		fprintf(stderr, "nft context allocation error\n");
 		ret = -1;
 		goto out;
@@ -246,7 +242,7 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 		parent_ctx->pipe_read_fd = -1;
 	}
 
-	waitpid(parent_ctx->pid, NULL, 0);
+	waitpid(parent_ctx->pid, FAC_NULL, 0);
 	if (parent_ctx->conf->nft == 1) {
 		net_nft_fini();
 	}
@@ -254,7 +250,7 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 	ret = 0;
 out:
 	nft_ctx_free(nft_ctx);
-	nft_ctx = NULL;
+	nft_ctx = FAC_NULL;
 	if (parent_ctx->pipe_read_fd >= 0) {
 		close(parent_ctx->pipe_read_fd);
 		parent_ctx->pipe_read_fd = -1;
@@ -275,13 +271,13 @@ static void *_fws_thread_run(void *thread_args) {
 	I32 write_fd = thread_ctx->write_fd;
 	SSL_CTX *ssl_ctx = (SSL_CTX *) thread_ctx->ssl_ctx_opq;
 
-	SSL *ssl = NULL;
+	SSL *ssl = FAC_NULL;
 
 	I32 ssl_flag = 1;
 	C8 request_buf[8192];
 
 	ssl = SSL_new(ssl_ctx);
-	if (ssl == NULL) {
+	if (ssl == FAC_NULL) {
 		ssl_flag = -1;
 		goto out;
 	}
@@ -351,7 +347,7 @@ out:
 		ssl_flag = -1;
 	}
 	SSL_free(ssl);
-	ssl = NULL;
+	ssl = FAC_NULL;
 	if (client_fd >= 0) {
 		close(client_fd);
 		client_fd = -1;
@@ -359,6 +355,6 @@ out:
 
 	(*thread_ctx->fws_thread_n)--;
 	free(thread_args);
-	thread_args = NULL;
-	return NULL;
+	thread_args = FAC_NULL;
+	return FAC_NULL;
 }

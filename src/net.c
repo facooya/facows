@@ -9,11 +9,11 @@
 #include "net.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <errno.h>
 
 #define REQ_MAX 8192
 #define REQ_KEY_MAX 64

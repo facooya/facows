@@ -6,16 +6,15 @@
 #include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
-#include "fws.h"
 #include "net.h"
 #include "file.h"
+#include "fws.h"
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <signal.h>
 #include <assert.h>
-#include <sys/types.h>
+#include <unistd.h>
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
@@ -24,8 +23,8 @@ volatile _Atomic I32 fws_flag = -1;
 static void _fws_exit(I32 sig);
 
 I32 main() {
-	struct fws_parent_ctx *parent_ctx = NULL;
-	struct fws_child_ctx *child_ctx = NULL;
+	struct fws_parent_ctx *parent_ctx = FAC_NULL;
+	struct fws_child_ctx *child_ctx = FAC_NULL;
 	I32 pipe_fd[2] = {-1, -1};
 	I32 pipe_read_fd = -1;
 	I32 pipe_write_fd = -1;
@@ -56,7 +55,7 @@ I32 main() {
 	pipe_read_fd = pipe_fd[0];
 	pipe_write_fd = pipe_fd[1];
 
-	const pid_t pid = fork();
+	const I32 pid = fork();
 	if (pid < 0) {
 		fprintf(stderr, "fork failed\n");
 		ret = 1;
@@ -65,7 +64,7 @@ I32 main() {
 
 	if (pid == 0) {
 		child_ctx = malloc(sizeof(struct fws_child_ctx));
-		if (child_ctx == NULL) {
+		if (child_ctx == FAC_NULL) {
 			ret = 1;
 			goto out;
 		}
@@ -76,11 +75,11 @@ I32 main() {
 
 		fws_child_run(child_ctx);
 		free(child_ctx);
-		child_ctx = NULL;
+		child_ctx = FAC_NULL;
 
 	} else {
 		parent_ctx = malloc(sizeof(struct fws_parent_ctx));
-		if (parent_ctx == NULL) {
+		if (parent_ctx == FAC_NULL) {
 			ret = 1;
 			goto out;
 		}
@@ -95,15 +94,15 @@ I32 main() {
 			goto out;
 		}
 		free(parent_ctx);
-		parent_ctx = NULL;
+		parent_ctx = FAC_NULL;
 	}
 
 	ret = 0;
 out:
 	free(child_ctx);
-	child_ctx = NULL;
+	child_ctx = FAC_NULL;
 	free(parent_ctx);
-	parent_ctx = NULL;
+	parent_ctx = FAC_NULL;
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;

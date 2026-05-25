@@ -9,12 +9,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <time.h>
 #include <string.h>
-#include <fcntl.h>
+#include <time.h>
+#include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/stat.h>
 #include <nftables/libnftables.h>
 
 #define STR_LEN(str) (sizeof(str) - 1)
@@ -63,8 +61,8 @@ static I32 _name_get(C8 *buf, U64 buf_n);
 
 I32 net_nft_init(const struct fws_conf *conf) {
 	I32 ret = 0;
-	struct nft_ctx *nft_ctx = NULL;
-	C8 *nft_buf = NULL;
+	struct nft_ctx *nft_ctx = FAC_NULL;
+	C8 *nft_buf = FAC_NULL;
 
 	C8 name_buf[16] = {0};
 	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
@@ -73,13 +71,13 @@ I32 net_nft_init(const struct fws_conf *conf) {
 	}
 
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
-	if (nft_ctx == NULL) {
+	if (nft_ctx == FAC_NULL) {
 		printf("facows_nft: can not create nft context\n");
 		ret = -1;
 		goto out;
 	}
 
-	U64 n = snprintf(NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
+	U64 n = snprintf(FAC_NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_buf = malloc(n+1);
 	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
@@ -87,17 +85,17 @@ I32 net_nft_init(const struct fws_conf *conf) {
 	ret = 0;
 out:
 	nft_ctx_free(nft_ctx);
-	nft_ctx = NULL;
+	nft_ctx = FAC_NULL;
 	free(nft_buf);
-	nft_buf = NULL;
+	nft_buf = FAC_NULL;
 	return ret;
 }
 
 I32 net_nft_fini(void) {
 	I32 ret = 0;
-	struct nft_ctx *nft_ctx = NULL;
+	struct nft_ctx *nft_ctx = FAC_NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
-	if (nft_ctx == NULL) {
+	if (nft_ctx == FAC_NULL) {
 		printf("facows_nft: can not create nft context\n");
 		ret = -1;
 		goto out;
@@ -107,28 +105,28 @@ I32 net_nft_fini(void) {
 	ret = 0;
 out:
 	nft_ctx_free(nft_ctx);
-	nft_ctx = NULL;
+	nft_ctx = FAC_NULL;
 	return ret;
 }
 
 void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
 	const C8 *ip_p = ip_buf;
-	C8 *nft_buf = NULL;
+	C8 *nft_buf = FAC_NULL;
 	U64 cmd_n = 0;
 
 	if (memcmp(ip_buf, IPV4_MAP, IPV4_MAP_N) == 0) {
 		ip_p += IPV4_MAP_N;
-		cmd_n = snprintf(NULL, 0, NFT_BAN4, ip_p, ban_time);
+		cmd_n = snprintf(FAC_NULL, 0, NFT_BAN4, ip_p, ban_time);
 		nft_buf = malloc(cmd_n+1);
-		if (nft_buf == NULL) {
+		if (nft_buf == FAC_NULL) {
 			goto out;
 		}
 		snprintf(nft_buf, cmd_n+1, NFT_BAN4, ip_p, ban_time);
 
 	} else {
-		cmd_n = snprintf(NULL, 0, NFT_BAN6, ip_p, ban_time);
+		cmd_n = snprintf(FAC_NULL, 0, NFT_BAN6, ip_p, ban_time);
 		nft_buf = malloc(cmd_n+1);
-		if (nft_buf == NULL) {
+		if (nft_buf == FAC_NULL) {
 			goto out;
 		}
 		snprintf(nft_buf, cmd_n+1, NFT_BAN6, ip_p, ban_time);
@@ -138,14 +136,14 @@ void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
 
 out:
 	free(nft_buf);
-	nft_buf = NULL;
+	nft_buf = FAC_NULL;
 }
 
 void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 write_fd, U64 nft_list_n) {
 	C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
-	time_t cur_sec = time(NULL);
+	time_t cur_sec = time(FAC_NULL);
 	I32 nft_i = -1;
 	for (U64 i=0; i<nft_list_n; i++) {
 		if (memcmp(nft_list[i].ip, client_ip, 16) == 0) {
@@ -184,12 +182,12 @@ void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 writ
 
 static I32 _name_get(C8 *buf, U64 buf_n) {
 	I32 ret = 0;
-	FILE *fp = NULL;
-	C8 *glp = NULL;
+	FILE *fp = FAC_NULL;
+	C8 *glp = FAC_NULL;
 	U64 gln = 0;
 
 	fp = fopen(ROUTE_PATH, "r");
-	if (fp == NULL) {
+	if (fp == FAC_NULL) {
 		fprintf(stderr, "net_nft/_name_get(): open failed %s\n", ROUTE_PATH);
 		ret = -1;
 		goto out;
@@ -220,10 +218,10 @@ static I32 _name_get(C8 *buf, U64 buf_n) {
 	ret = 0;
 out:
 	free(glp);
-	glp = NULL;
-	if (fp != NULL) {
+	glp = FAC_NULL;
+	if (fp != FAC_NULL) {
 		fclose(fp);
-		fp = NULL;
+		fp = FAC_NULL;
 	}
 	return ret;
 }

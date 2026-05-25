@@ -8,11 +8,10 @@
 #include "types.h"
 #include "file.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 static void _file_init(struct fws_file *file);
 static I32 _raw_path_build(C8 *raw_path, const C8 *uri_path, const C8 *web_root, U64 web_root_len);
@@ -46,7 +45,7 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		return code;
 	}
 
-	if (realpath(raw_path, file->path) == NULL) {
+	if (realpath(raw_path, file->path) == FAC_NULL) {
 		return 404;
 	}
 
@@ -73,7 +72,7 @@ static I32 _uri_path_build(struct fws_file *file) {
 	}
 
 	p1 = memrchr(file->uri_path, '/', file->uri_path_n);
-	if (p1 == NULL) {
+	if (p1 == FAC_NULL) {
 		return -1;
 	}
 
@@ -108,7 +107,7 @@ static I32 _uri_path_build(struct fws_file *file) {
 static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
 	struct stat file_stat;
 	C8 *p = memchr(raw_path, '\0', sizeof(file->path));
-	if (p == NULL) {
+	if (p == FAC_NULL) {
 		return -1;
 	}
 

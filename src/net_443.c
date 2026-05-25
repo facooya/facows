@@ -9,10 +9,10 @@
 #include "net.h"
 
 #include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <openssl/ssl.h>
 #include <string.h>
+#include <openssl/ssl.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 
 #define SHARE_DIR "/usr/share/facows/"
@@ -84,7 +84,7 @@ I32 net_443_read(U8 *ssl_opq, C8 *dst_buf, U64 buf_size) {
 		total_read_size += read_ret;
 		if (total_read_size >= 4095) {
 			return 431;
-		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != NULL) {
+		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != FAC_NULL) {
 			break;
 		}
 	}
@@ -118,14 +118,14 @@ out:
 	return ret;
 }
 
-I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, off_t size) {
+I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	SSL *ssl = (SSL *) ssl_opq;
-	C8 *res_buf = NULL;
+	C8 *res_buf = FAC_NULL;
 	I32 ret = 0;
 
-	U64 n = snprintf(NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
+	U64 n = snprintf(FAC_NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
 	res_buf = malloc(n+1);
-	if (res_buf == NULL) {
+	if (res_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
@@ -136,15 +136,15 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, off_t size) {
 	ret = 0;
 out:
 	free(res_buf);
-	res_buf = NULL;
+	res_buf = FAC_NULL;
 	return ret;
 }
 
 I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	SSL *ssl = (SSL *) ssl_opq;
-	C8 *html_fmt = NULL;
-	C8 *html_buf = NULL;
-	C8 *res_buf = NULL;
+	C8 *html_fmt = FAC_NULL;
+	C8 *html_buf = FAC_NULL;
+	C8 *res_buf = FAC_NULL;
 	I32 html_fd = -1;
 
 	I32 ret = 0;
@@ -160,7 +160,7 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		goto out;
 	}
 	html_fmt = malloc(html_stat.st_size+1);
-	if (html_fmt == NULL) {
+	if (html_fmt == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
@@ -184,17 +184,17 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		}
 	}
 
-	html_n = snprintf(NULL, 0, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
+	html_n = snprintf(FAC_NULL, 0, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
 	html_buf = malloc(html_n+1);
-	if (html_buf == NULL) {
+	if (html_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
 	snprintf(html_buf, html_n+1, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
 
-	res_n = snprintf(NULL, 0, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+	res_n = snprintf(FAC_NULL, 0, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
 	res_buf = malloc(res_n+1);
-	if (res_buf == NULL) {
+	if (res_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
@@ -206,11 +206,11 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	ret = 0;
 out:
 	free(res_buf);
-	res_buf = NULL;
+	res_buf = FAC_NULL;
 	free(html_buf);
-	html_buf = NULL;
+	html_buf = FAC_NULL;
 	free(html_fmt);
-	html_fmt = NULL;
+	html_fmt = FAC_NULL;
 	if (html_fd >= 0) {
 		close(html_fd);
 		html_fd = -1;

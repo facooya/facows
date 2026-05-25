@@ -10,11 +10,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #define STR_LEN(str) (sizeof(str) - 1)
 #define TRUE "true"
@@ -49,7 +49,7 @@ static I32 _tool_allow_ports_check(const C8 *p);
 I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 	I32 ret = 0;
 	I32 conf_fd = -1;
-	C8 *conf_buf = NULL;
+	C8 *conf_buf = FAC_NULL;
 
 	conf->allow_ports[0] = '\0';
 
@@ -67,7 +67,7 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 
 	U64 conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
-	if (conf_buf == NULL) {
+	if (conf_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
@@ -87,7 +87,7 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 	ret = 0;
 out:
 	free(conf_buf);
-	conf_buf = NULL;
+	conf_buf = FAC_NULL;
 	if (conf_fd >= 0) {
 		close(conf_fd);
 		conf_fd = -1;
@@ -97,8 +97,8 @@ out:
 }
 
 static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) {
-	assert(conf != NULL);
-	assert(conf_buf != NULL);
+	assert(conf != FAC_NULL);
+	assert(conf_buf != FAC_NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const C8 *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
@@ -151,14 +151,14 @@ next_line:
 }
 
 static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
-	assert(p != NULL);
+	assert(p != FAC_NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const C8 *p2 = NULL;
+	const C8 *p2 = FAC_NULL;
 	U64 n = 0;
-	long port = -1;
+	I64 port = -1;
 	switch (i) {
 		case HTTP_PORT:
-			port = strtol(p, NULL, 10);
+			port = strtol(p, FAC_NULL, 10);
 			if (port < 0 || port >= 65536) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
@@ -166,7 +166,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			conf->http_port = (U16) port;
 			break;
 		case HTTPS_PORT:
-			port = strtol(p, NULL, 10);
+			port = strtol(p, FAC_NULL, 10);
 			if (port < 0 || port >= 65536) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
@@ -176,7 +176,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 
 		case ALLOW_PORTS:
 			p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
-			if (p2 == NULL) {
+			if (p2 == FAC_NULL) {
 				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
 				return -1;
 			}
@@ -196,13 +196,13 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case PPS_LIMIT:
-			conf->pps_limit = (U32) strtol(p, NULL, 10);
+			conf->pps_limit = (U32) strtol(p, FAC_NULL, 10);
 			break;
 		case PPS_BURST:
-			conf->pps_burst = (U32) strtol(p, NULL, 10);
+			conf->pps_burst = (U32) strtol(p, FAC_NULL, 10);
 			break;
 		case BAN_TIME:
-			conf->ban_time = (U32) strtol(p, NULL, 10);
+			conf->ban_time = (U32) strtol(p, FAC_NULL, 10);
 			break;
 
 		case HSTS:
@@ -211,7 +211,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case HSTS_MAX_AGE:
-			conf->hsts_max_age = (U32) strtol(p, NULL, 10);
+			conf->hsts_max_age = (U32) strtol(p, FAC_NULL, 10);
 			break;
 
 		case DOMAIN:
@@ -252,7 +252,7 @@ static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n) {
 	}
 
 	const C8 *p2 = memchr(p1, '"', member_n-1);
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		printf("facows.conf: error: very large value, lower than %zu\n", member_n-1);
 		return -1;
 	}
@@ -288,10 +288,10 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
 }
 
 static I32 _tool_allow_ports_check(const C8 *p) {
-	assert(p != NULL);
-	C8 *ep = NULL;
+	assert(p != FAC_NULL);
+	C8 *ep = FAC_NULL;
 	while (*p != '\n' && *p != '\0') {
-		long port = strtol(p, &ep, 10);
+		I64 port = strtol(p, &ep, 10);
 		if (p == ep) {
 			p++;
 			continue;

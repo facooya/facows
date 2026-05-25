@@ -8,8 +8,8 @@
 #include "net.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 
 #define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
@@ -33,7 +33,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 
 		if (recv_total_size >= 8191) {
 			return -1;
-		} else if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != NULL) {
+		} else if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != FAC_NULL) {
 			break;
 		}
 
@@ -49,7 +49,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	const C8 *p1 = recv_buf;
 	const C8 *p2 = memchr(p1, ' ', sizeof(http_req.method));
 	U64 n;
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		return -1;
 	}
 	n = p2 - p1;
@@ -58,7 +58,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	}
 	p1 += n + 1;
 	p2 = memchr(p1, ' ', sizeof(http_req.uri));
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		return -1;
 	}
 	n = p2 - p1;
@@ -72,7 +72,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	// { parse host
 	p1 = recv_buf;
 	p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		return -1;
 	}
 	p1 = p2 + 2;
@@ -88,7 +88,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 			}
 
 			p2 = memchr(p1, ':', 64);
-			if (p2 == NULL) {
+			if (p2 == FAC_NULL) {
 				return -1;
 			}
 			p1 = p2 + 1;
@@ -115,7 +115,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 		}
 
 		p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
-		if (p2 == NULL) {
+		if (p2 == FAC_NULL) {
 			return -1;
 		}
 		p1 = p2 + 2;
@@ -127,14 +127,14 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	C8 host_buf[512];
 	net_host_build(host_buf, &http_req, config);
 
-	U64 res_n = snprintf(NULL, 0, RES_301, host_buf, http_req.uri);
+	U64 res_n = snprintf(FAC_NULL, 0, RES_301, host_buf, http_req.uri);
 	C8 *res_buf = malloc(res_n+1);
-	if (res_buf == NULL) {
+	if (res_buf == FAC_NULL) {
 		return -1;
 	}
 	snprintf(res_buf, res_n+1, RES_301, host_buf, http_req.uri);
 	send(client_80_fd, res_buf, fac_memclen(res_buf, '\0', sizeof(res_buf)), 0);
 	free(res_buf);
-	res_buf = NULL;
+	res_buf = FAC_NULL;
 	return 0;
 }

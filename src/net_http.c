@@ -9,10 +9,9 @@
 #include "net.h"
 
 #include <stdio.h>
-#include <stddef.h>
 #include <string.h>
-#include <ctype.h>
 #include <time.h>
+#include <ctype.h>
 #include <openssl/ssl.h>
 
 #define RES_301 "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
@@ -60,7 +59,7 @@ I32 net_http_res_build(struct fws_http_res *http_res, const C8 *path, U64 path_n
 
 	while (1) {
 		p2 = memchr(p1, '.', n);
-		if (p2 == NULL) {
+		if (p2 == FAC_NULL) {
 			break;
 		}
 
@@ -88,12 +87,12 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 	C8 host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	U64 n = snprintf(NULL, 0, RES_301, host_buf, file->uri_path);
+	U64 n = snprintf(FAC_NULL, 0, RES_301, host_buf, file->uri_path);
 	C8 *res_buf = malloc(n+1);
 	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);
-	res_buf = NULL;
+	res_buf = FAC_NULL;
 }
 
 static void _res_init(struct fws_http_res *http_res) {
@@ -110,9 +109,9 @@ static void _http_init(struct fws_http_req *http_req) {
 	http_req->browser[0] = '\0';
 	http_req->subdomain[0] = '\0';
 	http_req->uri[0] = '\0';
-	http_req->path = NULL;
+	http_req->path = FAC_NULL;
 	http_req->path_n = 0;
-	http_req->query = NULL;
+	http_req->query = FAC_NULL;
 	http_req->query_n = 0;
 }
 
@@ -121,7 +120,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	const C8 *p1 = req_buf;
 	const C8 *p2 = memchr(p1, ' ', sizeof(http_req->method));
 	U64 n;
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		// err_log
 		return 1;
 	}
@@ -137,7 +136,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	// { uri
 	p1 += n + 1;
 	p2 = memchr(p1, ' ', sizeof(http_req->uri));
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		// err log
 		return 1;
 	}
@@ -153,7 +152,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	// { version
 	p1 += n + 1;
 	p2 = memchr(p1, '\r', sizeof(http_req->version));
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		// err log
 		return 1;
 	}
@@ -175,7 +174,7 @@ static void _uri_parse(struct fws_http_req *http_req) {
 
 	http_req->path = p1;
 	p2 = memchr(http_req->uri, '?', uri_len);
-	if (p2 == NULL) {
+	if (p2 == FAC_NULL) {
 		http_req->path_n = uri_len;
 	} else {
 		http_req->path_n = p2 - p1;
@@ -192,7 +191,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 	const C8 *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 	U64 n;
 
-	if (p2 == NULL || *(p2+1) != '\n') {
+	if (p2 == FAC_NULL || *(p2+1) != '\n') {
 		// err log
 		return 1;
 	}
@@ -204,7 +203,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 		}
 
 		p2 = memchr(p1, ':', REQ_KEY_MAX);
-		if (p2 == NULL) {
+		if (p2 == FAC_NULL) {
 			return 1; // 400 bad
 		}
 
@@ -212,7 +211,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 			if (memcmp(p1, keyword[i], fac_memclen(keyword[i], '\0', sizeof(keyword[i]))) == 0) {
 				p1 = p2 + 1;
 				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
-				if (p2 == NULL) {
+				if (p2 == FAC_NULL) {
 					return 1; // 400 bad
 				}
 				while (*p1 == ' ') {
@@ -260,7 +259,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, os_type[i][0], p2-p3+1);
-								if (p4 == NULL) {
+								if (p4 == FAC_NULL) {
 									break;
 								}
 								if (memcmp(p4, os_type[i], fac_memclen(os_type[i], '\0', sizeof(os_type[i]))) == 0) {
@@ -286,7 +285,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
-								if (p4 == NULL) {
+								if (p4 == FAC_NULL) {
 									break;
 								}
 								if (memcmp(p4, browser_type[i], fac_memclen(browser_type[i], '\0', sizeof(browser_type[i]))) == 0) {
@@ -333,7 +332,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 		}
 
 		p2 = memchr(p1, '\r', REQ_VALUE_MAX);
-		if (p2 == NULL || *(p2+1) != '\n') {
+		if (p2 == FAC_NULL || *(p2+1) != '\n') {
 			return 1; // 400 bad
 		}
 		p1 = p2 + 2;
