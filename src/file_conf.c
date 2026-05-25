@@ -3,6 +3,11 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
+#include "fac_utils.h"
+#include "types.h"
+#include "file.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,11 +15,6 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-#include "factype.h"
-#include "fac_utils.h"
-#include "types.h"
-#include "file.h"
 
 #define STR_LEN(str) (sizeof(str) - 1)
 #define TRUE "true"
@@ -40,16 +40,16 @@
 #define CONF_KEYS_ENUM(key) key,
 #define CONF_KEYS_ARR(key) #key,
 
-static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len);
-static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf);
-static int _tool_conf_str_set(char *member, const char *val, size_t member_n);
-static int _tool_conf_bool_set(U8 *member, const char *val);
-static int _tool_allow_ports_check(const char *p);
+static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len);
+static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf);
+static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n);
+static I32 _tool_conf_bool_set(U8 *member, const C8 *val);
+static I32 _tool_allow_ports_check(const C8 *p);
 
-int file_conf_read(struct fws_conf *conf, const char *path) {
-	int ret = 0;
-	int conf_fd = -1;
-	char *conf_buf = NULL;
+I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
+	I32 ret = 0;
+	I32 conf_fd = -1;
+	C8 *conf_buf = NULL;
 
 	conf->allow_ports[0] = '\0';
 
@@ -65,7 +65,7 @@ int file_conf_read(struct fws_conf *conf, const char *path) {
 		goto out;
 	}
 
-	size_t conf_len = conf_stat.st_size + 1;
+	U64 conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
 	if (conf_buf == NULL) {
 		ret = -1;
@@ -96,27 +96,27 @@ out:
 	return ret;
 }
 
-static int _conf_parse(struct fws_conf *conf, const char *conf_buf, size_t conf_len) {
+static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) {
 	assert(conf != NULL);
 	assert(conf_buf != NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
+	const C8 *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
-	size_t n = 0;
-	const char *p = conf_buf;
-	size_t total_n = 0;
+	U64 n = 0;
+	const C8 *p = conf_buf;
+	U64 total_n = 0;
 	while (total_n < conf_len) {
 		if (*p == '#') {
 			goto next_line;
 		}
 
-		for (size_t i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
-			size_t conf_key_len = fac_memclen(p, ' ', CONF_KEY_MAX);
+		for (U64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
+			U64 conf_key_len = fac_memclen(p, ' ', CONF_KEY_MAX);
 			if (conf_key_len == CONF_KEY_MAX) {
 				goto next_line;
 			}
 
-			size_t key_len = fac_memclen(keys[i], '\0', CONF_KEY_MAX);
+			U64 key_len = fac_memclen(keys[i], '\0', CONF_KEY_MAX);
 			if (conf_key_len != key_len) {
 				continue;
 			}
@@ -150,11 +150,11 @@ next_line:
 	return 0;
 }
 
-static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
+static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 	assert(p != NULL);
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const char *p2 = NULL;
-	size_t n = 0;
+	const C8 *p2 = NULL;
+	U64 n = 0;
 	long port = -1;
 	switch (i) {
 		case HTTP_PORT:
@@ -244,27 +244,27 @@ static int _conf_parse_value(size_t i, const char *p, struct fws_conf *conf) {
 	return 0;
 }
 
-static int _tool_conf_str_set(char *member, const char *val, size_t member_n) {
-	const char *p1 = val + 1;
+static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n) {
+	const C8 *p1 = val + 1;
 	if (*(p1-1) != '"') {
 		printf("facows.conf: error: require double quote before write string\n");
 		return -1;
 	}
 
-	const char *p2 = memchr(p1, '"', member_n-1);
+	const C8 *p2 = memchr(p1, '"', member_n-1);
 	if (p2 == NULL) {
 		printf("facows.conf: error: very large value, lower than %zu\n", member_n-1);
 		return -1;
 	}
 
-	size_t n = p2 - p1;
+	U64 n = p2 - p1;
 	memcpy(member, p1, n);
 	member[n] = '\0';
 
 	return 0;
 }
 
-static int _tool_conf_bool_set(U8 *member, const char *val) {
+static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
 	if (memcmp(val, TRUE, STR_LEN(TRUE)) == 0) {
 		if (*(val+STR_LEN(TRUE)) == ' ' || *(val+STR_LEN(TRUE)) == '\n') {
 			*member = 1;
@@ -287,9 +287,9 @@ static int _tool_conf_bool_set(U8 *member, const char *val) {
 	return 0;
 }
 
-static int _tool_allow_ports_check(const char *p) {
+static I32 _tool_allow_ports_check(const C8 *p) {
 	assert(p != NULL);
-	char *ep = NULL;
+	C8 *ep = NULL;
 	while (*p != '\n' && *p != '\0') {
 		long port = strtol(p, &ep, 10);
 		if (p == ep) {

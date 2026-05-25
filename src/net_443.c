@@ -3,16 +3,17 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
+#include "fac_utils.h"
+#include "types.h"
+#include "net.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <openssl/ssl.h>
 #include <string.h>
 #include <sys/stat.h>
-
-#include "fac_utils.h"
-#include "types.h"
-#include "net.h"
 
 #define SHARE_DIR "/usr/share/facows/"
 #define SHARE_ERR_HTML "/usr/share/facows/error_page.html"
@@ -32,8 +33,8 @@
 #define HTTP_RES "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nDate: %s\r\n\r\n"
 
 static const struct {
-	int code;
-	const char *msg;
+	I32 code;
+	const C8 *msg;
 } http_msg[] = {
 	{500, HTTP_MSG_500},
 	{400, HTTP_MSG_400},
@@ -46,7 +47,7 @@ static const struct {
 	{501, HTTP_MSG_501}
 };
 
-int net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
+I32 net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	SSL_library_init();
 	const SSL_METHOD *ssl_method;
@@ -63,14 +64,14 @@ int net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 	return 0;
 }
 
-int net_443_read(U8 *ssl_opq, char *dst_buf, size_t buf_size) {
+I32 net_443_read(U8 *ssl_opq, C8 *dst_buf, U64 buf_size) {
 	SSL *ssl = (SSL *) ssl_opq;
-	int total_read_size = 0;
-	int read_ret = 0;
+	I32 total_read_size = 0;
+	I32 read_ret = 0;
 	while (1) {
 		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
 		if (read_ret <= 0) {
-			const int err_code = SSL_get_error(ssl, read_ret);
+			const I32 err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
 				return -1;
 
@@ -90,17 +91,17 @@ int net_443_read(U8 *ssl_opq, char *dst_buf, size_t buf_size) {
 	return 0;
 }
 
-int net_443_write(U8 *ssl_opq, const char *path) {
+I32 net_443_write(U8 *ssl_opq, const C8 *path) {
 	SSL *ssl = (SSL *) ssl_opq;
-	int ret = 0;
+	I32 ret = 0;
 
-	int fd = open(path, O_RDONLY);
+	I32 fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		ret = -1;
 		goto out;
 	}
-	char file_buf[4096];
-	ssize_t read_size;
+	C8 file_buf[4096];
+	I64 read_size;
 	while ((read_size = read(fd, file_buf, sizeof(file_buf))) > 0) {
 		if (SSL_write(ssl, file_buf, read_size) <= 0) {
 			ret = 1;
@@ -117,12 +118,12 @@ out:
 	return ret;
 }
 
-int net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, off_t size) {
+I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, off_t size) {
 	SSL *ssl = (SSL *) ssl_opq;
-	char *res_buf = NULL;
-	int ret = 0;
+	C8 *res_buf = NULL;
+	I32 ret = 0;
 
-	size_t n = snprintf(NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
+	U64 n = snprintf(NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
 	res_buf = malloc(n+1);
 	if (res_buf == NULL) {
 		ret = -1;
@@ -139,14 +140,14 @@ out:
 	return ret;
 }
 
-int net_443_err_write(U8 *ssl_opq, int code) {
+I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	SSL *ssl = (SSL *) ssl_opq;
-	char *html_fmt = NULL;
-	char *html_buf = NULL;
-	char *res_buf = NULL;
-	int html_fd = -1;
+	C8 *html_fmt = NULL;
+	C8 *html_buf = NULL;
+	C8 *res_buf = NULL;
+	I32 html_fd = -1;
 
-	int ret = 0;
+	I32 ret = 0;
 
 	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
 	if (html_fd < 0) {
@@ -173,10 +174,10 @@ int net_443_err_write(U8 *ssl_opq, int code) {
 		html_fd = -1;
 	}
 
-	size_t msg_idx = 0;
-	size_t html_n = 0;
-	size_t res_n = 0;
-	for (size_t i=0; i<(sizeof(http_msg)/sizeof(http_msg[0])); i++) {
+	U64 msg_idx = 0;
+	U64 html_n = 0;
+	U64 res_n = 0;
+	for (U64 i=0; i<(sizeof(http_msg)/sizeof(http_msg[0])); i++) {
 		if (http_msg[i].code == code) {
 			msg_idx = i;
 			break;

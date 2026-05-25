@@ -3,13 +3,6 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
-#include <assert.h>
-#include <sys/types.h>
-
 #include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
@@ -17,20 +10,27 @@
 #include "net.h"
 #include "file.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <assert.h>
+#include <sys/types.h>
+
 #define CONF_PATH "/etc/facows/facows.conf"
 
 volatile _Atomic I32 fws_flag = -1;
 
-static void _fws_exit(int sig);
+static void _fws_exit(I32 sig);
 
-int main() {
+I32 main() {
 	struct fws_parent_ctx *parent_ctx = NULL;
 	struct fws_child_ctx *child_ctx = NULL;
-	int pipe_fd[2] = {-1, -1};
-	int pipe_read_fd = -1;
-	int pipe_write_fd = -1;
+	I32 pipe_fd[2] = {-1, -1};
+	I32 pipe_read_fd = -1;
+	I32 pipe_write_fd = -1;
 
-	int ret = 0;
+	I32 ret = 0;
 
 	signal(SIGINT, _fws_exit);
 	signal(SIGTERM, _fws_exit);
@@ -115,6 +115,6 @@ out:
 	return ret;
 }
 
-static void _fws_exit(int sig) {
+static void _fws_exit(I32 sig) {
 	fws_flag = sig;
 }

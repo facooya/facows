@@ -3,6 +3,13 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
+#include "fac_utils.h"
+#include "types.h"
+#include "fws.h"
+#include "net.h"
+#include "file.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdatomic.h>
@@ -24,20 +31,13 @@
 #include <string.h>
 #include <nftables/libnftables.h>
 
-#include "factype.h"
-#include "fac_utils.h"
-#include "types.h"
-#include "fws.h"
-#include "net.h"
-#include "file.h"
-
 #define USER_WWW_DATA "www-data"
 #define USER_APACHE "apache"
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
 pthread_mutex_t nft_lock = {0};
-atomic_int fws_thread_n = 0;
+_Atomic I32 fws_thread_n = 0;
 
 struct fws_nft nft_list[1024] = {0};
 
@@ -46,14 +46,14 @@ static void *_fws_thread_run(void *thread_args);
 void fws_child_run(struct fws_child_ctx *child_ctx) {
 	SSL_CTX *ssl_ctx = NULL;
 	struct passwd *pw = NULL;
-	int server_http_fd = -1;
-	int server_https_fd = -1;
-	int client_http_fd = -1;
-	int client_fd = -1;
+	I32 server_http_fd = -1;
+	I32 server_https_fd = -1;
+	I32 client_http_fd = -1;
+	I32 client_fd = -1;
 
 	struct timespec thread_ts = {0};
-	int ret = 0;
-	int nft_lock_flag = -1;
+	I32 ret = 0;
+	I32 nft_lock_flag = -1;
 
 	net_443_init((U8**)&ssl_ctx, child_ctx->conf);
 
@@ -68,8 +68,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 		goto out;
 	}
 
-	const char *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
-	for (size_t i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
+	const C8 *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
+	for (U64 i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
 		if ((pw = getpwnam(user_name[i])) != NULL) {
 			break;
 		}
@@ -201,8 +201,8 @@ out:
 	_exit(ret);
 }
 
-int fws_parent_run(struct fws_parent_ctx *parent_ctx) {
-	int ret = 0;
+I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
+	I32 ret = 0;
 
 	if (parent_ctx->pipe_write_fd >= 0) {
 		close(parent_ctx->pipe_write_fd);
@@ -232,7 +232,7 @@ int fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 		}
 
 		if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
-			char ip_buf[INET6_ADDRSTRLEN] = {0};
+			C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 			if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
 				break;
 			} else {
@@ -271,14 +271,14 @@ static void *_fws_thread_run(void *thread_args) {
 	const struct fws_conf *conf = thread_ctx->fws_conf;
 	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock_opq;
 
-	int client_fd = thread_ctx->fd;
-	int write_fd = thread_ctx->write_fd;
+	I32 client_fd = thread_ctx->fd;
+	I32 write_fd = thread_ctx->write_fd;
 	SSL_CTX *ssl_ctx = (SSL_CTX *) thread_ctx->ssl_ctx_opq;
 
 	SSL *ssl = NULL;
 
-	int ssl_flag = 1;
-	char request_buf[8192];
+	I32 ssl_flag = 1;
+	C8 request_buf[8192];
 
 	ssl = SSL_new(ssl_ctx);
 	if (ssl == NULL) {
@@ -289,7 +289,7 @@ static void *_fws_thread_run(void *thread_args) {
 	struct timeval sock_tv = {0};
 	sock_tv.tv_sec = 2;
 	sock_tv.tv_usec = 0;
-	setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&sock_tv, sizeof(sock_tv));
+	setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const C8*)&sock_tv, sizeof(sock_tv));
 
 	SSL_set_fd(ssl, client_fd);
 	if (SSL_accept(ssl) <= 0) {
@@ -310,7 +310,7 @@ static void *_fws_thread_run(void *thread_args) {
 		}
 
 		struct fws_file file = {0};
-		int status_code = file_parse(&file, &http, conf->web_root, sizeof(conf->web_root));
+		I32 status_code = file_parse(&file, &http, conf->web_root, sizeof(conf->web_root));
 
 		if (status_code == 301) {
 			net_http_path_redir(&http, conf, &file, (U8*)ssl);
@@ -319,8 +319,8 @@ static void *_fws_thread_run(void *thread_args) {
 		}
 
 		if (conf->nft == 1) {
-			size_t path_size = fac_memclen(file.path, '\0', sizeof(file.path));
-			char *path_p = file.path + path_size - (sizeof(".html") - 1);
+			U64 path_size = fac_memclen(file.path, '\0', sizeof(file.path));
+			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(nft_lock);
 				net_nft_dos_ip_send(thread_ctx->client_ip, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));

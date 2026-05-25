@@ -3,11 +3,11 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
-#include <string.h>
-
 #include "fac_utils.h"
 
-size_t fac_memclen(const char *s, char c, size_t n) {
+#include <string.h>
+
+U64 fac_memclen(const C8 *s, C8 c, U64 n) {
 	char *p = memchr(s, c, n);
 	if (p == NULL) {
 		return n;

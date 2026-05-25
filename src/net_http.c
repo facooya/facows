@@ -3,16 +3,17 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
+#include "fac_utils.h"
+#include "types.h"
+#include "net.h"
+
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
 #include <openssl/ssl.h>
-
-#include "fac_utils.h"
-#include "types.h"
-#include "net.h"
 
 #define RES_301 "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
@@ -22,18 +23,18 @@
 #define REQ_UA_MAX 16
 
 static void _http_init(struct fws_http_req *http_req);
-static int _line_parse(const char *req_buf, struct fws_http_req *http_req);
+static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req);
 static void _uri_parse(struct fws_http_req *http_req);
-static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n);
-//static int _err_check(const struct fws_http_req *http_req);
+static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const C8 *domain, U64 domain_n);
+//static I32 _err_check(const struct fws_http_req *http_req);
 static void _res_init(struct fws_http_res *http_res);
 
-int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
+I32 net_http_req_parse(C8 *req_buf, struct fws_http_req *http_req, const C8 *domain, U64 domain_n) {
 	_http_init(http_req);
 	_line_parse(req_buf, http_req);
 	_uri_parse(http_req);
 
-	for (size_t i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
+	for (U64 i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
 		req_buf[i] = tolower(req_buf[i]);
 	}
 
@@ -41,7 +42,7 @@ int net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 	return 0;
 }
 
-int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t path_n) {
+I32 net_http_res_build(struct fws_http_res *http_res, const C8 *path, U64 path_n) {
 	_res_init(http_res);
 
 	time_t raw_time;
@@ -53,9 +54,9 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 	http_res->code = 200;
 	http_res->connection = 0;
 
-	const char *p1 = path;
-	const char *p2;
-	size_t n = fac_memclen(p1, '\0', path_n);
+	const C8 *p1 = path;
+	const C8 *p2;
+	U64 n = fac_memclen(p1, '\0', path_n);
 
 	while (1) {
 		p2 = memchr(p1, '.', n);
@@ -84,11 +85,11 @@ int net_http_res_build(struct fws_http_res *http_res, const char *path, size_t p
 
 void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, U8 *ssl_opq) {
 	SSL *ssl = (SSL *) ssl_opq;
-	char host_buf[512];
+	C8 host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	size_t n = snprintf(NULL, 0, RES_301, host_buf, file->uri_path);
-	char *res_buf = malloc(n+1);
+	U64 n = snprintf(NULL, 0, RES_301, host_buf, file->uri_path);
+	C8 *res_buf = malloc(n+1);
 	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);
@@ -115,11 +116,11 @@ static void _http_init(struct fws_http_req *http_req) {
 	http_req->query_n = 0;
 }
 
-static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
+static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	// { method
-	const char *p1 = req_buf;
-	const char *p2 = memchr(p1, ' ', sizeof(http_req->method));
-	size_t n;
+	const C8 *p1 = req_buf;
+	const C8 *p2 = memchr(p1, ' ', sizeof(http_req->method));
+	U64 n;
 	if (p2 == NULL) {
 		// err_log
 		return 1;
@@ -168,9 +169,9 @@ static int _line_parse(const char *req_buf, struct fws_http_req *http_req) {
 }
 
 static void _uri_parse(struct fws_http_req *http_req) {
-	const char *p1 = http_req->uri;
-	const char *p2;
-	size_t uri_len = fac_memclen(http_req->uri, '\0', sizeof(http_req->uri));
+	const C8 *p1 = http_req->uri;
+	const C8 *p2;
+	U64 uri_len = fac_memclen(http_req->uri, '\0', sizeof(http_req->uri));
 
 	http_req->path = p1;
 	p2 = memchr(http_req->uri, '?', uri_len);
@@ -183,13 +184,13 @@ static void _uri_parse(struct fws_http_req *http_req) {
 	}
 }
 
-static int _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, size_t domain_n) {
+static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const C8 *domain, U64 domain_n) {
 	enum key_idx {HOST, UA, AL};
-	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
+	const C8 keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
 
-	const char *p1 = req_buf;
-	const char *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
-	size_t n;
+	const C8 *p1 = req_buf;
+	const C8 *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
+	U64 n;
 
 	if (p2 == NULL || *(p2+1) != '\n') {
 		// err log
@@ -207,7 +208,7 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 			return 1; // 400 bad
 		}
 
-		for (size_t i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
+		for (U64 i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
 			if (memcmp(p1, keyword[i], fac_memclen(keyword[i], '\0', sizeof(keyword[i]))) == 0) {
 				p1 = p2 + 1;
 				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
@@ -231,7 +232,7 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							memcpy(http_req->subdomain, "www", sizeof("www"));
 						} else {
 							p2 = p1;
-							for (size_t i=0; i<sizeof(http_req->subdomain); i++) {
+							for (U64 i=0; i<sizeof(http_req->subdomain); i++) {
 								if (p2[i] == '.') {
 									p2 += i;
 									break;
@@ -248,14 +249,14 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							return 1; // 400
 						}
 
-						const char os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
-						const char browser_type[][REQ_UA_MAX] = {"firefox", "edg", "chrome", "safari"};
+						const C8 os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
+						const C8 browser_type[][REQ_UA_MAX] = {"firefox", "edg", "chrome", "safari"};
 
-						const char *p3;
-						const char *p4;
+						const C8 *p3;
+						const C8 *p4;
 						// { os
-						int flag = 0;
-						for (size_t i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
+						I32 flag = 0;
+						for (U64 i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, os_type[i][0], p2-p3+1);
@@ -281,7 +282,7 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 
 						// { browser
 						flag = 0;
-						for (size_t i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
+						for (U64 i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
@@ -341,7 +342,7 @@ static int _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	return 0;
 }
 
-/*static int _err_check(const struct fws_http_req *http_req) {
+/*static I32 _err_check(const struct fws_http_req *http_req) {
 	if (memcmp(http_req->method, "GET", fac_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed

@@ -3,6 +3,10 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
+#include "types.h"
+#include "net.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,10 +16,6 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <nftables/libnftables.h>
-
-#include "factype.h"
-#include "types.h"
-#include "net.h"
 
 #define STR_LEN(str) (sizeof(str) - 1)
 #define ROUTE_PATH "/proc/net/route"
@@ -59,14 +59,14 @@
 
 #define NFT_FINI "delete table netdev facows; delete table inet facows;"
 
-static int _name_get(char *buf, U64 buf_n);
+static I32 _name_get(C8 *buf, U64 buf_n);
 
-int net_nft_init(const struct fws_conf *conf) {
-	int ret = 0;
+I32 net_nft_init(const struct fws_conf *conf) {
+	I32 ret = 0;
 	struct nft_ctx *nft_ctx = NULL;
-	char *nft_buf = NULL;
+	C8 *nft_buf = NULL;
 
-	char name_buf[16] = {0};
+	C8 name_buf[16] = {0};
 	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
 		ret = -1;
 		goto out;
@@ -93,8 +93,8 @@ out:
 	return ret;
 }
 
-int net_nft_fini(void) {
-	int ret = 0;
+I32 net_nft_fini(void) {
+	I32 ret = 0;
 	struct nft_ctx *nft_ctx = NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == NULL) {
@@ -111,9 +111,9 @@ out:
 	return ret;
 }
 
-void net_nft_dos_ban(struct nft_ctx *nft_ctx, const char *ip_buf, U32 ban_time) {
-	const char *ip_p = ip_buf;
-	char *nft_buf = NULL;
+void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
+	const C8 *ip_p = ip_buf;
+	C8 *nft_buf = NULL;
 	U64 cmd_n = 0;
 
 	if (memcmp(ip_buf, IPV4_MAP, IPV4_MAP_N) == 0) {
@@ -141,12 +141,12 @@ out:
 	nft_buf = NULL;
 }
 
-void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, int write_fd, U64 nft_list_n) {
-	char ip_buf[INET6_ADDRSTRLEN] = {0};
+void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 write_fd, U64 nft_list_n) {
+	C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
 	time_t cur_sec = time(NULL);
-	int nft_i = -1;
+	I32 nft_i = -1;
 	for (U64 i=0; i<nft_list_n; i++) {
 		if (memcmp(nft_list[i].ip, client_ip, 16) == 0) {
 			nft_i = i;
@@ -182,10 +182,10 @@ void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, int writ
 	}
 }
 
-static int _name_get(char *buf, U64 buf_n) {
-	int ret = 0;
+static I32 _name_get(C8 *buf, U64 buf_n) {
+	I32 ret = 0;
 	FILE *fp = NULL;
-	char *glp = NULL;
+	C8 *glp = NULL;
 	U64 gln = 0;
 
 	fp = fopen(ROUTE_PATH, "r");
@@ -195,8 +195,8 @@ static int _name_get(char *buf, U64 buf_n) {
 		goto out;
 	}
 
-	char dst_buf[16];
-	char net_buf[16];
+	C8 dst_buf[16];
+	C8 net_buf[16];
 	while (getline(&glp, &gln, fp) != -1) {
 		if (sscanf(glp, "%15s %15s", net_buf, dst_buf) == 2) {
 			if (memcmp(dst_buf, ROUTE_DST, STR_LEN(ROUTE_DST)) == 0) {
