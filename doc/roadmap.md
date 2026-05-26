@@ -9,13 +9,17 @@
 - redirect html count 1 per 1s
 - html not found request count 3 per 1s, if found html count 3 per 1s
 
+## Refactoring
+- Change from U64, I64 to I32
+- const update
+
+
 ## ETC
 - add log
 - reduce header
 - file conf change switch to lookup table
 - header for hsts
 - add doc for ssl certification
-- Change from U64, I64 to I32
 
 ---
 

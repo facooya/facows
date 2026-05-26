@@ -176,11 +176,11 @@ static I32 _raw_path_build(C8 *raw_path, const C8 *uri_path, const C8 *web_root,
 			*p2 = '\0';
 			break;
 		} else if (*p1 == '%') {
-			if (isxdigit(*(p1+1)) != 0 && isxdigit(*(p1+2)) != 0) {
+			if (isxdigit((U8)*(p1+1)) != 0 && isxdigit((U8)*(p1+2)) != 0) {
 				U8 c1 = *(p1 + 1);
 				U8 c2 = *(p1 + 2);
 
-				if (isdigit(*(p1+1)) != 0) {
+				if (isdigit((U8)*(p1+1)) != 0) {
 					c1 -= 0x30;
 					c1 <<= 4;
 				} else {
@@ -191,7 +191,7 @@ static I32 _raw_path_build(C8 *raw_path, const C8 *uri_path, const C8 *web_root,
 					c1 <<= 4;
 				}
 
-				if (isdigit(*(p1+2)) != 0) {
+				if (isdigit((U8)*(p1+2)) != 0) {
 					c2 -= 0x30;
 					c1 |= c2;
 				} else {

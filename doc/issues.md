@@ -1,7 +1,6 @@
 # Issues
 
 ## Secure
-- `isdigit(c)` -> `isdigit((U8)c)`
 
 ---
 
