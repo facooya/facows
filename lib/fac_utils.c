@@ -6,7 +6,6 @@
 #include "factype.h"
 #include "fac_utils.h"
 
-#include <stdio.h>
 #include <string.h>
 
 U64 fac_memclen(const C8 *s, const C8 c, const U64 n) {

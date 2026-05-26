@@ -19,6 +19,10 @@ static I32 _uri_path_build(struct fws_file *file);
 static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir);
 
 I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const C8 *web_root, U64 web_root_n) {
+	C8 *path_rp = NULL;
+
+	I32 ret = 0;
+
 	_file_init(file);
 
 	memcpy(file->uri_path, http_req->path, http_req->path_n);
@@ -27,7 +31,8 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 
 	U64 web_root_len = fac_memclen(web_root, '\0', web_root_n);
 	if (web_root_len == web_root_n) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	C8 raw_path[4096];
@@ -35,25 +40,43 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 
 	I32 code = _uri_path_build(file);
 	if (code == 301) {
-		return code;
+		ret = code;
+		goto out;
 	} else if (code < 0) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	code = _path_build(file, raw_path, code);
 	if (code != 0) {
-		return code;
+		ret = code;
+		goto out;
 	}
 
-	if (realpath(raw_path, file->path) == FAC_NULL) {
-		return 404;
+	path_rp = realpath(raw_path, FAC_NULL);
+	if (path_rp == FAC_NULL) {
+		ret = 404;
+		goto out;
 	}
+	U64 path_rp_n = fac_memclen(path_rp, FAC_NUL, sizeof(file->path));
+	if (path_rp_n >= sizeof(file->path)) {
+		ret = -1;
+		goto out;
+	}
+	memcpy(file->path, path_rp, path_rp_n+1);
+	free(path_rp);
+	path_rp = NULL;
 
 	if (memcmp(file->path, web_root, web_root_len) != 0) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
-	return 0;
+	ret = 0;
+out:
+	free(path_rp);
+	path_rp = NULL;
+	return ret;
 }
 
 static void _file_init(struct fws_file *file) {

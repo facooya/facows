@@ -15,6 +15,7 @@
 - file conf change switch to lookup table
 - header for hsts
 - add doc for ssl certification
+- Change from U64, I64 to I32
 
 ---
 
