@@ -28,7 +28,10 @@ struct fws_conf {
 
 struct fws_nft {
 	U8 ip[16];
-	I32 count;
+	U8 html_cnt;
+	U8 no_html_cnt;
+	U8 url_redir_cnt;
+	U8 uri_redir_cnt;
 	I64 time;
 };
 

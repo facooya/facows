@@ -3,6 +3,7 @@
  * Copyright 2026 Facooya and Fanone Facooya
  */
 
+#include "factype.h"
 #include "fac_utils.h"
 #include "types.h"
 #include "net.h"
@@ -17,7 +18,6 @@
 I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	C8 recv_buf[8192] = {0};
 
-	// { recv
 	I32 recv_size;
 	I32 recv_total_size = 0;
 	while (1) {
@@ -36,16 +36,12 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 		} else if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != FAC_NULL) {
 			break;
 		}
-
 	}
-	// }
 
-	// {{ http req
 	struct fws_http_req http_req;
 	http_req.subdomain[0] = '\0';
 	http_req.uri[0] = '\0';
 
-	// { parse uri
 	const C8 *p1 = recv_buf;
 	const C8 *p2 = memchr(p1, ' ', sizeof(http_req.method));
 	U64 n;
@@ -67,9 +63,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	}
 	memcpy(http_req.uri, p1, n);
 	http_req.uri[n] = '\0';
-	// }
 
-	// { parse host
 	p1 = recv_buf;
 	p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
 	if (p2 == FAC_NULL) {
@@ -121,8 +115,6 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 		p1 = p2 + 2;
 
 	}
-	// }
-	// }}
 
 	C8 host_buf[512];
 	net_host_build(host_buf, &http_req, config);

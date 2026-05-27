@@ -21,7 +21,7 @@
 #define IPV4_MAP "::ffff:"
 #define IPV4_MAP_N sizeof(IPV4_MAP) - 1
 
-#define DOS_LIMIT 3
+#define DOS_LIMIT 3U
 #define NFT_BAN4 "add element netdev facows facows_ban4 {%s timeout %dm}"
 #define NFT_BAN6 "add element netdev facows facows_ban6 {%s timeout %dm}"
 
@@ -139,14 +139,14 @@ out:
 	nft_buf = FAC_NULL;
 }
 
-void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 write_fd, U64 nft_list_n) {
+void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_table, I32 write_fd, U64 nft_list_n) {
 	C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
 	time_t cur_sec = time(FAC_NULL);
 	I32 nft_i = -1;
 	for (U64 i=0; i<nft_list_n; i++) {
-		if (memcmp(nft_list[i].ip, client_ip, 16) == 0) {
+		if (memcmp(nft_table[i].ip, client_ip, 16) == 0) {
 			nft_i = i;
 			break;
 		}
@@ -154,7 +154,7 @@ void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 writ
 
 	if (nft_i < 0) {
 		for (U64 i=0; i<nft_list_n; i++) {
-			if (nft_list[i].time != cur_sec) {
+			if (nft_table[i].time != cur_sec) {
 				nft_i = i;
 				break;
 			}
@@ -164,19 +164,19 @@ void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_list, I32 writ
 			nft_i = nft_list_n;
 		}
 
-		memcpy(nft_list[nft_i].ip, client_ip, 16);
+		memcpy(nft_table[nft_i].ip, client_ip, 16);
 	}
 
-	if (nft_list[nft_i].time == cur_sec) {
-		nft_list[nft_i].count++;
+	if (nft_table[nft_i].time == cur_sec) {
+		nft_table[nft_i].html_cnt++;
 
-		if (nft_list[nft_i].count > DOS_LIMIT) {
+		if (nft_table[nft_i].html_cnt > DOS_LIMIT) {
 			write(write_fd, ip_buf, INET6_ADDRSTRLEN);
 		}
 
 	} else {
-		nft_list[nft_i].count = 1;
-		nft_list[nft_i].time = cur_sec;
+		nft_table[nft_i].html_cnt = 1U;
+		nft_table[nft_i].time = cur_sec;
 	}
 }
 

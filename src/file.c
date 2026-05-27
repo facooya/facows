@@ -87,9 +87,8 @@ static void _file_init(struct fws_file *file) {
 }
 
 static I32 _uri_path_build(struct fws_file *file) {
-	C8 *p1;
+	C8 *p1 = FAC_NULL;
 
-	// dir
 	if (*(file->uri_path+(file->uri_path_n-1)) == '/') {
 		return 1;
 	}
@@ -99,7 +98,6 @@ static I32 _uri_path_build(struct fws_file *file) {
 		return -1;
 	}
 
-	// index
 	p1++;
 	if (memcmp(p1, "index", sizeof("index")) == 0) {
 		file->uri_path_n -= (sizeof("index") - 1);
@@ -112,7 +110,6 @@ static I32 _uri_path_build(struct fws_file *file) {
 		return 301;
 	}
 
-	// extension
 	I32 size = file->uri_path_n - (sizeof(".html") - 1);
 	if (size <= 0) {
 		return 0;

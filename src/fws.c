@@ -32,12 +32,21 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
-pthread_mutex_t nft_lock = {0};
+I64 global_time = 0;
+I64 swap_time = 0;
 _Atomic I32 fws_thread_n = 0;
 
-struct fws_nft nft_list[1024] = {0};
+pthread_mutex_t nft_lock = {0};
+
+struct fws_nft nft_table_a[1024] = {0};
+struct fws_nft nft_table_b[1024] = {0};
+
+struct fws_nft * volatile nft_table = nft_table_a;
+struct fws_nft * volatile nft_table_swap = nft_table_b;
 
 static void *_fws_thread_run(void *thread_args);
+static void *_fws_swap_thread_run();
+static void _fws_nft_table_swap();
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
 	SSL_CTX *ssl_ctx = FAC_NULL;
@@ -205,6 +214,10 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 		parent_ctx->pipe_write_fd = -1;
 	}
 
+	pthread_t fws_swap_thread;
+	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thread_run, FAC_NULL);
+	pthread_detach(fws_swap_thread);
+
 	struct nft_ctx *nft_ctx = FAC_NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == FAC_NULL) {
@@ -319,7 +332,7 @@ static void *_fws_thread_run(void *thread_args) {
 			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				pthread_mutex_lock(nft_lock);
-				net_nft_dos_ip_send(thread_ctx->client_ip, nft_list, write_fd, sizeof(nft_list)/sizeof(nft_list[0]));
+				net_nft_dos_ip_send(thread_ctx->client_ip, nft_table_a, write_fd, sizeof(nft_table_a)/sizeof(nft_table_a[0]));
 				pthread_mutex_unlock(nft_lock);
 			}
 		}
@@ -357,4 +370,30 @@ out:
 	free(thread_args);
 	thread_args = FAC_NULL;
 	return FAC_NULL;
+}
+
+static void *_fws_swap_thread_run() {
+	global_time = time(FAC_NULL);
+	swap_time = global_time;
+
+	while (FAC_TRUE) {
+		poll(FAC_NULL, 0, 1000);
+		global_time = time(FAC_NULL);
+		_fws_nft_table_swap();
+	}
+	return FAC_NULL;
+}
+
+static void _fws_nft_table_swap() {
+	if (global_time - swap_time < 3) {
+		return;
+	}
+
+	struct fws_nft *nft_table_tmp = nft_table;
+	nft_table = nft_table_swap;
+	nft_table_swap = nft_table_tmp;
+	memset(nft_table_swap, 0, sizeof(nft_table_a));
+
+	global_time = time(FAC_NULL);
+	swap_time = global_time;
 }
