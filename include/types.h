@@ -51,9 +51,9 @@ struct fws_http_req {
 	C8 browser[16];
 	C8 subdomain[64];
 	C8 uri[4096];
-	const C8 *path;
+	C8 *path;
 	I64 path_n;
-	const C8 *query;
+	C8 *query;
 	I64 query_n;
 };
 
@@ -69,34 +69,36 @@ struct fws_thread_ctx {
 	I32 write_fd;
 	_Atomic I32 *fws_thread_n;
 
-	const U8 *ssl_ctx_opq;
 	U8 client_ip[16];
-	const struct fws_conf *fws_conf;
-	const U8 *nft_lock_opq;
+	U8 *ssl_ctx_opq;
+	U8 *nft_lock_opq;
+	struct fws_conf *fws_conf;
+	struct fws_nft **nft_table;
 };
 
 struct fws_swap_ctx {
-	struct fws_nft *nft_table;
-	struct fws_nft *nft_table_swap;
 	I64 global_time;
 	I64 swap_time;
+	U8 *nft_lock_opq;
+	struct fws_nft *nft_table;
+	struct fws_nft *nft_table_swap;
 };
 
 struct fws_parent_ctx {
 	I32 pipe_read_fd;
 	I32 pipe_write_fd;
 	I64 pid;
-	volatile _Atomic I32 *fws_flag;
+	I32 *sig_flag_opq;
 
-	const struct fws_conf *conf;
+	struct fws_conf *conf;
 };
 
 struct fws_child_ctx {
 	I32 pipe_read_fd;
 	I32 pipe_write_fd;
-	volatile _Atomic I32 *fws_flag;
+	I32 *sig_flag_opq;
 
-	const struct fws_conf *conf;
+	struct fws_conf *conf;
 };
 
 #endif

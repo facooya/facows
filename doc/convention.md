@@ -18,7 +18,7 @@
 - Memory free or file descriptor close using `goto out;` in function bottom. After memory freed `mem = NULL;`, and after file diescriptor closed `fd = -1`.
 - Should signed and 32 bit in like `if()`, `for()`, `while()` functions. 32 bit zero-extension. If using unsined `if (((U32) 1) < ((I32) -1))` is true, I32 foced typecasting to U32.
 - Should `I32 func_ret = func(); if (func_ret < 0)`, should not `if (func() < 0)`.
-- Should `const` keyword every readonly. Like `const C8 * const ptr;`, `I32 func(const I32 param)`.
+- Should `const` keyword for readonly pointer. Like `const C8 * const ptr;`. Should not `const` keyword in struct definition. Should not `const` keyword to not pointer type, using `#define`.
 
 ---
 

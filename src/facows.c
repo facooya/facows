@@ -18,7 +18,7 @@
 
 #define CONF_PATH "/etc/facows/facows.conf"
 
-volatile _Atomic I32 fws_flag = -1;
+_Atomic I32 sig_flag = -1;
 
 static void _fws_exit(I32 sig);
 
@@ -70,7 +70,7 @@ I32 main() {
 		}
 		child_ctx->pipe_read_fd = pipe_read_fd;
 		child_ctx->pipe_write_fd = pipe_write_fd;
-		child_ctx->fws_flag = &fws_flag;
+		child_ctx->sig_flag_opq = (I32 *) &sig_flag;
 		child_ctx->conf = &conf;
 
 		fws_child_run(child_ctx);
@@ -85,7 +85,7 @@ I32 main() {
 		}
 		parent_ctx->pipe_read_fd = pipe_read_fd;
 		parent_ctx->pipe_write_fd = pipe_write_fd;
-		parent_ctx->fws_flag = &fws_flag;
+		parent_ctx->sig_flag_opq = (I32 *) &sig_flag;
 		parent_ctx->pid = pid;
 		parent_ctx->conf = &conf;
 
@@ -115,5 +115,5 @@ out:
 }
 
 static void _fws_exit(I32 sig) {
-	fws_flag = sig;
+	sig_flag = sig;
 }

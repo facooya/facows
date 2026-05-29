@@ -168,8 +168,8 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 }
 
 static void _uri_parse(struct fws_http_req *http_req) {
-	const C8 *p1 = http_req->uri;
-	const C8 *p2;
+	C8 *p1 = http_req->uri;
+	C8 *p2;
 	U64 uri_len = fac_memclen(http_req->uri, '\0', sizeof(http_req->uri));
 
 	http_req->path = p1;
