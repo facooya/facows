@@ -32,12 +32,6 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
-I64 global_time = 0;
-I64 swap_time = 0;
-_Atomic I32 fws_thread_n = 0;
-
-pthread_mutex_t nft_lock = {0};
-
 struct fws_nft nft_table_a[1024] = {0};
 struct fws_nft nft_table_b[1024] = {0};
 
@@ -46,7 +40,7 @@ struct fws_nft *nft_table_swap = nft_table_b;
 
 static void *_fws_thread_run(void *thread_args);
 static void *_fws_swap_thread_run(void *swap_ctx_opq);
-static void _fws_nft_table_swap(struct fws_swap_ctx *swap_ctx);
+static void _fws_swap_run(struct fws_swap_ctx *swap_ctx);
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
 	SSL_CTX *ssl_ctx = FAC_NULL;
@@ -56,9 +50,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	I32 client_http_fd = -1;
 	I32 client_fd = -1;
 
-	struct timespec thread_ts = {0};
 	I32 ret = 0;
 	I32 nft_lock_flag = -1;
+	_Atomic I32 fws_thread_n = 0;
+	struct timespec thread_ts = {0};
+	pthread_mutex_t nft_lock = {0};
 
 	net_443_init((U8**)&ssl_ctx, child_ctx->conf);
 
@@ -118,8 +114,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	nft_lock_flag = 1;
 
 	struct fws_swap_ctx *swap_ctx = malloc(sizeof(struct fws_swap_ctx));
-	swap_ctx->nft_table = &nft_table;
-	swap_ctx->nft_table_swap = &nft_table_swap;
+	swap_ctx->nft_table = nft_table;
+	swap_ctx->nft_table_swap = nft_table_swap;
 	pthread_t fws_swap_thread;
 	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thread_run, swap_ctx);
 	pthread_detach(fws_swap_thread);
@@ -248,7 +244,6 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 			if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
 				break;
 			} else {
-				printf("BAN: %s\n", ip_buf);
 				net_nft_dos_ban(nft_ctx, ip_buf, parent_ctx->conf->ban_time);
 			}
 		}
@@ -333,7 +328,7 @@ static void *_fws_thread_run(void *thread_args) {
 
 		if (conf->nft == 1) {
 			I32 html_cnt = 0;
-			U64 path_size = fac_memclen(file.path, '\0', sizeof(file.path));
+			U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
 			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				html_cnt++;
@@ -364,7 +359,6 @@ static void *_fws_thread_run(void *thread_args) {
 				nft_i = i;
 			}
 			nft_table[nft_i].html_cnt += html_cnt;
-			printf("HTML_CNT: %d, %d, NFT_I: %d, addr: %p\n", nft_table[nft_i].html_cnt, html_cnt, nft_i, nft_table);
 			if (nft_table[nft_i].html_cnt > 3U) {
 				ip_send = FAC_TRUE;
 			}
@@ -412,30 +406,33 @@ out:
 
 static void *_fws_swap_thread_run(void *swap_ctx_opq) {
 	struct fws_swap_ctx *swap_ctx = (struct fws_swap_ctx *) swap_ctx_opq;
-	global_time = time(FAC_NULL);
-	swap_time = global_time;
+
+	I64 global_time = time(FAC_NULL);
+	I64 swap_time = global_time;
+
+	swap_ctx->global_time = global_time;
+	swap_ctx->swap_time = swap_time;
 
 	while (FAC_TRUE) {
 		poll(FAC_NULL, 0, 1000);
-		global_time = time(FAC_NULL);
-		_fws_nft_table_swap(swap_ctx);
+		swap_ctx->global_time = time(FAC_NULL);
+		_fws_swap_run(swap_ctx);
 	}
 	free(swap_ctx_opq);
 	swap_ctx_opq = FAC_NULL;
 	return FAC_NULL;
 }
 
-static void _fws_nft_table_swap(struct fws_swap_ctx *swap_ctx) {
-	if (global_time - swap_time < 2) {
+static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
+	if (swap_ctx->global_time - swap_ctx->swap_time < 2) {
 		return;
 	}
 
-	struct fws_nft *nft_table_tmp = *swap_ctx->nft_table;
-	*swap_ctx->nft_table = *swap_ctx->nft_table_swap;
-	*swap_ctx->nft_table_swap = nft_table_tmp;
-	memset(*swap_ctx->nft_table_swap, 0, sizeof(nft_table_a));
-	printf("poll: %p, %p\n", *swap_ctx->nft_table, *swap_ctx->nft_table_swap);
+	struct fws_nft *nft_table_tmp = swap_ctx->nft_table;
+	swap_ctx->nft_table = swap_ctx->nft_table_swap;
+	swap_ctx->nft_table_swap = nft_table_tmp;
+	memset(swap_ctx->nft_table_swap, 0, sizeof(nft_table_a));
 
-	global_time = time(FAC_NULL);
-	swap_time = global_time;
+	swap_ctx->global_time = time(FAC_NULL);
+	swap_ctx->swap_time = swap_ctx->global_time;
 }

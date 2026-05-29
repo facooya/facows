@@ -76,8 +76,10 @@ struct fws_thread_ctx {
 };
 
 struct fws_swap_ctx {
-	struct fws_nft **nft_table;
-	struct fws_nft **nft_table_swap;
+	struct fws_nft *nft_table;
+	struct fws_nft *nft_table_swap;
+	I64 global_time;
+	I64 swap_time;
 };
 
 struct fws_parent_ctx {
