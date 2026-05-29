@@ -139,7 +139,7 @@ out:
 	nft_buf = FAC_NULL;
 }
 
-void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_table, I32 write_fd, U64 nft_list_n) {
+/*void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_table, I32 write_fd, U64 nft_list_n) {
 	C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
@@ -178,7 +178,32 @@ void net_nft_dos_ip_send(const U8 *client_ip, struct fws_nft *nft_table, I32 wri
 		nft_table[nft_i].html_cnt = 1U;
 		nft_table[nft_i].time = cur_sec;
 	}
-}
+}*/
+
+/*void net_nft_ip_send(const U8 *client_ip, struct fws_nft *nft_table, I32 write_fd, U64 nft_table_n) {
+	I32 nft_i = -1;
+	U8 empty_ip[16] = {0};
+
+	for (I32 i=0; i<nft_table_n; i++) {
+		if (memcmp(nft_table[i].ip, client_ip, 16) == 0) {
+			nft_i = i;
+			break;
+		}
+		if (memcmp(nft_table[i].ip, empty_ip, 16) == 0) {
+			nft_i = i;
+			break;
+		}
+		nft_i = i;
+	}
+
+	nft_table[nft_i].html_cnt++;
+
+	if (nft_table[nft_i].html_cnt > DOS_LIMIT) {
+		C8 ip_buf[INET6_ADDRSTRLEN] = {0};
+		inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
+		write(write_fd, ip_buf, INET6_ADDRSTRLEN);
+	}
+}*/
 
 static I32 _name_get(C8 *buf, U64 buf_n) {
 	I32 ret = 0;

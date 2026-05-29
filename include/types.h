@@ -75,6 +75,11 @@ struct fws_thread_ctx {
 	const U8 *nft_lock_opq;
 };
 
+struct fws_swap_ctx {
+	struct fws_nft **nft_table;
+	struct fws_nft **nft_table_swap;
+};
+
 struct fws_parent_ctx {
 	I32 pipe_read_fd;
 	I32 pipe_write_fd;
