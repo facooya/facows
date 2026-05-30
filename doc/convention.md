@@ -3,6 +3,20 @@
 **Variable**
 - `entity_attribute`
 
+**Array and pointer**
+- array `_arr`
+- pointer `_p`
+- double pointer `_pp`
+```c
+I32 name_arr[10] = {0};
+name_arr[0] = 1;
+I32 *name_arr_p = name_arr;
+/* Shoud not e.g., name_arr_p[0] = 1; */
+I32 **name_arr_pp = &name_arr_p;
+I32 *restore_arr = *name_arr_pp;
+restore_arr[0] = 1;
+```
+
 **Function**
 - `prefix_noun_verb`
 
@@ -12,6 +26,7 @@
 
 ## Rules
 - No header pollution.
+- No `*str*()`.
 - Explicit type.
 - - `int a = 10;` -> `I32 a = 10;`
 - - `unsinged int a = 10;` -> `U32 a = 10;`

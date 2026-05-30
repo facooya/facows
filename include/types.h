@@ -32,7 +32,6 @@ struct fws_nft {
 	U8 no_html_cnt;
 	U8 url_redir_cnt;
 	U8 uri_redir_cnt;
-	I64 time;
 };
 
 struct fws_http_res {
@@ -73,15 +72,15 @@ struct fws_thread_ctx {
 	U8 *ssl_ctx_opq;
 	U8 *nft_lock_opq;
 	struct fws_conf *fws_conf;
-	struct fws_nft **nft_table;
+	struct fws_nft **nft_arr_pp;
 };
 
 struct fws_swap_ctx {
 	I64 global_time;
 	I64 swap_time;
 	U8 *nft_lock_opq;
-	struct fws_nft *nft_table;
-	struct fws_nft *nft_table_swap;
+	struct fws_nft *nft_arr_p;
+	struct fws_nft *nft_swap_arr_p;
 };
 
 struct fws_parent_ctx {

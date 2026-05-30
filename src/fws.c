@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
+#define NFT_ARR_CAP 1024U
 #define USER_WWW_DATA "www-data"
 #define USER_APACHE "apache"
 #define USER_HTTP "http"
@@ -48,10 +49,10 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	I32 nft_lock_flag = -1;
 	_Atomic I32 fws_thread_n = 0;
 	struct timespec thread_ts = {0};
-	struct fws_nft nft_table_a[1024] = {0};
-	struct fws_nft nft_table_b[1024] = {0};
-	struct fws_nft *nft_table = nft_table_a;
-	struct fws_nft *nft_table_swap = nft_table_b;
+	struct fws_nft nft_a_arr[NFT_ARR_CAP] = {0};
+	struct fws_nft nft_b_arr[NFT_ARR_CAP] = {0};
+	struct fws_nft *nft_arr_p = nft_a_arr;
+	struct fws_nft *nft_swap_arr_p = nft_b_arr;
 	_Atomic I32 *sig_flag = (_Atomic I32 *) child_ctx->sig_flag_opq;
 
 	pthread_mutex_t nft_lock = {0};
@@ -114,8 +115,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	nft_lock_flag = 1;
 
 	struct fws_swap_ctx *swap_ctx = malloc(sizeof(struct fws_swap_ctx));
-	swap_ctx->nft_table = nft_table;
-	swap_ctx->nft_table_swap = nft_table_swap;
+	swap_ctx->nft_arr_p = nft_arr_p;
+	swap_ctx->nft_swap_arr_p = nft_swap_arr_p;
 	swap_ctx->nft_lock_opq = (U8 *) &nft_lock;
 	pthread_t fws_swap_thread;
 	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thread_run, swap_ctx);
@@ -158,7 +159,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			thread_ctx->ssl_ctx_opq = (U8 *) ssl_ctx;
 			thread_ctx->fws_conf = child_ctx->conf;
 			thread_ctx->fws_thread_n = &fws_thread_n;
-			thread_ctx->nft_table = &nft_table;
+			thread_ctx->nft_arr_pp = &nft_arr_p;
 			thread_ctx->nft_lock_opq = (U8 *) &nft_lock;
 
 			fws_thread_n++;
@@ -345,25 +346,25 @@ static void *_fws_thread_run(void *thread_args) {
 			inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
 			pthread_mutex_lock(nft_lock);
-			struct fws_nft * const nft_table = *thread_ctx->nft_table;
+			struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
 			I32 nft_i = 0;
-			for (I32 i=0; i<1024; i++) {
-				ip_cmp = memcmp(nft_table[i].ip, client_ip, 16);
+			for (U32 i=0; i<NFT_ARR_CAP; i++) {
+				ip_cmp = memcmp(nft_arr[i].ip, client_ip, 16);
 				if (ip_cmp == 0) {
 					nft_i = i;
 					break;
 				}
 
-				ip_cmp = memcmp(nft_table[i].ip, empty_ip, 16);
+				ip_cmp = memcmp(nft_arr[i].ip, empty_ip, 16);
 				if (ip_cmp == 0) {
 					nft_i = i;
-					memcpy(nft_table[nft_i].ip, client_ip, 16);
+					memcpy(nft_arr[nft_i].ip, client_ip, 16);
 					break;
 				}
 				nft_i = i;
 			}
-			nft_table[nft_i].html_cnt += html_cnt;
-			if (nft_table[nft_i].html_cnt > 3U) {
+			nft_arr[nft_i].html_cnt += html_cnt;
+			if (nft_arr[nft_i].html_cnt > 3U) {
 				ip_send = FAC_TRUE;
 			}
 			pthread_mutex_unlock(nft_lock);
@@ -434,10 +435,10 @@ static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
 
 	pthread_mutex_t *nft_lock = (pthread_mutex_t *) swap_ctx->nft_lock_opq;
 	pthread_mutex_lock(nft_lock);
-	struct fws_nft *nft_table_tmp = swap_ctx->nft_table;
-	swap_ctx->nft_table = swap_ctx->nft_table_swap;
-	swap_ctx->nft_table_swap = nft_table_tmp;
-	memset(swap_ctx->nft_table_swap, 0, sizeof(struct fws_nft)*1024);
+	struct fws_nft *nft_table_tmp = swap_ctx->nft_arr_p;
+	swap_ctx->nft_arr_p = swap_ctx->nft_swap_arr_p;
+	swap_ctx->nft_swap_arr_p = nft_table_tmp;
+	memset(swap_ctx->nft_swap_arr_p, 0, sizeof(struct fws_nft)*NFT_ARR_CAP);
 	pthread_mutex_unlock(nft_lock);
 
 	swap_ctx->global_time = time(FAC_NULL);
