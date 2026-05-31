@@ -79,6 +79,7 @@ struct fws_swap_ctx {
 	I64 global_time;
 	I64 swap_time;
 	U8 *nft_lock_opq;
+	I32 *sig_flag_opq_p;
 	struct fws_nft *nft_arr_p;
 	struct fws_nft *nft_swap_arr_p;
 };

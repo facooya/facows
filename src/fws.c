@@ -33,8 +33,8 @@
 #define USER_HTTP "http"
 #define USER_NOBODY "nobody"
 
-static void *_fws_thread_run(void *thread_args);
-static void *_fws_swap_thread_run(void *swap_ctx_opq);
+static void *_fws_thrd_run(void *thread_args);
+static void *_fws_swap_thrd_run(void *swap_ctx_opq);
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx);
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
@@ -118,8 +118,9 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	swap_ctx->nft_arr_p = nft_arr_p;
 	swap_ctx->nft_swap_arr_p = nft_swap_arr_p;
 	swap_ctx->nft_lock_opq = (U8 *) &nft_lock;
+	swap_ctx->sig_flag_opq_p = (I32 *) sig_flag;
 	pthread_t fws_swap_thread;
-	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thread_run, swap_ctx);
+	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thrd_run, swap_ctx);
 	pthread_detach(fws_swap_thread);
 
 	printf("Facows start\n");
@@ -164,7 +165,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 			fws_thread_n++;
 			pthread_t fws_thread;
-			pthread_create(&fws_thread, FAC_NULL, _fws_thread_run, (void*)thread_ctx);
+			pthread_create(&fws_thread, FAC_NULL, _fws_thrd_run, (void*)thread_ctx);
 			pthread_detach(fws_thread);
 		}
 	}
@@ -278,7 +279,7 @@ out:
 	return ret;
 }
 
-static void *_fws_thread_run(void *thread_args) {
+static void *_fws_thrd_run(void *thread_args) {
 	struct fws_thread_ctx *thread_ctx = (struct fws_thread_ctx *) thread_args;
 	const struct fws_conf *conf = thread_ctx->fws_conf;
 	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock_opq;
@@ -409,9 +410,10 @@ out:
 	return FAC_NULL;
 }
 
-static void *_fws_swap_thread_run(void *swap_ctx_opq) {
+static void *_fws_swap_thrd_run(void *swap_ctx_opq) {
 	struct fws_swap_ctx *swap_ctx = (struct fws_swap_ctx *) swap_ctx_opq;
 
+	_Atomic I32 *sig_flag_p = (_Atomic I32 *) swap_ctx->sig_flag_opq_p;
 	I64 global_time = time(FAC_NULL);
 	I64 swap_time = global_time;
 
@@ -419,7 +421,13 @@ static void *_fws_swap_thread_run(void *swap_ctx_opq) {
 	swap_ctx->swap_time = swap_time;
 
 	while (FAC_TRUE) {
-		poll(FAC_NULL, 0, 1000);
+		I32 ret = poll(FAC_NULL, 0, 1000);
+		if (ret < 0) {
+			break;
+		}
+		if (*sig_flag_p == SIGINT) {
+			break;
+		}
 		swap_ctx->global_time = time(FAC_NULL);
 		_fws_swap_run(swap_ctx);
 	}
@@ -438,8 +446,8 @@ static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
 	struct fws_nft *nft_table_tmp = swap_ctx->nft_arr_p;
 	swap_ctx->nft_arr_p = swap_ctx->nft_swap_arr_p;
 	swap_ctx->nft_swap_arr_p = nft_table_tmp;
-	memset(swap_ctx->nft_swap_arr_p, 0, sizeof(struct fws_nft)*NFT_ARR_CAP);
 	pthread_mutex_unlock(nft_lock);
+	memset(swap_ctx->nft_swap_arr_p, 0, sizeof(struct fws_nft)*NFT_ARR_CAP);
 
 	swap_ctx->global_time = time(FAC_NULL);
 	swap_ctx->swap_time = swap_ctx->global_time;

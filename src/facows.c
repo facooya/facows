@@ -30,9 +30,11 @@ I32 main() {
 	I32 pipe_write_fd = -1;
 
 	I32 ret = 0;
+	struct sigaction fws_sa = {0};
 
-	signal(SIGINT, _fws_exit);
-	signal(SIGTERM, _fws_exit);
+	fws_sa.sa_handler = _fws_exit;
+	sigaction(SIGINT, &fws_sa, FAC_NULL);
+	sigaction(SIGTERM, &fws_sa, FAC_NULL);
 
 	struct fws_conf conf = {0};
 	if (file_conf_read(&conf, CONF_PATH) < 0) {

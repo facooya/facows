@@ -126,44 +126,34 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	}
 	n = p2 - p1;
 	if (n >= sizeof(http_req->method)) {
-		// err_log
 		return 1;
 	}
 	memcpy(http_req->method, p1, n);
 	http_req->method[n] = '\0';
-	// }
 
-	// { uri
 	p1 += n + 1;
 	p2 = memchr(p1, ' ', sizeof(http_req->uri));
 	if (p2 == FAC_NULL) {
-		// err log
 		return 1;
 	}
 	n = p2 - p1;
 	if (n >= sizeof(http_req->uri)) {
-		// err log
 		return 1;
 	}
 	memcpy(http_req->uri, p1, n);
 	http_req->uri[n] = '\0';
-	// }
 
-	// { version
 	p1 += n + 1;
 	p2 = memchr(p1, '\r', sizeof(http_req->version));
 	if (p2 == FAC_NULL) {
-		// err log
 		return 1;
 	}
 	n = p2 - p1;
 	if (n >= sizeof(http_req->version)) {
-		// err log
 		return 1;
 	}
 	memcpy(http_req->version, p1, n);
 	http_req->version[n] = '\0';
-	// }
 	return 0;
 }
 
@@ -192,7 +182,6 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 	U64 n;
 
 	if (p2 == FAC_NULL || *(p2+1) != '\n') {
-		// err log
 		return 1;
 	}
 	p1 = p2 + 2;
@@ -204,7 +193,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 
 		p2 = memchr(p1, ':', REQ_KEY_MAX);
 		if (p2 == FAC_NULL) {
-			return 1; // 400 bad
+			return 1;
 		}
 
 		for (U64 i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
@@ -212,19 +201,19 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 				p1 = p2 + 1;
 				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 				if (p2 == FAC_NULL) {
-					return 1; // 400 bad
+					return 1;
 				}
 				while (*p1 == ' ') {
 					p1++;
 				}
 				n = p2 - p1;
 
-				// p1: value start
-				// n: value size
+				/* p2: value start */
+				/* n: value size */
 				switch (i) {
 					case HOST:
 						if (http_req->subdomain[0] != '\0') {
-							return 1; // 400
+							return 1;
 						}
 
 						if (memcmp(p1, domain, fac_memclen(domain, '\0', domain_n)) == 0) {
@@ -245,7 +234,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 
 					case UA:
 						if (http_req->os[0] != '\0' || http_req->browser[0] != '\0') {
-							return 1; // 400
+							return 1;
 						}
 
 						const C8 os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
@@ -253,7 +242,6 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 
 						const C8 *p3;
 						const C8 *p4;
-						// { os
 						I32 flag = 0;
 						for (U64 i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
 							p3 = p1;
@@ -277,9 +265,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 						if (!flag) {
 							memcpy(http_req->os, "-", sizeof("-"));
 						}
-						// }
 
-						// { browser
 						flag = 0;
 						for (U64 i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
 							p3 = p1;
@@ -303,12 +289,11 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 						if (!flag) {
 							memcpy(http_req->browser, "-", sizeof("-"));
 						}
-						// }
 						break;
 
 					case AL:
 						if (http_req->lang[0] != '\0') {
-							return 1; // 400
+							return 1;
 						}
 
 						p2 = p1;
@@ -333,7 +318,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 
 		p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 		if (p2 == FAC_NULL || *(p2+1) != '\n') {
-			return 1; // 400 bad
+			return 1;
 		}
 		p1 = p2 + 2;
 	}
