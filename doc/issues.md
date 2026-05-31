@@ -1,5 +1,4 @@
 # Issues
-- Thread data race
 
 ---
 
