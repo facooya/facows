@@ -72,7 +72,7 @@ I32 main() {
 		}
 		child_ctx->pipe_read_fd = pipe_read_fd;
 		child_ctx->pipe_write_fd = pipe_write_fd;
-		child_ctx->sig_flag_opq = (I32 *) &sig_flag;
+		child_ctx->sig_flag_opq_p = (I32 *) &sig_flag;
 		child_ctx->conf = &conf;
 
 		fws_child_run(child_ctx);
@@ -87,7 +87,7 @@ I32 main() {
 		}
 		parent_ctx->pipe_read_fd = pipe_read_fd;
 		parent_ctx->pipe_write_fd = pipe_write_fd;
-		parent_ctx->sig_flag_opq = (I32 *) &sig_flag;
+		parent_ctx->sig_flag_opq_p = (I32 *) &sig_flag;
 		parent_ctx->pid = pid;
 		parent_ctx->conf = &conf;
 

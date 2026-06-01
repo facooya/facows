@@ -66,11 +66,11 @@ struct fws_file {
 struct fws_thread_ctx {
 	I32 fd;
 	I32 write_fd;
-	_Atomic I32 *fws_thread_n;
+	I32 *thrd_n_opq_p;
 
 	U8 client_ip[16];
-	U8 *ssl_ctx_opq;
-	U8 *nft_lock_opq;
+	U8 *ssl_ctx_opq_p;
+	U8 *nft_lock_opq_p;
 	struct fws_conf *fws_conf;
 	struct fws_nft **nft_arr_pp;
 };
@@ -78,8 +78,8 @@ struct fws_thread_ctx {
 struct fws_swap_ctx {
 	I64 global_time;
 	I64 swap_time;
-	_Atomic I32 *thrd_n_p;
-	U8 *nft_lock_opq;
+	I32 *thrd_n_opq_p;
+	U8 *nft_lock_opq_p;
 	I32 *sig_flag_opq_p;
 	struct fws_nft **nft_arr_pp;
 	struct fws_nft *nft_swap_arr_p;
@@ -89,7 +89,7 @@ struct fws_parent_ctx {
 	I32 pipe_read_fd;
 	I32 pipe_write_fd;
 	I64 pid;
-	I32 *sig_flag_opq;
+	I32 *sig_flag_opq_p;
 
 	struct fws_conf *conf;
 };
@@ -97,7 +97,7 @@ struct fws_parent_ctx {
 struct fws_child_ctx {
 	I32 pipe_read_fd;
 	I32 pipe_write_fd;
-	I32 *sig_flag_opq;
+	I32 *sig_flag_opq_p;
 
 	struct fws_conf *conf;
 };
