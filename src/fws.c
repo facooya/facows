@@ -356,10 +356,12 @@ static void *_fws_thrd_run(void *thread_args) {
 		}
 
 		if (conf->nft == 1) {
+			U8 is_html = (U8) FAC_FALSE;
 			I32 html_cnt = 0;
 			U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
 			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+				is_html = (U8) FAC_TRUE;
 				html_cnt++;
 			}
 
@@ -374,22 +376,28 @@ static void *_fws_thrd_run(void *thread_args) {
 			struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
 			I32 nft_i = 0;
 			for (U32 i=0; i<NFT_ARR_CAP; i++) {
-				ip_cmp = memcmp(nft_arr[i].ip, client_ip, 16);
+				ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip, 16);
 				if (ip_cmp == 0) {
 					nft_i = i;
 					break;
 				}
 
-				ip_cmp = memcmp(nft_arr[i].ip, empty_ip, 16);
+				ip_cmp = memcmp(nft_arr[i].ip_buf, empty_ip, 16);
 				if (ip_cmp == 0) {
 					nft_i = i;
-					memcpy(nft_arr[nft_i].ip, client_ip, 16);
+					memcpy(nft_arr[nft_i].ip_buf, client_ip, 16);
 					break;
 				}
 				nft_i = i;
 			}
-			nft_arr[nft_i].html_cnt += html_cnt;
-			if (nft_arr[nft_i].html_cnt > 3U) {
+
+			if (is_html == (U8)FAC_TRUE) {
+				nft_arr[nft_i].html_cnt++;
+			} else {
+				nft_arr[nft_i].no_html_cnt++;
+			}
+
+			if (nft_arr[nft_i].html_cnt > 3U || nft_arr[nft_i].no_html_cnt > 30U) {
 				ip_send = FAC_TRUE;
 			}
 			pthread_mutex_unlock(nft_lock);

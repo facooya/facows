@@ -25,7 +25,7 @@ Testing ...
 ### Dependancy Install
 ```bash
 sudo apt update
-sudo apt install git make libssl-dev nftables libnftables-dev libkmod-dev libnl-3-dev libnl-route-3-dev
+sudo apt install git make libssl-dev nftables libnftables-dev
 ```
 - `git` - For the `git clone`
 - `make` - Build for facows

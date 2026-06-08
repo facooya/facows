@@ -27,11 +27,9 @@ struct fws_conf {
 };
 
 struct fws_nft {
-	U8 ip[16];
-	U8 html_cnt;
-	U8 no_html_cnt;
-	U8 url_redir_cnt;
-	U8 uri_redir_cnt;
+	U8 ip_buf[16];
+	U16 html_cnt;
+	U16 no_html_cnt;
 };
 
 struct fws_http_res {
