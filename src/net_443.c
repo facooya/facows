@@ -61,6 +61,8 @@ I32 net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 		fprintf(stderr, "ssl private key error\n");
 		return 1;
 	}
+
+	SSL_CTX_set_session_cache_mode(*ssl_ctx, SSL_SESS_CACHE_OFF);
 	return 0;
 }
 

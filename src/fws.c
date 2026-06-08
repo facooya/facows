@@ -64,7 +64,6 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 		goto out;
 	}
 
-
 	net_443_init((U8**)&ssl_ctx_p, child_ctx->conf);
 
 	if ((server_http_fd = net_server_init(child_ctx->conf->http_port)) < 0) {
@@ -315,7 +314,7 @@ static void *_fws_thrd_run(void *thread_args) {
 	SSL *ssl = FAC_NULL;
 
 	I32 ssl_flag = 1;
-	C8 request_buf[8192];
+	C8 request_buf[8192] = {0};
 
 	ssl = SSL_new(ssl_ctx_p);
 	if (ssl == FAC_NULL) {
@@ -357,12 +356,10 @@ static void *_fws_thrd_run(void *thread_args) {
 
 		if (conf->nft == 1) {
 			U8 is_html = (U8) FAC_FALSE;
-			I32 html_cnt = 0;
 			U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
 			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
 			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
 				is_html = (U8) FAC_TRUE;
-				html_cnt++;
 			}
 
 			I32 ip_send = FAC_FALSE;
