@@ -362,7 +362,6 @@ static void *_fws_thrd_run(void *thread_args) {
 				is_html = (U8) FAC_TRUE;
 			}
 
-			I32 ip_send = FAC_FALSE;
 			C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 			U8 *client_ip = thread_ctx->client_ip;
 			U8 empty_ip[16] = {0};
@@ -371,6 +370,8 @@ static void *_fws_thrd_run(void *thread_args) {
 
 			pthread_mutex_lock(nft_lock);
 			struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
+
+			/* get nft_i */
 			I32 nft_i = 0;
 			for (U32 i=0; i<NFT_ARR_CAP; i++) {
 				ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip, 16);
@@ -388,20 +389,35 @@ static void *_fws_thrd_run(void *thread_args) {
 				nft_i = i;
 			}
 
+			/* check dos at 429 */
+			if (nft_arr[nft_i].html_cnt > 3U || nft_arr[nft_i].no_html_cnt > 30U) {
+				nft_arr[nft_i].dos_cnt++;
+
+				if (nft_arr[nft_i].dos_cnt > 3U) {
+					write(write_fd, ip_buf, INET6_ADDRSTRLEN);
+				}
+
+				pthread_mutex_unlock(nft_lock);
+				status_code = 429;
+				if (net_443_err_write((U8*)ssl, status_code) < 0) {
+					ssl_flag = -1;
+					goto out;
+				}
+				goto out;
+			}
+
+			/* check 429 */
 			if (is_html == (U8)FAC_TRUE) {
+				// TODO: error page dos cnt
 				nft_arr[nft_i].html_cnt++;
 			} else {
 				nft_arr[nft_i].no_html_cnt++;
 			}
-
 			if (nft_arr[nft_i].html_cnt > 3U || nft_arr[nft_i].no_html_cnt > 30U) {
-				ip_send = FAC_TRUE;
+				nft_arr[nft_i].dos_cnt++;
+				status_code = 429;
 			}
 			pthread_mutex_unlock(nft_lock);
-
-			if (ip_send == FAC_TRUE) {
-				write(write_fd, ip_buf, INET6_ADDRSTRLEN);
-			}
 		}
 
 		if (status_code != 0) {
@@ -469,7 +485,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq) {
 }
 
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
-	if (swap_ctx->global_time - swap_ctx->swap_time < 2) {
+	if (swap_ctx->global_time - swap_ctx->swap_time < 20) {
 		return;
 	}
 

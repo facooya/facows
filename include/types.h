@@ -30,6 +30,7 @@ struct fws_nft {
 	U8 ip_buf[16];
 	U16 html_cnt;
 	U16 no_html_cnt;
+	U16 dos_cnt;
 };
 
 struct fws_http_res {
