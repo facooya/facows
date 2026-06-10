@@ -407,8 +407,7 @@ static void *_fws_thrd_run(void *thread_args) {
 			}
 
 			/* check 429 */
-			if (is_html == (U8)FAC_TRUE) {
-				// TODO: error page dos cnt
+			if (is_html == (U8)FAC_TRUE || status_code != 0) {
 				nft_arr[nft_i].html_cnt++;
 			} else {
 				nft_arr[nft_i].no_html_cnt++;
