@@ -29,8 +29,7 @@
 #define HTTP_MSG_500 "Internal Server Error"
 #define HTTP_MSG_501 "Not Implemented"
 
-#define HTTP_ERR_RES "HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n"
-#define HTTP_RES "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nDate: %s\r\n\r\n"
+#define HTTP_RES "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\n\r\n"
 
 static const struct {
 	I32 code;
@@ -149,6 +148,11 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	C8 *res_buf = FAC_NULL;
 	I32 html_fd = -1;
 
+	static const C8 res_err_fmt[] =
+		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n\r\n";
+	static const C8 res_429_fmt[] =
+		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\n"
+		"Content-Length: %lu\r\nRetry-After: 60\r\n\r\n";
 	I32 ret = 0;
 
 	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
@@ -194,13 +198,23 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	}
 	snprintf(html_buf, html_n+1, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
 
-	res_n = snprintf(FAC_NULL, 0, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
-	res_buf = malloc(res_n+1);
-	if (res_buf == FAC_NULL) {
-		ret = -1;
-		goto out;
+	if (code == 429) {
+		res_n = snprintf(FAC_NULL, 0, res_429_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+		res_buf = malloc(res_n+1);
+		if (res_buf == FAC_NULL) {
+			ret = -1;
+			goto out;
+		}
+		snprintf(res_buf, res_n+1, res_429_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+	} else {
+		res_n = snprintf(FAC_NULL, 0, res_err_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+		res_buf = malloc(res_n+1);
+		if (res_buf == FAC_NULL) {
+			ret = -1;
+			goto out;
+		}
+		snprintf(res_buf, res_n+1, res_err_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
 	}
-	snprintf(res_buf, res_n+1, HTTP_ERR_RES, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
 
 	SSL_write(ssl, res_buf, res_n);
 	SSL_write(ssl, html_buf, html_n);

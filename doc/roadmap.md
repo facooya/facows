@@ -3,9 +3,6 @@
 - epoll, io_uring
 - kTLS
 
-## Defense
-- 429 rate limit
-
 ## Refactoring
 - Change from U64, I64 to I32
 - const update
