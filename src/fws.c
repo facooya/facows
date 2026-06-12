@@ -130,6 +130,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	swap_ctx->nft_lock_opq_p = (U8 *) &nft_lock;
 	swap_ctx->sig_flag_opq_p = (I32 *) sig_flag_p;
 	swap_ctx->thrd_n_opq_p = (I32 *) &thrd_n;
+	swap_ctx->conf_p = child_ctx->conf;
 
 	thrd_n++;
 	pthread_t fws_swap_thread;
@@ -354,70 +355,68 @@ static void *_fws_thrd_run(void *thread_args) {
 			goto out;
 		}
 
-		if (conf->nft == 1) {
-			U8 is_html = (U8) FAC_FALSE;
-			U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
-			C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
-			if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
-				is_html = (U8) FAC_TRUE;
-			}
+		U8 is_html = (U8) FAC_FALSE;
+		U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
+		C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
+		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+			is_html = (U8) FAC_TRUE;
+		}
 
-			C8 ip_buf[INET6_ADDRSTRLEN] = {0};
-			U8 *client_ip = thread_ctx->client_ip;
-			U8 empty_ip[16] = {0};
-			I32 ip_cmp = 0;
-			inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
+		C8 ip_buf[INET6_ADDRSTRLEN] = {0};
+		U8 *client_ip = thread_ctx->client_ip;
+		U8 empty_ip[16] = {0};
+		I32 ip_cmp = 0;
+		inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
-			pthread_mutex_lock(nft_lock);
-			struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
+		pthread_mutex_lock(nft_lock);
+		struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
 
-			/* get nft_i */
-			I32 nft_i = 0;
-			for (U32 i=0; i<NFT_ARR_CAP; i++) {
-				ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip, 16);
-				if (ip_cmp == 0) {
-					nft_i = i;
-					break;
-				}
-
-				ip_cmp = memcmp(nft_arr[i].ip_buf, empty_ip, 16);
-				if (ip_cmp == 0) {
-					nft_i = i;
-					memcpy(nft_arr[nft_i].ip_buf, client_ip, 16);
-					break;
-				}
+		/* get nft_i */
+		I32 nft_i = 0;
+		for (U32 i=0; i<NFT_ARR_CAP; i++) {
+			ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip, 16);
+			if (ip_cmp == 0) {
 				nft_i = i;
+				break;
 			}
 
-			/* check dos at 429 */
-			if (nft_arr[nft_i].html_cnt > 3U || nft_arr[nft_i].no_html_cnt > 30U) {
-				nft_arr[nft_i].dos_cnt++;
+			ip_cmp = memcmp(nft_arr[i].ip_buf, empty_ip, 16);
+			if (ip_cmp == 0) {
+				nft_i = i;
+				memcpy(nft_arr[nft_i].ip_buf, client_ip, 16);
+				break;
+			}
+			nft_i = i;
+		}
 
-				if (nft_arr[nft_i].dos_cnt > 3U) {
-					write(write_fd, ip_buf, INET6_ADDRSTRLEN);
-				}
+		/* check dos at 429 */
+		if (nft_arr[nft_i].html_cnt > conf->lim_page || nft_arr[nft_i].no_html_cnt > conf->lim_res) {
+			nft_arr[nft_i].dos_cnt++;
 
-				pthread_mutex_unlock(nft_lock);
-				status_code = 429;
-				if (net_443_err_write((U8*)ssl, status_code) < 0) {
-					ssl_flag = -1;
-					goto out;
-				}
+			if (conf->nft == 1 && nft_arr[nft_i].dos_cnt > conf->ban_lim) {
+				write(write_fd, ip_buf, INET6_ADDRSTRLEN);
+			}
+
+			pthread_mutex_unlock(nft_lock);
+			status_code = 429;
+			if (net_443_err_write((U8*)ssl, status_code) < 0) {
+				ssl_flag = -1;
 				goto out;
 			}
-
-			/* check 429 */
-			if (is_html == (U8)FAC_TRUE || status_code != 0) {
-				nft_arr[nft_i].html_cnt++;
-			} else {
-				nft_arr[nft_i].no_html_cnt++;
-			}
-			if (nft_arr[nft_i].html_cnt > 3U || nft_arr[nft_i].no_html_cnt > 30U) {
-				nft_arr[nft_i].dos_cnt++;
-				status_code = 429;
-			}
-			pthread_mutex_unlock(nft_lock);
+			goto out;
 		}
+
+		/* check 429 */
+		if (is_html == (U8)FAC_TRUE || status_code != 0) {
+			nft_arr[nft_i].html_cnt++;
+		} else {
+			nft_arr[nft_i].no_html_cnt++;
+		}
+		if (nft_arr[nft_i].html_cnt > conf->lim_res || nft_arr[nft_i].no_html_cnt > conf->lim_res) {
+			nft_arr[nft_i].dos_cnt++;
+			status_code = 429;
+		}
+		pthread_mutex_unlock(nft_lock);
 
 		if (status_code != 0) {
 			if (net_443_err_write((U8*)ssl, status_code) < 0) {
@@ -484,7 +483,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq) {
 }
 
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
-	if (swap_ctx->global_time - swap_ctx->swap_time < 20) {
+	if (swap_ctx->global_time - swap_ctx->swap_time < swap_ctx->conf_p->lim_swap_time) {
 		return;
 	}
 

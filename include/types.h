@@ -9,14 +9,19 @@
 #include "factype.h"
 
 struct fws_conf {
-	U8 nft;
-	U8 hsts;
 	U16 http_port;
 	U16 https_port;
 	U32 pps_limit;
 	U32 pps_burst;
 	U32 ban_time;
+	U32 ban_lim;
 	U32 hsts_max_age;
+	U32 lim_swap_time;
+	U32 lim_page;
+	U32 lim_res;
+
+	U8 nft;
+	U8 hsts;
 
 	C8 allow_ports[128];
 	C8 domain[128];
@@ -82,6 +87,7 @@ struct fws_swap_ctx {
 	I32 *sig_flag_opq_p;
 	struct fws_nft **nft_arr_pp;
 	struct fws_nft *nft_swap_arr_p;
+	struct fws_conf *conf_p;
 };
 
 struct fws_parent_ctx {

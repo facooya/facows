@@ -27,8 +27,12 @@
 	KEY(HTTPS_PORT) \
 	KEY(NFT) \
 	KEY(ALLOW_PORTS) \
+	KEY(LIM_SWAP_TIME) \
+	KEY(LIM_PAGE) \
+	KEY(LIM_RES) \
 	KEY(PPS_LIMIT) \
 	KEY(PPS_BURST) \
+	KEY(BAN_LIM) \
 	KEY(BAN_TIME) \
 	KEY(DOMAIN) \
 	KEY(WEB_ROOT) \
@@ -190,6 +194,16 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
 			break;
 
+		case LIM_SWAP_TIME:
+			conf->lim_swap_time = (U32) strtol(p, FAC_NULL, 10);
+			break;
+		case LIM_PAGE:
+			conf->lim_page = (U32) strtol(p, FAC_NULL, 10);
+			break;
+		case LIM_RES:
+			conf->lim_res = (U32) strtol(p, FAC_NULL, 10);
+			break;
+
 		case NFT:
 			if (_tool_conf_bool_set(&conf->nft, p) < 0) {
 				return -1;
@@ -200,6 +214,9 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 		case PPS_BURST:
 			conf->pps_burst = (U32) strtol(p, FAC_NULL, 10);
+			break;
+		case BAN_LIM:
+			conf->ban_lim = (U32) strtol(p, FAC_NULL, 10);
 			break;
 		case BAN_TIME:
 			conf->ban_time = (U32) strtol(p, FAC_NULL, 10);
