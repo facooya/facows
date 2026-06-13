@@ -93,19 +93,47 @@ out:
 
 I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	static const C8 http_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\n\r\n";
+	static const C8 http_hsts_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\nStrict-Transport-Security: max-age=%u;\r\n\r\n";
+
 	SSL *ssl = (SSL *) ssl_opq;
-	C8 *res_buf = FAC_NULL;
+	U64 n = 0U;
+	U64 written = 0U;
 	I32 ret = 0;
 
-	U32 n = snprintf(FAC_NULL, 0U, http_res_fmt, http_res->content, size, http_res->date);
+	C8 *res_buf = FAC_NULL;
+
+	if (http_res->hsts_max_age != 0U) {
+		ret = snprintf(FAC_NULL, 0U, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+	} else {
+		ret = snprintf(FAC_NULL, 0U, http_res_fmt, http_res->content, size, http_res->date);
+	}
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	n = (U64) ret;
 	res_buf = malloc(n+1U);
 	if (res_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
 
-	snprintf(res_buf, n+1U, http_res_fmt, http_res->content, size, http_res->date);
-	SSL_write(ssl, res_buf, n);
+	if (http_res->hsts_max_age != 0U) {
+		ret = snprintf(res_buf, n+1U, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+	} else {
+		ret = snprintf(res_buf, n+1U, http_res_fmt, http_res->content, size, http_res->date);
+	}
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	ret = SSL_write_ex(ssl, res_buf, n, &written);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
 
 	ret = 0;
 out:

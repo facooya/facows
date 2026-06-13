@@ -427,6 +427,9 @@ static void *_fws_thrd_run(void *thread_args) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
+			if (conf->hsts == 1U) {
+				http_res.hsts_max_age = conf->hsts_max_age;
+			}
 			if (net_443_res_write((U8*)ssl, &http_res, file.size) != 0) {
 				ssl_flag = -1;
 				goto out;

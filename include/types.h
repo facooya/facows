@@ -39,6 +39,7 @@ struct fws_nft {
 };
 
 struct fws_http_res {
+	U32 hsts_max_age;
 	I32 code;
 	I32 connection;
 	C8 content[16];
