@@ -135,7 +135,7 @@ static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
 		if (stat(raw_path, &file_stat) != 0) {
 			return 404;
 		} else {
-			const C8 index_str[] = "index.html";
+			static const C8 index_str[] = "index.html";
 			memcpy(p, index_str, sizeof(index_str));
 
 			if (stat(raw_path, &file_stat) == 0) {
@@ -147,7 +147,7 @@ static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
 
 	} else {
 		if (stat(raw_path, &file_stat) != 0) {
-			const C8 html_str[] = ".html";
+			static const C8 html_str[] = ".html";
 			memcpy(p, html_str, sizeof(html_str));
 			if (stat(raw_path, &file_stat) != 0) {
 				return 404;

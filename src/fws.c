@@ -369,7 +369,7 @@ static void *_fws_thrd_run(void *thread_args) {
 		inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
 		pthread_mutex_lock(nft_lock);
-		struct fws_nft * const nft_arr = *thread_ctx->nft_arr_pp;
+		struct fws_nft *nft_arr = *thread_ctx->nft_arr_pp;
 
 		/* get nft_i */
 		I32 nft_i = 0;

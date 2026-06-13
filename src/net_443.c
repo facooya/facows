@@ -18,34 +18,6 @@
 #define SHARE_DIR "/usr/share/facows/"
 #define SHARE_ERR_HTML "/usr/share/facows/error_page.html"
 
-#define HTTP_MSG_200 "OK"
-#define HTTP_MSG_400 "Bad Request"
-#define HTTP_MSG_403 "Forbidden"
-#define HTTP_MSG_404 "File Not Found"
-#define HTTP_MSG_405 "Method Not Allowed"
-#define HTTP_MSG_414 "URI Too Long"
-#define HTTP_MSG_429 "Too Many Requests"
-#define HTTP_MSG_431 "Request Header Fields Too Large"
-#define HTTP_MSG_500 "Internal Server Error"
-#define HTTP_MSG_501 "Not Implemented"
-
-#define HTTP_RES "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\n\r\n"
-
-static const struct {
-	I32 code;
-	const C8 *msg;
-} http_msg[] = {
-	{500, HTTP_MSG_500},
-	{400, HTTP_MSG_400},
-	{403, HTTP_MSG_403},
-	{404, HTTP_MSG_404},
-	{405, HTTP_MSG_405},
-	{414, HTTP_MSG_414},
-	{429, HTTP_MSG_429},
-	{431, HTTP_MSG_431},
-	{501, HTTP_MSG_501}
-};
-
 I32 net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	SSL_library_init();
@@ -120,18 +92,19 @@ out:
 }
 
 I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
+	static const C8 http_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\n\r\n";
 	SSL *ssl = (SSL *) ssl_opq;
 	C8 *res_buf = FAC_NULL;
 	I32 ret = 0;
 
-	U64 n = snprintf(FAC_NULL, 0, HTTP_RES, http_res->content, size, http_res->date);
-	res_buf = malloc(n+1);
+	U32 n = snprintf(FAC_NULL, 0U, http_res_fmt, http_res->content, size, http_res->date);
+	res_buf = malloc(n+1U);
 	if (res_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
 
-	snprintf(res_buf, n+1, HTTP_RES, http_res->content, size, http_res->date);
+	snprintf(res_buf, n+1U, http_res_fmt, http_res->content, size, http_res->date);
 	SSL_write(ssl, res_buf, n);
 
 	ret = 0;
@@ -142,25 +115,42 @@ out:
 }
 
 I32 net_443_err_write(U8 *ssl_opq, I32 code) {
-	SSL *ssl = (SSL *) ssl_opq;
-	C8 *html_fmt = FAC_NULL;
-	C8 *html_buf = FAC_NULL;
-	C8 *res_buf = FAC_NULL;
-	I32 html_fd = -1;
-
+	struct http_msg { I32 code; C8 *msg; };
+	static const struct http_msg http_msg[] = {
+		{.code = 500, .msg = "Internal Server Error"}, /* default */
+		{.code = 400, .msg = "Bad Request"},
+		{.code = 403, .msg = "Forbidden"},
+		{.code = 404, .msg = "File Not Found"},
+		{.code = 405, .msg = "Method Not Allowed"},
+		{.code = 414, .msg = "URI Too Long"},
+		{.code = 429, .msg = "Too Many Requests"},
+		{.code = 431, .msg = "Request Header Fields Too Large"},
+		{.code = 501, .msg = "Not Implemented"}
+	};
 	static const C8 res_err_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n\r\n";
 	static const C8 res_429_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\n"
 		"Content-Length: %lu\r\nRetry-After: 60\r\n\r\n";
+
+	SSL *ssl = (SSL *) ssl_opq;
+	struct stat html_stat = {0};
+	U64 html_n = 0U;
+	U64 msg_i = 0U;
+	U64 res_n = 0U;
+	U64 written = 0U;
 	I32 ret = 0;
+
+	C8 *html_fmt = FAC_NULL;
+	C8 *html_buf = FAC_NULL;
+	C8 *res_buf = FAC_NULL;
+	I32 html_fd = -1;
 
 	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
 	if (html_fd < 0) {
 		ret = -1;
 		goto out;
 	}
-	struct stat html_stat = {0};
 	if (fstat(html_fd, &html_stat) < 0) {
 		ret = -1;
 		goto out;
@@ -180,44 +170,77 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		html_fd = -1;
 	}
 
-	U64 msg_idx = 0;
-	U64 html_n = 0;
-	U64 res_n = 0;
-	for (U64 i=0; i<(sizeof(http_msg)/sizeof(http_msg[0])); i++) {
+	for (U64 i=0U; i<(sizeof(http_msg)/sizeof(http_msg[0U])); i++) {
 		if (http_msg[i].code == code) {
-			msg_idx = i;
+			msg_i = i;
 			break;
 		}
 	}
 
-	html_n = snprintf(FAC_NULL, 0, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
-	html_buf = malloc(html_n+1);
+	ret = snprintf(FAC_NULL, 0U, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+	html_n = (U64) ret;
+	html_buf = malloc(html_n+1U);
 	if (html_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
-	snprintf(html_buf, html_n+1, html_fmt, http_msg[msg_idx].code, http_msg[msg_idx].code, http_msg[msg_idx].msg);
-
-	if (code == 429) {
-		res_n = snprintf(FAC_NULL, 0, res_429_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
-		res_buf = malloc(res_n+1);
-		if (res_buf == FAC_NULL) {
-			ret = -1;
-			goto out;
-		}
-		snprintf(res_buf, res_n+1, res_429_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
-	} else {
-		res_n = snprintf(FAC_NULL, 0, res_err_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
-		res_buf = malloc(res_n+1);
-		if (res_buf == FAC_NULL) {
-			ret = -1;
-			goto out;
-		}
-		snprintf(res_buf, res_n+1, res_err_fmt, http_msg[msg_idx].code, http_msg[msg_idx].msg, html_n);
+	ret = snprintf(html_buf, html_n+1, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
 	}
 
-	SSL_write(ssl, res_buf, res_n);
-	SSL_write(ssl, html_buf, html_n);
+	if (code == 429) {
+		ret = snprintf(FAC_NULL, 0U, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		if (ret < 0) {
+			ret = -1;
+			goto out;
+		}
+		res_n = (U64) ret;
+		res_buf = malloc(res_n+1U);
+		if (res_buf == FAC_NULL) {
+			ret = -1;
+			goto out;
+		}
+		ret = snprintf(res_buf, res_n+1U, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		if (ret < 0) {
+			ret = -1;
+			goto out;
+		}
+
+	} else {
+		ret = snprintf(FAC_NULL, 0U, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		if (ret < 0) {
+			ret = -1;
+			goto out;
+		}
+		res_n = (U64) ret;
+		res_buf = malloc(res_n+1U);
+		if (res_buf == FAC_NULL) {
+			ret = -1;
+			goto out;
+		}
+		ret = snprintf(res_buf, res_n+1U, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		if (ret < 0) {
+			ret = -1;
+			goto out;
+		}
+	}
+
+	ret = SSL_write_ex(ssl, res_buf, res_n, &written);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+	ret = SSL_write_ex(ssl, html_buf, html_n, &written);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
 
 	ret = 0;
 out:
