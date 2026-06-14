@@ -20,7 +20,7 @@ _Atomic I32 sig_flag = -1;
 
 static void _fws_exit(I32 sig);
 
-I32 main() {
+I32 main(void) {
 	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
 	struct fws_parent_ctx *parent_ctx = FAC_NULL;
 	struct fws_child_ctx *child_ctx = FAC_NULL;

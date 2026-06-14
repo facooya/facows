@@ -13,7 +13,9 @@
 - buffer `_buf`
 - format `_fmt`
 - opaque `_opq`
+- string (`static const` string only) `_str`
 ```c
+static const C8 abc_str[] = "abc";
 I32 name_arr[10] = {0};
 name_arr[0] = 1;
 
@@ -51,14 +53,40 @@ restore_st->abc = 2;
 
 **Should**
 - Should not header pollution.
-- Should use 32-bit in like `for()`, `while()`. Cause 32-bit zero-extension.
-- Should use unsinged number using `U`. E.g., `if ((U32) cnt < 3U)`
+- Should use `U64` in like `for()`, `while()`.
+- Should use unsinged number using `U`. E.g., `if ((U32) cnt < 3U)`, `arr[1U]`
 - Should `I32 func_ret = func(); if (func_ret < 0)`, should not `if (func() < 0)`.
 - Readonly data should use `static const` instead of `#define`.
 - Should use memory free or file descriptor close using `goto out;` and `out` label in function bottom.
+- Should use `void` parameter, if no parameters (e.g., `func(void)`).
 
 **May**
 - Order for parameters e.g., `func(dst, src, num)`, `func(dst, dst_n, src, src_n)`.
+- Order for variables for example:
+```c
+void func(void) {
+    /* static */
+    static const C8 abc_str[] = "abc";
+
+    /* require free */
+    C8 *ptr = FAC_NULL;
+
+    /* file desciptor */
+    I32 fd = -1;
+
+    /* reuse variable */
+    I32 ret = 0;
+
+    /* normal variable */
+    I32 a = 0;
+    /* [logic] <a> */
+
+    struct a_st a_st = {0};
+    /* [logic] <a_st> */
+
+    /* [logic] <a_st, a> */
+}
+```
 
 ---
 
