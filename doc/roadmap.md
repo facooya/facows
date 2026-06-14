@@ -3,11 +3,13 @@
 - epoll, io_uring
 - kTLS
 
+## Refactoring
+- Replace `#define` with `static const`
+
 ## ETC
 - add log
 - reduce header
 - file conf change switch to lookup table
-- add doc for ssl certification
 
 ---
 

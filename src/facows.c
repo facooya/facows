@@ -16,50 +16,62 @@
 #include <assert.h>
 #include <unistd.h>
 
-#define CONF_PATH "/etc/facows/facows.conf"
-
 _Atomic I32 sig_flag = -1;
 
 static void _fws_exit(I32 sig);
 
 I32 main() {
+	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
 	struct fws_parent_ctx *parent_ctx = FAC_NULL;
 	struct fws_child_ctx *child_ctx = FAC_NULL;
-	I32 pipe_fd[2] = {-1, -1};
+	I32 pipe_fd[2U] = {-1, -1};
 	I32 pipe_read_fd = -1;
 	I32 pipe_write_fd = -1;
-
 	I32 ret = 0;
+
 	struct sigaction fws_sa = {0};
-
 	fws_sa.sa_handler = _fws_exit;
-	sigaction(SIGINT, &fws_sa, FAC_NULL);
-	sigaction(SIGTERM, &fws_sa, FAC_NULL);
-
-	struct fws_conf conf = {0};
-	if (file_conf_read(&conf, CONF_PATH) < 0) {
+	ret = sigaction(SIGINT, &fws_sa, FAC_NULL);
+	if (ret < 0) {
+		fprintf(stderr, "main(): sigaction():failed\n");
+		ret = 1;
+		goto out;
+	}
+	ret = sigaction(SIGTERM, &fws_sa, FAC_NULL);
+	if (ret < 0) {
+		fprintf(stderr, "main(): sigaction(): failed\n");
 		ret = 1;
 		goto out;
 	}
 
-	assert(conf.nft == 0 || conf.nft == 1);
-	if (conf.nft == 1) {
-		if (net_nft_init(&conf) < 0) {
+	struct fws_conf conf = {0};
+	ret = file_conf_read(&conf, conf_path_str);
+	if (ret < 0) {
+		fprintf(stderr, "main(): file_conf_read(): failed\n");
+		ret = 1;
+		goto out;
+	}
+
+	if (conf.nft == 1U) {
+		ret = net_nft_init(&conf);
+		if (ret < 0) {
+			fprintf(stderr, "main(): net_nft_init(): failed\n");
 			return 1;
 		}
 	}
 
-	if (pipe(pipe_fd) < 0) {
-		fprintf(stderr, "pipe failed\n");
+	ret = pipe(pipe_fd);
+	if (ret < 0) {
+		fprintf(stderr, "main(): pipe(): pipe failed\n");
 		ret = 1;
 		goto out;
 	}
-	pipe_read_fd = pipe_fd[0];
-	pipe_write_fd = pipe_fd[1];
+	pipe_read_fd = pipe_fd[0U];
+	pipe_write_fd = pipe_fd[1U];
 
 	const I32 pid = fork();
 	if (pid < 0) {
-		fprintf(stderr, "fork failed\n");
+		fprintf(stderr, "main(): fork(): fork failed\n");
 		ret = 1;
 		goto out;
 	}
@@ -67,6 +79,7 @@ I32 main() {
 	if (pid == 0) {
 		child_ctx = malloc(sizeof(struct fws_child_ctx));
 		if (child_ctx == FAC_NULL) {
+			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
 		}
@@ -82,6 +95,7 @@ I32 main() {
 	} else {
 		parent_ctx = malloc(sizeof(struct fws_parent_ctx));
 		if (parent_ctx == FAC_NULL) {
+			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
 		}
@@ -91,7 +105,9 @@ I32 main() {
 		parent_ctx->pid = pid;
 		parent_ctx->conf = &conf;
 
-		if (fws_parent_run(parent_ctx) < 0) {
+		ret = fws_parent_run(parent_ctx);
+		if (ret < 0) {
+			fprintf(stderr, "main(): fws_parent_run(): error\n");
 			ret = 1;
 			goto out;
 		}
