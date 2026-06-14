@@ -7,7 +7,6 @@
 - add log
 - reduce header
 - file conf change switch to lookup table
-- header for hsts
 - add doc for ssl certification
 
 ---

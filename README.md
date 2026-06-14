@@ -23,7 +23,7 @@ Testing ...
 - Configure: `/etc/facows/`
 
 ### Dependancy Install
-```bash
+```sh
 sudo apt update
 sudo apt install git make libssl-dev nftables libnftables-dev
 ```
@@ -34,14 +34,14 @@ sudo apt install git make libssl-dev nftables libnftables-dev
 - `libnftables-dev` - Network filter library in C
 
 Register nftables to systemd:
-```bash
+```sh
 sudo systemctl enable nftables
 sudo systemctl start nftables
 ```
 
 ### Quick Start
 **Build**
-```bash
+```sh
 git clone https://github.com/facooya/facows.git
 cd facows
 make
@@ -58,12 +58,12 @@ Modifiy `/etc/facows/facows.conf` domain and SSL path.
 
 **Execute**
 Manual:
-```bash
+```sh
 sudo ./build/facows
 ```
 
 System daemon:
-```bash
+```sh
 sudo useradd -r -s /usr/sbin/nologin facows
 sudo systemctl enable facows
 sudo systemctl start facows
@@ -76,18 +76,21 @@ Program exit `ctrl + c` or `kill PID`.
 > Must not `kill -9 PID`. If already used and `NFT true` in `/etc/facows/facows.conf`, try `sudo nft table delete netdev facows; sudo nft table delete inet facows` for network.
 
 System daemon:
-```bash
+```sh
 sudo systemctl stop facows
 ```
 
-**Update**
+**Upgrade**
 System deamon:
-```bash
+```sh
 sudo systemctl stop facows
 make
 sudo make install
 sudo systemctl restart facows
 ```
+
+### Reference Links
+- Create SSL Certificate [SSL](/doc/ssl.md)
 
 ---
 
