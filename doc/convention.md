@@ -58,7 +58,7 @@ restore_st->abc = 2;
 - Should `I32 func_ret = func(); if (func_ret < 0)`, should not `if (func() < 0)`.
 - Readonly data should use `static const` instead of `#define`.
 - Should use memory free or file descriptor close using `goto out;` and `out` label in function bottom.
-- Should use `void` parameter, if no parameters (e.g., `func(void)`).
+- Should use `void` parameter, if no parameters (e.g., `I32 func(void); ret = func();`).
 
 **May**
 - Order for parameters e.g., `func(dst, src, num)`, `func(dst, dst_n, src, src_n)`.

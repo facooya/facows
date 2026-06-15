@@ -27,17 +27,17 @@
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
-#define NFT_ARR_CAP 1024U
-#define USER_WWW_DATA "www-data"
-#define USER_APACHE "apache"
-#define USER_HTTP "http"
-#define USER_NOBODY "nobody"
+static const U64 nft_arr_cap = 1024U;
 
 static void *_fws_thrd_run(void *thread_args);
 static void *_fws_swap_thrd_run(void *swap_ctx_opq);
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx);
 
 void fws_child_run(struct fws_child_ctx *child_ctx) {
+	static const C8 www_data_str[] = "www-data";
+	static const C8 apache_str[] = "apache";
+	static const C8 http_str[] = "http";
+	static const C8 nobody_str[] = "nobody";
 	SSL_CTX *ssl_ctx_p = FAC_NULL;
 	struct fws_nft *nft_a_arr_p = FAC_NULL;
 	struct fws_nft *nft_b_arr_p = FAC_NULL;
@@ -45,57 +45,61 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	I32 server_https_fd = -1;
 	I32 client_http_fd = -1;
 	I32 client_fd = -1;
-
-	pthread_mutex_t nft_lock = {0};
-	I32 nft_lock_flag = -1;
-	I32 thrd_join_ms = 0;
-	_Atomic I32 *sig_flag_p = (_Atomic I32 *) child_ctx->sig_flag_opq_p;
 	_Atomic I32 thrd_n = 0;
 	I32 ret = 0;
 
-	nft_a_arr_p = calloc(NFT_ARR_CAP, sizeof(struct fws_nft));
+	nft_a_arr_p = calloc(nft_arr_cap, sizeof(struct fws_nft));
 	if (nft_a_arr_p == FAC_NULL) {
 		ret = 1;
 		goto out;
 	}
-	nft_b_arr_p = calloc(NFT_ARR_CAP, sizeof(struct fws_nft));
+	nft_b_arr_p = calloc(nft_arr_cap, sizeof(struct fws_nft));
 	if (nft_b_arr_p == FAC_NULL) {
 		ret = 1;
 		goto out;
 	}
 
-	net_443_init((U8**)&ssl_ctx_p, child_ctx->conf);
+	ret = net_443_init((U8**)&ssl_ctx_p, child_ctx->conf);
+	if (ret < 0) {
+		ret = 1;
+		goto out;
+	}
 
-	if ((server_http_fd = net_server_init(child_ctx->conf->http_port)) < 0) {
+	server_http_fd = net_server_init(child_ctx->conf->http_port);
+	if (server_http_fd < 0) {
 		fprintf(stderr, "http socket failed\n");
 		ret = 1;
 		goto out;
 	}
-	if ((server_https_fd = net_server_init(child_ctx->conf->https_port)) < 0) {
+	server_https_fd = net_server_init(child_ctx->conf->https_port);
+	if (server_https_fd < 0) {
 		fprintf(stderr, "https socket failed\n");
 		ret = 1;
 		goto out;
 	}
 
 	struct passwd *pw = FAC_NULL;
-	const C8 *user_name[] = {USER_WWW_DATA, USER_APACHE, USER_HTTP, USER_NOBODY};
-	for (U64 i=0; i<(sizeof(user_name)/sizeof(user_name[0])); i++) {
-		if ((pw = getpwnam(user_name[i])) != FAC_NULL) {
+	const C8 *user_name[] = {www_data_str, apache_str, http_str, nobody_str};
+	for (U64 i=0U; i<(sizeof(user_name)/sizeof(user_name[0U])); i++) {
+		pw = getpwnam(user_name[i]);
+		if (pw != FAC_NULL) {
 			break;
 		}
-		if ((i+1) == (sizeof(user_name)/sizeof(user_name[0]))) {
+		if ((i+1U) == (sizeof(user_name)/sizeof(user_name[0U]))) {
 			fprintf(stderr, "user not found\n");
 			ret = 1;
 			goto out;
 		}
 	}
 
-	if (setgid(pw->pw_gid) != 0) {
+	ret = setgid(pw->pw_gid);
+	if (ret != 0) {
 		fprintf(stderr, "set group failed\n");
 		ret = 1;
 		goto out;
 	}
-	if (setuid(pw->pw_uid) != 0) {
+	ret = setuid(pw->pw_uid);
+	if (ret != 0) {
 		fprintf(stderr, "set user failed\n");
 		ret = 1;
 		goto out;
@@ -106,15 +110,14 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 		child_ctx->pipe_read_fd = -1;
 	}
 
-	assert(server_http_fd >= 0 && server_https_fd >= 0);
-	struct pollfd fws_fd[2];
-	fws_fd[0].fd = server_http_fd;
-	fws_fd[0].events = POLLIN;
-	fws_fd[1].fd = server_https_fd;
-	fws_fd[1].events = POLLIN;
+	struct pollfd fws_fd[2U] = {0};
+	fws_fd[0U].fd = server_http_fd;
+	fws_fd[0U].events = POLLIN;
+	fws_fd[1U].fd = server_https_fd;
+	fws_fd[1U].events = POLLIN;
 
-	struct sockaddr_in6 client_addr = {0};
-	socklen_t client_addr_size = sizeof(client_addr);
+	pthread_mutex_t nft_lock = {0};
+	I32 nft_lock_flag = -1;
 	if (pthread_mutex_init(&nft_lock, FAC_NULL) != 0) {
 		fprintf(stderr, "mutex init failed\n");
 		ret = 1;
@@ -124,7 +127,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 
 	struct fws_nft *nft_arr_p = nft_a_arr_p;
 	struct fws_nft *nft_swap_arr_p = nft_b_arr_p;
-	struct fws_swap_ctx *swap_ctx = calloc(1, sizeof(struct fws_swap_ctx));
+	struct fws_swap_ctx *swap_ctx = calloc(1U, sizeof(struct fws_swap_ctx));
+	_Atomic I32 *sig_flag_p = (_Atomic I32 *) child_ctx->sig_flag_opq_p;
 	swap_ctx->nft_arr_pp = &nft_arr_p;
 	swap_ctx->nft_swap_arr_p = nft_swap_arr_p;
 	swap_ctx->nft_lock_opq_p = (U8 *) &nft_lock;
@@ -133,9 +137,9 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 	swap_ctx->conf_p = child_ctx->conf;
 
 	thrd_n++;
-	pthread_t fws_swap_thread;
-	pthread_create(&fws_swap_thread, FAC_NULL, _fws_swap_thrd_run, swap_ctx);
-	pthread_detach(fws_swap_thread);
+	U64 fws_swap_thrd = 0U;
+	pthread_create(&fws_swap_thrd, FAC_NULL, _fws_swap_thrd_run, swap_ctx);
+	pthread_detach(fws_swap_thrd);
 
 	printf("Facows start\n");
 	while (1) {
@@ -143,8 +147,9 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			break;
 		}
 
-		if ((fws_fd[0].revents & POLLIN) != 0) {
-			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+		struct sockaddr_in6 client_addr = {0};
+		if ((fws_fd[0U].revents & POLLIN) != 0) {
+			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, (U32*)&client_addr);
 
 			if (net_80_443_redir(client_http_fd, child_ctx->conf) < 0) {
 				if (client_http_fd >= 0) {
@@ -159,10 +164,10 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 				client_http_fd = -1;
 			}
 
-		} else if ((fws_fd[1].revents & POLLIN) != 0) {
-			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_size);
+		} else if ((fws_fd[1U].revents & POLLIN) != 0) {
+			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, (U32*)&client_addr);
 
-			struct fws_thread_ctx *thread_ctx = calloc(1, sizeof(struct fws_thread_ctx));
+			struct fws_thread_ctx *thread_ctx = calloc(1U, sizeof(struct fws_thread_ctx));
 			if (thread_ctx == FAC_NULL) {
 				ret = 1;
 				goto out;
@@ -178,22 +183,26 @@ void fws_child_run(struct fws_child_ctx *child_ctx) {
 			thread_ctx->thrd_n_opq_p = (I32 *) &thrd_n;
 
 			thrd_n++;
-			pthread_t fws_thread;
-			pthread_create(&fws_thread, FAC_NULL, _fws_thrd_run, (void*)thread_ctx);
-			pthread_detach(fws_thread);
+			U64 fws_thrd = 0U;
+			pthread_create(&fws_thrd, FAC_NULL, _fws_thrd_run, (void*)thread_ctx);
+			pthread_detach(fws_thrd);
 		}
 	}
 
 	ret = 0;
 out:
-	thrd_join_ms = 0;
-	while (thrd_n > 0) {
-		poll(FAC_NULL, 0, 100);
-		thrd_join_ms += 100;
-		if (thrd_join_ms > 5000) {
-			break;
+	{ /* thrd wait for terminate */
+		U64 thrd_join_ms = 0U;
+		while (thrd_n > 0) {
+			poll(FAC_NULL, 0, 100);
+			thrd_join_ms += 100U;
+			if (thrd_join_ms > 5000U) {
+				break;
+			}
 		}
 	}
+
+	/* 300ms wait for safety */
 	poll(FAC_NULL, 0, 300);
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
@@ -236,16 +245,14 @@ out:
 }
 
 I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
+	struct nft_ctx *nft_ctx = FAC_NULL;
 	I32 ret = 0;
-
-	_Atomic I32 *sig_flag_p = (_Atomic I32 *) parent_ctx->sig_flag_opq_p;
 
 	if (parent_ctx->pipe_write_fd >= 0) {
 		close(parent_ctx->pipe_write_fd);
 		parent_ctx->pipe_write_fd = -1;
 	}
 
-	struct nft_ctx *nft_ctx = FAC_NULL;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == FAC_NULL) {
 		fprintf(stderr, "nft context allocation error\n");
@@ -257,19 +264,26 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 	nft_fd.fd = parent_ctx->pipe_read_fd;
 	nft_fd.events = POLLIN | POLLHUP | POLLERR;
 
-	while (1) {
+	while (FAC_TRUE) {
 		errno = 0;
-		if (poll(&nft_fd, 1, -1) < 0) {
-			if (errno == EINTR && (*sig_flag_p == SIGINT || *sig_flag_p == SIGTERM)) {
+		ret = poll(&nft_fd, 1, -1);
+		if (ret < 0) {
+			const I32 poll_err = errno;
+			_Atomic I32 *sig_flag_p = (_Atomic I32 *) parent_ctx->sig_flag_opq_p;
+			const I32 sig_cond = (*sig_flag_p == SIGINT || *sig_flag_p == SIGTERM);
+			const I32 poll_cond = (poll_err == EINTR && sig_cond);
+			if (poll_cond == FAC_TRUE) {
 				break;
 			}
 			ret = -1;
 			goto out;
 		}
 
-		if ((nft_fd.revents & (POLLIN|POLLHUP|POLLERR)) != 0) {
+		const I32 nft_event = nft_fd.revents & (POLLIN|POLLHUP|POLLERR);
+		if (nft_event != 0) {
 			C8 ip_buf[INET6_ADDRSTRLEN] = {0};
-			if (read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN) <= 0) {
+			ret = read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN);
+			if (ret <= 0) {
 				break;
 			} else {
 				net_nft_dos_ban(nft_ctx, ip_buf, parent_ctx->conf->ban_time);
@@ -282,9 +296,19 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx) {
 		parent_ctx->pipe_read_fd = -1;
 	}
 
-	waitpid(parent_ctx->pid, FAC_NULL, 0);
-	if (parent_ctx->conf->nft == 1) {
-		net_nft_fini();
+	ret = waitpid(parent_ctx->pid, FAC_NULL, 0);
+	if (ret < 0) {
+		fprintf(stderr, "fws_parent_run(): waitpid(): error\n");
+		ret = -1;
+		goto out;
+	}
+	if (parent_ctx->conf->nft == 1U) {
+		ret = net_nft_fini();
+		if (ret < 0) {
+			fprintf(stderr, "fws_parent_run(): net_nft_fini(): error\n");
+			ret = -1;
+			goto out;
+		}
 	}
 
 	ret = 0;
@@ -303,46 +327,59 @@ out:
 }
 
 static void *_fws_thrd_run(void *thread_args) {
-	struct fws_thread_ctx *thread_ctx = (struct fws_thread_ctx *) thread_args;
-	const struct fws_conf *conf = thread_ctx->fws_conf;
-	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock_opq_p;
-	_Atomic I32 *thrd_n_p = (_Atomic I32 *) thread_ctx->thrd_n_opq_p;
-
-	I32 client_fd = thread_ctx->fd;
-	I32 write_fd = thread_ctx->write_fd;
-	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thread_ctx->ssl_ctx_opq_p;
-
 	SSL *ssl = FAC_NULL;
+	struct fws_thread_ctx *thread_ctx = FAC_NULL;
+	I32 client_fd = -1;
+	I32 ret = 0;
 
-	I32 ssl_flag = 1;
-	C8 request_buf[8192] = {0};
+	thread_ctx = (struct fws_thread_ctx *) thread_args;
 
-	ssl = SSL_new(ssl_ctx_p);
-	if (ssl == FAC_NULL) {
-		ssl_flag = -1;
+	client_fd = thread_ctx->fd;
+	if (client_fd < 0) {
+		ret = -1;
 		goto out;
 	}
 
 	struct timeval sock_tv = {0};
 	sock_tv.tv_sec = 2;
 	sock_tv.tv_usec = 0;
-	setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const C8*)&sock_tv, sizeof(sock_tv));
-
-	SSL_set_fd(ssl, client_fd);
-	if (SSL_accept(ssl) <= 0) {
-		ssl_flag = -1;
+	ret = setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const C8*)&sock_tv, sizeof(sock_tv));
+	if (ret < 0) {
+		ret = -1;
 		goto out;
 	}
 
-	while (1) {
-		if (net_443_read((U8*)ssl, request_buf, sizeof(request_buf)) != 0) {
-			ssl_flag = -1;
+	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thread_ctx->ssl_ctx_opq_p;
+	ssl = SSL_new(ssl_ctx_p);
+	if (ssl == FAC_NULL) {
+		ret = -1;
+		goto out;
+	}
+
+	ret = SSL_set_fd(ssl, client_fd);
+	if (ret <= 0) {
+		ret = -1;
+		goto out;
+	}
+	ret = SSL_accept(ssl);
+	if (ret <= 0) {
+		ret = -1;
+		goto out;
+	}
+
+	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock_opq_p;
+	const struct fws_conf *conf = thread_ctx->fws_conf;
+	while (FAC_TRUE) {
+		static const C8 html_ext_str[] = ".html";
+		C8 req_buf[8192U] = {0};
+		if (net_443_read((U8*)ssl, req_buf, sizeof(req_buf)) != 0) {
+			ret = -1;
 			goto out;
 		}
 
 		struct fws_http_req http = {0};
-		if (net_http_req_parse(request_buf, &http, conf->domain, sizeof(conf->domain)) != 0) {
-			ssl_flag = -1;
+		if (net_http_req_parse(req_buf, &http, conf->domain, sizeof(conf->domain)) != 0) {
+			ret = -1;
 			goto out;
 		}
 
@@ -351,14 +388,14 @@ static void *_fws_thrd_run(void *thread_args) {
 
 		if (status_code == 301) {
 			net_http_path_redir(&http, conf, &file, (U8*)ssl);
-			ssl_flag = -1;
+			ret = -1;
 			goto out;
 		}
 
 		U8 is_html = (U8) FAC_FALSE;
 		U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
-		C8 *path_p = file.path + path_size - (sizeof(".html") - 1);
-		if (memcmp(path_p, ".html", sizeof(".html")) == 0) {
+		C8 *path_p = file.path + path_size - (sizeof(html_ext_str) - 1);
+		if (memcmp(path_p, html_ext_str, sizeof(html_ext_str)) == 0) {
 			is_html = (U8) FAC_TRUE;
 		}
 
@@ -373,7 +410,7 @@ static void *_fws_thrd_run(void *thread_args) {
 
 		/* get nft_i */
 		I32 nft_i = 0;
-		for (U32 i=0; i<NFT_ARR_CAP; i++) {
+		for (U32 i=0; i<nft_arr_cap; i++) {
 			ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip, 16);
 			if (ip_cmp == 0) {
 				nft_i = i;
@@ -393,14 +430,14 @@ static void *_fws_thrd_run(void *thread_args) {
 		if (nft_arr[nft_i].html_cnt > conf->lim_page || nft_arr[nft_i].no_html_cnt > conf->lim_res) {
 			nft_arr[nft_i].dos_cnt++;
 
-			if (conf->nft == 1 && nft_arr[nft_i].dos_cnt > conf->ban_lim) {
-				write(write_fd, ip_buf, INET6_ADDRSTRLEN);
+			if (conf->nft == 1U && nft_arr[nft_i].dos_cnt > conf->ban_lim) {
+				write(thread_ctx->write_fd, ip_buf, INET6_ADDRSTRLEN);
 			}
 
 			pthread_mutex_unlock(nft_lock);
 			status_code = 429;
 			if (net_443_err_write((U8*)ssl, status_code) < 0) {
-				ssl_flag = -1;
+				ret = -1;
 				goto out;
 			}
 			goto out;
@@ -420,7 +457,7 @@ static void *_fws_thrd_run(void *thread_args) {
 
 		if (status_code != 0) {
 			if (net_443_err_write((U8*)ssl, status_code) < 0) {
-				ssl_flag = -1;
+				ret = -1;
 				goto out;
 			}
 
@@ -431,17 +468,18 @@ static void *_fws_thrd_run(void *thread_args) {
 				http_res.hsts_max_age = conf->hsts_max_age;
 			}
 			if (net_443_res_write((U8*)ssl, &http_res, file.size) != 0) {
-				ssl_flag = -1;
+				ret = -1;
 				goto out;
 			}
 			net_443_write((U8*)ssl, file.path);
 		}
 	}
 
+	ret = 0;
 out:
-	if (ssl_flag >= 0) {
+	// TODO: while for shutdown
+	if (ret >= 0) {
 		SSL_shutdown(ssl);
-		ssl_flag = -1;
 	}
 	SSL_free(ssl);
 	ssl = FAC_NULL;
@@ -450,23 +488,25 @@ out:
 		client_fd = -1;
 	}
 
-	(*thrd_n_p)--;
+	{
+		_Atomic I32 *thrd_n_p = (_Atomic I32 *) thread_ctx->thrd_n_opq_p;
+		(*thrd_n_p)--;
+	}
 	free(thread_ctx);
 	thread_ctx = FAC_NULL;
 	return FAC_NULL;
 }
 
 static void *_fws_swap_thrd_run(void *swap_ctx_opq) {
-	struct fws_swap_ctx *swap_ctx = (struct fws_swap_ctx *) swap_ctx_opq;
-
-	_Atomic I32 *sig_flag_p = (_Atomic I32 *) swap_ctx->sig_flag_opq_p;
-	_Atomic I32 *thrd_n_p = (_Atomic I32 *) swap_ctx->thrd_n_opq_p;
+	struct fws_swap_ctx *swap_ctx = FAC_NULL;
 	I64 global_time = time(FAC_NULL);
 	I64 swap_time = global_time;
 
+	swap_ctx = (struct fws_swap_ctx *) swap_ctx_opq;
 	swap_ctx->global_time = global_time;
 	swap_ctx->swap_time = swap_time;
 
+	_Atomic I32 *sig_flag_p = (_Atomic I32 *) swap_ctx->sig_flag_opq_p;
 	while (FAC_TRUE) {
 		I32 ret = poll(FAC_NULL, 0, 1000);
 		if (ret < 0) {
@@ -479,6 +519,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq) {
 		_fws_swap_run(swap_ctx);
 	}
 
+	_Atomic I32 *thrd_n_p = (_Atomic I32 *) swap_ctx->thrd_n_opq_p;
 	(*thrd_n_p)--;
 	free(swap_ctx);
 	swap_ctx = FAC_NULL;
@@ -496,7 +537,7 @@ static void _fws_swap_run(struct fws_swap_ctx *swap_ctx) {
 	*swap_ctx->nft_arr_pp = swap_ctx->nft_swap_arr_p;
 	swap_ctx->nft_swap_arr_p = nft_table_tmp;
 	pthread_mutex_unlock(nft_lock);
-	memset(swap_ctx->nft_swap_arr_p, 0, sizeof(struct fws_nft)*NFT_ARR_CAP);
+	memset(swap_ctx->nft_swap_arr_p, 0, sizeof(struct fws_nft)*nft_arr_cap);
 
 	swap_ctx->global_time = time(FAC_NULL);
 	swap_ctx->swap_time = swap_ctx->global_time;

@@ -26,11 +26,11 @@ I32 net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 	*ssl_ctx = SSL_CTX_new(ssl_method);
 	if (SSL_CTX_use_certificate_file(*ssl_ctx, config->ssl_cert, SSL_FILETYPE_PEM) <= 0) {
 		fprintf(stderr, "ssl certification error\n");
-		return 1;
+		return -1;
 	}
 	if (SSL_CTX_use_PrivateKey_file(*ssl_ctx, config->ssl_key, SSL_FILETYPE_PEM) <= 0) {
 		fprintf(stderr, "ssl private key error\n");
-		return 1;
+		return -1;
 	}
 
 	SSL_CTX_set_session_cache_mode(*ssl_ctx, SSL_SESS_CACHE_OFF);

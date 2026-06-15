@@ -33,7 +33,7 @@ I32 main(void) {
 	fws_sa.sa_handler = _fws_exit;
 	ret = sigaction(SIGINT, &fws_sa, FAC_NULL);
 	if (ret < 0) {
-		fprintf(stderr, "main(): sigaction():failed\n");
+		fprintf(stderr, "main(): sigaction(): failed\n");
 		ret = 1;
 		goto out;
 	}
