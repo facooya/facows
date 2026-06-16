@@ -68,15 +68,15 @@ struct fws_file {
 	I64 size;
 };
 
-struct fws_thread_ctx {
+struct fws_thrd_ctx {
 	I32 fd;
 	I32 write_fd;
 	I32 *thrd_n_opq_p;
 
-	U8 client_ip[16];
+	U8 client_ip_buf[16];
 	U8 *ssl_ctx_opq_p;
 	U8 *nft_lock_opq_p;
-	struct fws_conf *fws_conf;
+	struct fws_conf *conf_p;
 	struct fws_nft **nft_arr_pp;
 };
 
@@ -97,7 +97,7 @@ struct fws_parent_ctx {
 	I64 pid;
 	I32 *sig_flag_opq_p;
 
-	struct fws_conf *conf;
+	struct fws_conf *conf_p;
 };
 
 struct fws_child_ctx {
@@ -105,7 +105,7 @@ struct fws_child_ctx {
 	I32 pipe_write_fd;
 	I32 *sig_flag_opq_p;
 
-	struct fws_conf *conf;
+	struct fws_conf *conf_p;
 };
 
 #endif

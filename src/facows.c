@@ -22,9 +22,9 @@ static void _fws_exit(I32 sig);
 
 I32 main(void) {
 	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
-	struct fws_parent_ctx *parent_ctx = FAC_NULL;
-	struct fws_child_ctx *child_ctx = FAC_NULL;
-	I32 pipe_fd[2U] = {-1, -1};
+	struct fws_parent_ctx *parent_ctx_p = FAC_NULL;
+	struct fws_child_ctx *child_ctx_p = FAC_NULL;
+	I32 pipe_fds[2U] = {-1, -1};
 	I32 pipe_read_fd = -1;
 	I32 pipe_write_fd = -1;
 	I32 ret = 0;
@@ -60,14 +60,14 @@ I32 main(void) {
 		}
 	}
 
-	ret = pipe(pipe_fd);
+	ret = pipe(pipe_fds);
 	if (ret < 0) {
 		fprintf(stderr, "main(): pipe(): pipe failed\n");
 		ret = 1;
 		goto out;
 	}
-	pipe_read_fd = pipe_fd[0U];
-	pipe_write_fd = pipe_fd[1U];
+	pipe_read_fd = pipe_fds[0U];
+	pipe_write_fd = pipe_fds[1U];
 
 	const I32 pid = fork();
 	if (pid < 0) {
@@ -77,50 +77,50 @@ I32 main(void) {
 	}
 
 	if (pid == 0) {
-		child_ctx = malloc(sizeof(struct fws_child_ctx));
-		if (child_ctx == FAC_NULL) {
+		child_ctx_p = malloc(sizeof(struct fws_child_ctx));
+		if (child_ctx_p == FAC_NULL) {
 			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
 		}
-		child_ctx->pipe_read_fd = pipe_read_fd;
-		child_ctx->pipe_write_fd = pipe_write_fd;
-		child_ctx->sig_flag_opq_p = (I32 *) &sig_flag;
-		child_ctx->conf = &conf;
+		child_ctx_p->pipe_read_fd = pipe_read_fd;
+		child_ctx_p->pipe_write_fd = pipe_write_fd;
+		child_ctx_p->sig_flag_opq_p = (I32 *) &sig_flag;
+		child_ctx_p->conf_p = &conf;
 
-		fws_child_run(child_ctx);
-		free(child_ctx);
-		child_ctx = FAC_NULL;
+		fws_child_run(child_ctx_p);
+		free(child_ctx_p);
+		child_ctx_p = FAC_NULL;
 
 	} else {
-		parent_ctx = malloc(sizeof(struct fws_parent_ctx));
-		if (parent_ctx == FAC_NULL) {
+		parent_ctx_p = malloc(sizeof(struct fws_parent_ctx));
+		if (parent_ctx_p == FAC_NULL) {
 			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
 		}
-		parent_ctx->pipe_read_fd = pipe_read_fd;
-		parent_ctx->pipe_write_fd = pipe_write_fd;
-		parent_ctx->sig_flag_opq_p = (I32 *) &sig_flag;
-		parent_ctx->pid = pid;
-		parent_ctx->conf = &conf;
+		parent_ctx_p->pipe_read_fd = pipe_read_fd;
+		parent_ctx_p->pipe_write_fd = pipe_write_fd;
+		parent_ctx_p->sig_flag_opq_p = (I32 *) &sig_flag;
+		parent_ctx_p->pid = pid;
+		parent_ctx_p->conf_p = &conf;
 
-		ret = fws_parent_run(parent_ctx);
+		ret = fws_parent_run(parent_ctx_p);
 		if (ret < 0) {
 			fprintf(stderr, "main(): fws_parent_run(): error\n");
 			ret = 1;
 			goto out;
 		}
-		free(parent_ctx);
-		parent_ctx = FAC_NULL;
+		free(parent_ctx_p);
+		parent_ctx_p = FAC_NULL;
 	}
 
 	ret = 0;
 out:
-	free(child_ctx);
-	child_ctx = FAC_NULL;
-	free(parent_ctx);
-	parent_ctx = FAC_NULL;
+	free(child_ctx_p);
+	child_ctx_p = FAC_NULL;
+	free(parent_ctx_p);
+	parent_ctx_p = FAC_NULL;
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;
