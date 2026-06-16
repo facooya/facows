@@ -330,6 +330,7 @@ static void *_fws_thrd_run(void *thread_args) {
 	SSL *ssl = FAC_NULL;
 	struct fws_thread_ctx *thread_ctx = FAC_NULL;
 	I32 client_fd = -1;
+	I32 ssl_shutdown_flag = -1;
 	I32 ret = 0;
 
 	thread_ctx = (struct fws_thread_ctx *) thread_args;
@@ -366,26 +367,28 @@ static void *_fws_thrd_run(void *thread_args) {
 		ret = -1;
 		goto out;
 	}
+	ssl_shutdown_flag = 1;
 
 	pthread_mutex_t *nft_lock = (pthread_mutex_t *) thread_ctx->nft_lock_opq_p;
 	const struct fws_conf *conf = thread_ctx->fws_conf;
 	while (FAC_TRUE) {
 		static const C8 html_ext_str[] = ".html";
 		C8 req_buf[8192U] = {0};
-		if (net_443_read((U8*)ssl, req_buf, sizeof(req_buf)) != 0) {
+		ret = net_443_read((U8*)ssl, req_buf, sizeof(req_buf));
+		if (ret != 0) {
 			ret = -1;
 			goto out;
 		}
 
 		struct fws_http_req http = {0};
-		if (net_http_req_parse(req_buf, &http, conf->domain, sizeof(conf->domain)) != 0) {
+		ret = net_http_req_parse(req_buf, &http, conf->domain, sizeof(conf->domain));
+		if (ret != 0) {
 			ret = -1;
 			goto out;
 		}
 
 		struct fws_file file = {0};
 		I32 status_code = file_parse(&file, &http, conf->web_root, sizeof(conf->web_root));
-
 		if (status_code == 301) {
 			net_http_path_redir(&http, conf, &file, (U8*)ssl);
 			ret = -1;
@@ -395,13 +398,14 @@ static void *_fws_thrd_run(void *thread_args) {
 		U8 is_html = (U8) FAC_FALSE;
 		U64 path_size = fac_memclen(file.path, FAC_NUL, sizeof(file.path));
 		C8 *path_p = file.path + path_size - (sizeof(html_ext_str) - 1);
-		if (memcmp(path_p, html_ext_str, sizeof(html_ext_str)) == 0) {
+		ret = memcmp(path_p, html_ext_str, sizeof(html_ext_str));
+		if (ret == 0) {
 			is_html = (U8) FAC_TRUE;
 		}
 
 		C8 ip_buf[INET6_ADDRSTRLEN] = {0};
 		U8 *client_ip = thread_ctx->client_ip;
-		U8 empty_ip[16] = {0};
+		U8 empty_ip[16U] = {0};
 		I32 ip_cmp = 0;
 		inet_ntop(AF_INET6, client_ip, ip_buf, INET6_ADDRSTRLEN);
 
@@ -436,7 +440,8 @@ static void *_fws_thrd_run(void *thread_args) {
 
 			pthread_mutex_unlock(nft_lock);
 			status_code = 429;
-			if (net_443_err_write((U8*)ssl, status_code) < 0) {
+			ret = net_443_err_write((U8*)ssl, status_code);
+			if (ret < 0) {
 				ret = -1;
 				goto out;
 			}
@@ -456,7 +461,8 @@ static void *_fws_thrd_run(void *thread_args) {
 		pthread_mutex_unlock(nft_lock);
 
 		if (status_code != 0) {
-			if (net_443_err_write((U8*)ssl, status_code) < 0) {
+			ret = net_443_err_write((U8*)ssl, status_code);
+			if (ret < 0) {
 				ret = -1;
 				goto out;
 			}
@@ -467,7 +473,8 @@ static void *_fws_thrd_run(void *thread_args) {
 			if (conf->hsts == 1U) {
 				http_res.hsts_max_age = conf->hsts_max_age;
 			}
-			if (net_443_res_write((U8*)ssl, &http_res, file.size) != 0) {
+			ret = net_443_res_write((U8*)ssl, &http_res, file.size);
+			if (ret != 0) {
 				ret = -1;
 				goto out;
 			}
@@ -477,12 +484,28 @@ static void *_fws_thrd_run(void *thread_args) {
 
 	ret = 0;
 out:
-	// TODO: while for shutdown
-	if (ret >= 0) {
-		SSL_shutdown(ssl);
+	/* ssl shutdown */
+	if (ssl_shutdown_flag >= 0) {
+		U32 ssl_timeout = 0U;
+		I32 ssl_stat = SSL_shutdown(ssl);
+		if (ssl_stat == 0) {
+			while (ssl_timeout < 2000U) {
+				I32 poll_ret = poll(FAC_NULL, 0, 100);
+				if (poll_ret < 0) {
+					break;
+				}
+				ssl_stat = SSL_shutdown(ssl);
+				if (ssl_stat == 1) {
+					break;
+				}
+				ssl_timeout += 100U;
+			}
+		}
 	}
+
 	SSL_free(ssl);
 	ssl = FAC_NULL;
+
 	if (client_fd >= 0) {
 		close(client_fd);
 		client_fd = -1;
