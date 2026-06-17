@@ -51,9 +51,9 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val);
 static I32 _tool_allow_ports_check(const C8 *p);
 
 I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
-	I32 ret = 0;
-	I32 conf_fd = -1;
 	C8 *conf_buf = FAC_NULL;
+	I32 conf_fd = -1;
+	I32 ret = 0;
 
 	conf->allow_ports[0] = '\0';
 
@@ -64,7 +64,8 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 	}
 
 	struct stat conf_stat = {0};
-	if (fstat(conf_fd, &conf_stat) < 0) {
+	ret = fstat(conf_fd, &conf_stat);
+	if (ret < 0) {
 		ret = -1;
 		goto out;
 	}
@@ -75,7 +76,9 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 		ret = -1;
 		goto out;
 	}
-	if (read(conf_fd, conf_buf, conf_len-1) < 0) {
+
+	I64 read_ret = read(conf_fd, conf_buf, conf_len-1);
+	if (read_ret < 0) {
 		ret = -1;
 		goto out;
 	}
@@ -83,7 +86,8 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 	conf_buf[conf_len-1] = '\n';
 	conf_buf[conf_len] = '\0';
 
-	if (_conf_parse(conf, conf_buf, conf_len)) {
+	ret = _conf_parse(conf, conf_buf, conf_len);
+	if (ret < 0) {
 		ret = -1;
 		goto out;
 	}
@@ -95,14 +99,12 @@ out:
 	if (conf_fd >= 0) {
 		close(conf_fd);
 		conf_fd = -1;
-		(void)conf_fd;
 	}
 	return ret;
 }
 
 static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) {
-	assert(conf != FAC_NULL);
-	assert(conf_buf != FAC_NULL);
+	I32 ret = 0;
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const C8 *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
@@ -124,7 +126,8 @@ static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) 
 			if (conf_key_len != key_len) {
 				continue;
 			}
-			if (memcmp(p, keys[i], key_len) != 0) {
+			ret = memcmp(p, keys[i], key_len);
+			if (ret != 0) {
 				continue;
 			}
 
@@ -135,7 +138,8 @@ static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) 
 				p++;
 			}
 
-			if (_conf_parse_value(i, p, conf) < 0) {
+			ret = _conf_parse_value(i, p, conf);
+			if (ret < 0) {
 				return -1;
 			}
 			break;
@@ -155,7 +159,7 @@ next_line:
 }
 
 static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
-	assert(p != FAC_NULL);
+	I32 ret = 0;
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const C8 *p2 = FAC_NULL;
 	U64 n = 0;
@@ -184,11 +188,11 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
 				return -1;
 			}
-			if (_tool_allow_ports_check(p) < 0) {
+			ret = _tool_allow_ports_check(p);
+			if (ret < 0) {
 				return -1;
 			}
 			n = p2 - p;
-			assert(n + STR_LEN(PREFIX_ALLOW_PORTS) < sizeof(conf->allow_ports));
 			memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
 			memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);
 			conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
@@ -205,7 +209,8 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 
 		case NFT:
-			if (_tool_conf_bool_set(&conf->nft, p) < 0) {
+			ret = _tool_conf_bool_set(&conf->nft, p);
+			if (ret < 0) {
 				return -1;
 			}
 			break;
@@ -223,7 +228,8 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 
 		case HSTS:
-			if (_tool_conf_bool_set(&conf->hsts, p) < 0) {
+			ret = _tool_conf_bool_set(&conf->hsts, p);
+			if (ret < 0) {
 				return -1;
 			}
 			break;
@@ -232,27 +238,32 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 
 		case DOMAIN:
-			if (_tool_conf_str_set(conf->domain, p, sizeof(conf->domain)) < 0) {
+			ret = _tool_conf_str_set(conf->domain, p, sizeof(conf->domain));
+			if (ret < 0) {
 				return -1;
 			}
 			break;
 		case WEB_ROOT:
-			if (_tool_conf_str_set(conf->web_root, p, sizeof(conf->web_root)) < 0) {
+			ret = _tool_conf_str_set(conf->web_root, p, sizeof(conf->web_root));
+			if (ret < 0) {
 				return -1;
 			}
 			break;
 		case WEB_LOG:
-			if (_tool_conf_str_set(conf->web_log, p, sizeof(conf->web_log)) < 0) {
+			ret = _tool_conf_str_set(conf->web_log, p, sizeof(conf->web_log));
+			if (ret < 0) {
 				return -1;
 			}
 			break;
 		case SSL_CERT:
-			if (_tool_conf_str_set(conf->ssl_cert, p, sizeof(conf->ssl_cert)) < 0) {
+			ret = _tool_conf_str_set(conf->ssl_cert, p, sizeof(conf->ssl_cert));
+			if (ret < 0) {
 				return -1;
 			}
 			break;
 		case SSL_KEY:
-			if (_tool_conf_str_set(conf->ssl_key, p, sizeof(conf->ssl_key)) < 0) {
+			ret = _tool_conf_str_set(conf->ssl_key, p, sizeof(conf->ssl_key));
+			if (ret < 0) {
 				return -1;
 			}
 			break;
@@ -305,7 +316,6 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
 }
 
 static I32 _tool_allow_ports_check(const C8 *p) {
-	assert(p != FAC_NULL);
 	C8 *ep = FAC_NULL;
 	while (*p != '\n' && *p != '\0') {
 		I64 port = strtol(p, &ep, 10);
@@ -314,7 +324,6 @@ static I32 _tool_allow_ports_check(const C8 *p) {
 			continue;
 		}
 
-		assert(port > 0 || port < 65536);
 		if (port < 0 || port >= 65536) {
 			fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 			return -1;
