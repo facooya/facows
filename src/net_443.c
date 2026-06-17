@@ -96,16 +96,16 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	static const C8 http_hsts_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\nStrict-Transport-Security: max-age=%u;\r\n\r\n";
 
 	SSL *ssl = (SSL *) ssl_opq;
-	U64 n = 0U;
-	U64 written = 0U;
+	U64 n = 0;
+	U64 written = 0;
 	I32 ret = 0;
 
 	C8 *res_buf = FAC_NULL;
 
-	if (http_res->hsts_max_age != 0U) {
-		ret = snprintf(FAC_NULL, 0U, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+	if (http_res->hsts_max_age != 0) {
+		ret = snprintf(FAC_NULL, 0, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
 	} else {
-		ret = snprintf(FAC_NULL, 0U, http_res_fmt, http_res->content, size, http_res->date);
+		ret = snprintf(FAC_NULL, 0, http_res_fmt, http_res->content, size, http_res->date);
 	}
 	if (ret < 0) {
 		ret = -1;
@@ -113,16 +113,16 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	}
 
 	n = (U64) ret;
-	res_buf = malloc(n+1U);
+	res_buf = malloc(n+1);
 	if (res_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
 	}
 
-	if (http_res->hsts_max_age != 0U) {
-		ret = snprintf(res_buf, n+1U, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+	if (http_res->hsts_max_age != 0) {
+		ret = snprintf(res_buf, n+1, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
 	} else {
-		ret = snprintf(res_buf, n+1U, http_res_fmt, http_res->content, size, http_res->date);
+		ret = snprintf(res_buf, n+1, http_res_fmt, http_res->content, size, http_res->date);
 	}
 	if (ret < 0) {
 		ret = -1;
@@ -163,10 +163,10 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 
 	SSL *ssl = (SSL *) ssl_opq;
 	struct stat html_stat = {0};
-	U64 html_n = 0U;
-	U64 msg_i = 0U;
-	U64 res_n = 0U;
-	U64 written = 0U;
+	U64 html_n = 0;
+	U64 msg_i = 0;
+	U64 res_n = 0;
+	U64 written = 0;
 	I32 ret = 0;
 
 	C8 *html_fmt = FAC_NULL;
@@ -198,20 +198,20 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		html_fd = -1;
 	}
 
-	for (U64 i=0U; i<(sizeof(http_msg)/sizeof(http_msg[0U])); i++) {
+	for (U64 i=0; i<(sizeof(http_msg)/sizeof(http_msg[0])); i++) {
 		if (http_msg[i].code == code) {
 			msg_i = i;
 			break;
 		}
 	}
 
-	ret = snprintf(FAC_NULL, 0U, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
+	ret = snprintf(FAC_NULL, 0, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
 	if (ret < 0) {
 		ret = -1;
 		goto out;
 	}
 	html_n = (U64) ret;
-	html_buf = malloc(html_n+1U);
+	html_buf = malloc(html_n+1);
 	if (html_buf == FAC_NULL) {
 		ret = -1;
 		goto out;
@@ -223,36 +223,36 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	}
 
 	if (code == 429) {
-		ret = snprintf(FAC_NULL, 0U, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(FAC_NULL, 0, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;
 		}
 		res_n = (U64) ret;
-		res_buf = malloc(res_n+1U);
+		res_buf = malloc(res_n+1);
 		if (res_buf == FAC_NULL) {
 			ret = -1;
 			goto out;
 		}
-		ret = snprintf(res_buf, res_n+1U, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(res_buf, res_n+1, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;
 		}
 
 	} else {
-		ret = snprintf(FAC_NULL, 0U, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(FAC_NULL, 0, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;
 		}
 		res_n = (U64) ret;
-		res_buf = malloc(res_n+1U);
+		res_buf = malloc(res_n+1);
 		if (res_buf == FAC_NULL) {
 			ret = -1;
 			goto out;
 		}
-		ret = snprintf(res_buf, res_n+1U, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(res_buf, res_n+1, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;

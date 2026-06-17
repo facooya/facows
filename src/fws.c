@@ -27,7 +27,7 @@
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
-static const U64 nft_arr_cap = 1024U;
+static const U64 nft_arr_cap = 1024;
 
 static void *_fws_thrd_run(void *thrd_ctx_opq_p);
 static void *_fws_swap_thrd_run(void *swap_ctx_opq_p);
@@ -80,12 +80,12 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	}
 
 	struct passwd *passwd_p = FAC_NULL;
-	for (U64 i=0U; i<(sizeof(uname_str_arr)/sizeof(uname_str_arr[0U])); i++) {
+	for (U64 i=0; i<(sizeof(uname_str_arr)/sizeof(uname_str_arr[0])); i++) {
 		passwd_p = getpwnam(uname_str_arr[i]);
 		if (passwd_p != FAC_NULL) {
 			break;
 		}
-		if ((i+1U) == (sizeof(uname_str_arr)/sizeof(uname_str_arr[0U]))) {
+		if ((i+1) == (sizeof(uname_str_arr)/sizeof(uname_str_arr[0]))) {
 			fprintf(stderr, "user not found\n");
 			ret = 1;
 			goto out;
@@ -110,11 +110,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		child_ctx_p->pipe_read_fd = -1;
 	}
 
-	struct pollfd fws_fds[2U] = {0};
-	fws_fds[0U].fd = server_http_fd;
-	fws_fds[0U].events = POLLIN;
-	fws_fds[1U].fd = server_https_fd;
-	fws_fds[1U].events = POLLIN;
+	struct pollfd fws_fds[2] = {0};
+	fws_fds[0].fd = server_http_fd;
+	fws_fds[0].events = POLLIN;
+	fws_fds[1].fd = server_https_fd;
+	fws_fds[1].events = POLLIN;
 
 	pthread_mutex_t nft_lock = {0};
 	I32 nft_lock_flag = -1;
@@ -127,7 +127,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 	struct fws_nft *nft_arr_p = nft_a_arr_p;
 	struct fws_nft *nft_swap_arr_p = nft_b_arr_p;
-	struct fws_swap_ctx *swap_ctx_p = calloc(1U, sizeof(struct fws_swap_ctx));
+	struct fws_swap_ctx *swap_ctx_p = calloc(1, sizeof(struct fws_swap_ctx));
 	_Atomic I32 *sig_flag_p = (_Atomic I32 *) child_ctx_p->sig_flag_opq_p;
 	swap_ctx_p->nft_arr_pp = &nft_arr_p;
 	swap_ctx_p->nft_swap_arr_p = nft_swap_arr_p;
@@ -137,7 +137,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	swap_ctx_p->conf_p = child_ctx_p->conf_p;
 
 	thrd_n++;
-	U64 fws_swap_thrd = 0U;
+	U64 fws_swap_thrd = 0;
 	pthread_create(&fws_swap_thrd, FAC_NULL, _fws_swap_thrd_run, swap_ctx_p);
 	pthread_detach(fws_swap_thrd);
 
@@ -148,7 +148,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		}
 
 		struct sockaddr_in6 client_addr = {0};
-		if ((fws_fds[0U].revents & POLLIN) != 0) {
+		if ((fws_fds[0].revents & POLLIN) != 0) {
 			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, (U32*)&client_addr);
 
 			if (net_80_443_redir(client_http_fd, child_ctx_p->conf_p) < 0) {
@@ -164,10 +164,10 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				client_http_fd = -1;
 			}
 
-		} else if ((fws_fds[1U].revents & POLLIN) != 0) {
+		} else if ((fws_fds[1].revents & POLLIN) != 0) {
 			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, (U32*)&client_addr);
 
-			struct fws_thrd_ctx *thrd_ctx_p = calloc(1U, sizeof(struct fws_thrd_ctx));
+			struct fws_thrd_ctx *thrd_ctx_p = calloc(1, sizeof(struct fws_thrd_ctx));
 			if (thrd_ctx_p == FAC_NULL) {
 				ret = 1;
 				goto out;
@@ -183,7 +183,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			thrd_ctx_p->thrd_n_opq_p = (I32 *) &thrd_n;
 
 			thrd_n++;
-			U64 fws_thrd = 0U;
+			U64 fws_thrd = 0;
 			pthread_create(&fws_thrd, FAC_NULL, _fws_thrd_run, (void*)thrd_ctx_p);
 			pthread_detach(fws_thrd);
 		}
@@ -192,11 +192,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	ret = 0;
 out:
 	{ /* thrd wait for terminate */
-		U64 thrd_join_ms = 0U;
+		U64 thrd_join_ms = 0;
 		while (thrd_n > 0) {
 			poll(FAC_NULL, 0, 100);
-			thrd_join_ms += 100U;
-			if (thrd_join_ms > 5000U) {
+			thrd_join_ms += 100;
+			if (thrd_join_ms > 5000) {
 				break;
 			}
 		}
@@ -302,7 +302,7 @@ I32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		ret = -1;
 		goto out;
 	}
-	if (parent_ctx_p->conf_p->nft == 1U) {
+	if (parent_ctx_p->conf_p->nft == 1) {
 		ret = net_nft_fini();
 		if (ret < 0) {
 			fprintf(stderr, "fws_parent_run(): net_nft_fini(): error\n");
@@ -327,7 +327,7 @@ out:
 }
 
 static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
-	static const U8 empty_ip_buf[16U] = {0};
+	static const U8 empty_ip_buf[16] = {0};
 	SSL *ssl = FAC_NULL;
 	struct fws_thrd_ctx *thrd_ctx_p = FAC_NULL;
 	I32 client_fd = -1;
@@ -374,7 +374,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	const struct fws_conf *conf_p = thrd_ctx_p->conf_p;
 	while (FAC_TRUE) {
 		static const C8 html_ext_str[] = ".html";
-		C8 req_buf[8192U] = {0};
+		C8 req_buf[8192] = {0};
 		ret = net_443_read((U8*)ssl, req_buf, sizeof(req_buf));
 		if (ret != 0) {
 			ret = -1;
@@ -412,8 +412,8 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		struct fws_nft *nft_arr = *thrd_ctx_p->nft_arr_pp;
 
 		/* get nft_i */
-		I32 nft_i = 0;
-		for (U32 i=0; i<nft_arr_cap; i++) {
+		U32 nft_i = 0;
+		for (U64 i=0; i<nft_arr_cap; i++) {
 			I32 ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip_buf, 16);
 			if (ip_cmp == 0) {
 				nft_i = i;
@@ -433,7 +433,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		if (nft_arr[nft_i].html_cnt > conf_p->lim_page || nft_arr[nft_i].no_html_cnt > conf_p->lim_res) {
 			nft_arr[nft_i].dos_cnt++;
 
-			if (conf_p->nft == 1U && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
+			if (conf_p->nft == 1 && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
 				write(thrd_ctx_p->write_fd, ip_buf, INET6_ADDRSTRLEN);
 			}
 
@@ -469,7 +469,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
-			if (conf_p->hsts == 1U) {
+			if (conf_p->hsts == 1) {
 				http_res.hsts_max_age = conf_p->hsts_max_age;
 			}
 			ret = net_443_res_write((U8*)ssl, &http_res, file.size);
@@ -485,10 +485,10 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 out:
 	/* ssl shutdown */
 	if (ssl_shutdown_flag >= 0) {
-		U32 ssl_timeout = 0U;
+		U32 ssl_timeout = 0;
 		I32 ssl_stat = SSL_shutdown(ssl);
 		if (ssl_stat == 0) {
-			while (ssl_timeout < 2000U) {
+			while (ssl_timeout < 2000) {
 				I32 poll_ret = poll(FAC_NULL, 0, 100);
 				if (poll_ret < 0) {
 					break;
@@ -497,7 +497,7 @@ out:
 				if (ssl_stat == 1) {
 					break;
 				}
-				ssl_timeout += 100U;
+				ssl_timeout += 100;
 			}
 		}
 	}

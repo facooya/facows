@@ -21,7 +21,7 @@
 #define IPV4_MAP "::ffff:"
 #define IPV4_MAP_N sizeof(IPV4_MAP) - 1
 
-#define DOS_LIMIT 3U
+#define DOS_LIMIT 3
 #define NFT_BAN4 "add element netdev facows facows_ban4 {%s timeout %dm}"
 #define NFT_BAN6 "add element netdev facows facows_ban6 {%s timeout %dm}"
 

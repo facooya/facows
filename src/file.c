@@ -13,18 +13,15 @@
 #include <ctype.h>
 #include <sys/stat.h>
 
-static void _file_init(struct fws_file *file);
-static I32 _raw_path_build(C8 *raw_path, const C8 *uri_path, const C8 *web_root, U64 web_root_len);
+static I32 _raw_path_build(C8 *raw_path_buf, const C8 *uri_path, const C8 *web_root, U64 web_root_len);
 static I32 _uri_path_build(struct fws_file *file);
-static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir);
+static I32 _path_build(struct fws_file *file, C8 *raw_path_buf, I32 dir);
 
 I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const C8 *web_root, U64 web_root_n) {
-	C8 *path_rp = NULL;
-
+	C8 *path_rp = FAC_NULL;
 	I32 ret = 0;
 
-	_file_init(file);
-
+	memset(file, 0, sizeof(struct fws_file));
 	memcpy(file->uri_path, http_req->path, http_req->path_n);
 	file->uri_path[http_req->path_n] = '\0';
 	file->uri_path_n = http_req->path_n;
@@ -35,8 +32,8 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		goto out;
 	}
 
-	C8 raw_path[4096];
-	_raw_path_build(raw_path, file->uri_path, web_root, web_root_len);
+	C8 raw_path_buf[4096];
+	_raw_path_build(raw_path_buf, file->uri_path, web_root, web_root_len);
 
 	I32 code = _uri_path_build(file);
 	if (code == 301) {
@@ -47,13 +44,13 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		goto out;
 	}
 
-	code = _path_build(file, raw_path, code);
+	code = _path_build(file, raw_path_buf, code);
 	if (code != 0) {
 		ret = code;
 		goto out;
 	}
 
-	path_rp = realpath(raw_path, FAC_NULL);
+	path_rp = realpath(raw_path_buf, FAC_NULL);
 	if (path_rp == FAC_NULL) {
 		ret = 404;
 		goto out;
@@ -67,7 +64,8 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 	free(path_rp);
 	path_rp = NULL;
 
-	if (memcmp(file->path, web_root, web_root_len) != 0) {
+	ret = memcmp(file->path, web_root, web_root_len);
+	if (ret != 0) {
 		ret = -1;
 		goto out;
 	}
@@ -77,13 +75,6 @@ out:
 	free(path_rp);
 	path_rp = NULL;
 	return ret;
-}
-
-static void _file_init(struct fws_file *file) {
-	file->uri_path[0] = '\0';
-	file->uri_path_n = 0;
-	file->path[0] = '\0';
-	file->size = 0;
 }
 
 static I32 _uri_path_build(struct fws_file *file) {
@@ -124,21 +115,21 @@ static I32 _uri_path_build(struct fws_file *file) {
 	return 0;
 }
 
-static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
+static I32 _path_build(struct fws_file *file, C8 *raw_path_buf, I32 dir) {
 	struct stat file_stat;
-	C8 *p = memchr(raw_path, '\0', sizeof(file->path));
+	C8 *p = memchr(raw_path_buf, '\0', sizeof(file->path));
 	if (p == FAC_NULL) {
 		return -1;
 	}
 
 	if (dir == 1) {
-		if (stat(raw_path, &file_stat) != 0) {
+		if (stat(raw_path_buf, &file_stat) != 0) {
 			return 404;
 		} else {
 			static const C8 index_str[] = "index.html";
 			memcpy(p, index_str, sizeof(index_str));
 
-			if (stat(raw_path, &file_stat) == 0) {
+			if (stat(raw_path_buf, &file_stat) == 0) {
 				file->size = file_stat.st_size;
 			} else {
 				return 404;
@@ -146,10 +137,10 @@ static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
 		}
 
 	} else {
-		if (stat(raw_path, &file_stat) != 0) {
+		if (stat(raw_path_buf, &file_stat) != 0) {
 			static const C8 html_str[] = ".html";
 			memcpy(p, html_str, sizeof(html_str));
-			if (stat(raw_path, &file_stat) != 0) {
+			if (stat(raw_path_buf, &file_stat) != 0) {
 				return 404;
 			}
 			file->size = file_stat.st_size;
@@ -162,12 +153,12 @@ static I32 _path_build(struct fws_file *file, C8 *raw_path, I32 dir) {
 	return 0;
 }
 
-static I32 _raw_path_build(C8 *raw_path, const C8 *uri_path, const C8 *web_root, U64 web_root_len) {
-	memcpy(raw_path, web_root, web_root_len);
-	raw_path[web_root_len] = '\0';
+static I32 _raw_path_build(C8 *raw_path_buf, const C8 *uri_path, const C8 *web_root, U64 web_root_len) {
+	memcpy(raw_path_buf, web_root, web_root_len);
+	raw_path_buf[web_root_len] = '\0';
 
 	const C8 *p1 = uri_path;
-	C8 *p2 = raw_path + web_root_len;
+	C8 *p2 = raw_path_buf + web_root_len;
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';

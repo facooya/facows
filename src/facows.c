@@ -24,7 +24,7 @@ I32 main(void) {
 	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
 	struct fws_parent_ctx *parent_ctx_p = FAC_NULL;
 	struct fws_child_ctx *child_ctx_p = FAC_NULL;
-	I32 pipe_fds[2U] = {-1, -1};
+	I32 pipe_fds[2] = {-1, -1};
 	I32 pipe_read_fd = -1;
 	I32 pipe_write_fd = -1;
 	I32 ret = 0;
@@ -52,7 +52,7 @@ I32 main(void) {
 		goto out;
 	}
 
-	if (conf.nft == 1U) {
+	if (conf.nft == 1) {
 		ret = net_nft_init(&conf);
 		if (ret < 0) {
 			fprintf(stderr, "main(): net_nft_init(): failed\n");
@@ -66,8 +66,8 @@ I32 main(void) {
 		ret = 1;
 		goto out;
 	}
-	pipe_read_fd = pipe_fds[0U];
-	pipe_write_fd = pipe_fds[1U];
+	pipe_read_fd = pipe_fds[0];
+	pipe_write_fd = pipe_fds[1];
 
 	const I32 pid = fork();
 	if (pid < 0) {

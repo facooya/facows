@@ -53,8 +53,6 @@ restore_st->abc = 2;
 
 **Should**
 - Should not header pollution.
-- Should use `U64` in like `for()`, `while()`.
-- Should use unsinged number using `U`. E.g., `if ((U32) cnt < 3U)`, `arr[1U]`
 - Should `I32 func_ret = func(); if (func_ret < 0)`, should not `if (func() < 0)`.
 - Readonly data should use `static const` instead of `#define`.
 - Should use memory free or file descriptor close using `goto out;` and `out` label in function bottom.
