@@ -15,18 +15,18 @@
 #include <assert.h>
 #include <unistd.h>
 
-_Atomic I32 sig_flag = -1;
+_Atomic s32 sig_flag = -1;
 
-static void _fws_exit(I32 sig);
+static void _fws_exit(s32 sig);
 
-I32 main(void) {
-	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
+s32 main(void) {
+	static const char conf_path_str[] = "/etc/facows/facows.conf";
 	struct fws_parent_ctx *parent_ctx_p = nullptr;
 	struct fws_child_ctx *child_ctx_p = nullptr;
-	I32 pipe_fds[2] = {-1, -1};
-	I32 pipe_read_fd = -1;
-	I32 pipe_write_fd = -1;
-	I32 ret = 0;
+	s32 pipe_fds[2] = {-1, -1};
+	s32 pipe_read_fd = -1;
+	s32 pipe_write_fd = -1;
+	s32 ret = 0;
 
 	struct sigaction fws_sa = {0};
 	fws_sa.sa_handler = _fws_exit;
@@ -68,7 +68,7 @@ I32 main(void) {
 	pipe_read_fd = pipe_fds[0];
 	pipe_write_fd = pipe_fds[1];
 
-	const I32 pid = fork();
+	const s32 pid = fork();
 	if (pid < 0) {
 		fprintf(stderr, "main(): fork(): fork failed\n");
 		ret = 1;
@@ -84,7 +84,7 @@ I32 main(void) {
 		}
 		child_ctx_p->pipe_read_fd = pipe_read_fd;
 		child_ctx_p->pipe_write_fd = pipe_write_fd;
-		child_ctx_p->sig_flag_opq_p = (I32 *) &sig_flag;
+		child_ctx_p->sig_flag_opq_p = (s32 *) &sig_flag;
 		child_ctx_p->conf_p = &conf;
 
 		fws_child_run(child_ctx_p);
@@ -100,7 +100,7 @@ I32 main(void) {
 		}
 		parent_ctx_p->pipe_read_fd = pipe_read_fd;
 		parent_ctx_p->pipe_write_fd = pipe_write_fd;
-		parent_ctx_p->sig_flag_opq_p = (I32 *) &sig_flag;
+		parent_ctx_p->sig_flag_opq_p = (s32 *) &sig_flag;
 		parent_ctx_p->pid = pid;
 		parent_ctx_p->conf_p = &conf;
 
@@ -131,6 +131,6 @@ out:
 	return ret;
 }
 
-static void _fws_exit(I32 sig) {
+static void _fws_exit(s32 sig) {
 	sig_flag = sig;
 }

@@ -57,14 +57,14 @@
 
 #define NFT_FINI "delete table netdev facows; delete table inet facows;"
 
-static I32 _name_get(C8 *buf, U64 buf_n);
+static s32 _name_get(char *buf, u64 buf_n);
 
-I32 net_nft_init(const struct fws_conf *conf) {
-	I32 ret = 0;
+s32 net_nft_init(const struct fws_conf *conf) {
+	s32 ret = 0;
 	struct nft_ctx *nft_ctx = nullptr;
-	C8 *nft_buf = nullptr;
+	char *nft_buf = nullptr;
 
-	C8 name_buf[16] = {0};
+	char name_buf[16] = {0};
 	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
 		ret = -1;
 		goto out;
@@ -77,7 +77,7 @@ I32 net_nft_init(const struct fws_conf *conf) {
 		goto out;
 	}
 
-	U64 n = snprintf(nullptr, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
+	u64 n = snprintf(nullptr, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_buf = malloc(n+1);
 	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
@@ -91,8 +91,8 @@ out:
 	return ret;
 }
 
-I32 net_nft_fini(void) {
-	I32 ret = 0;
+s32 net_nft_fini(void) {
+	s32 ret = 0;
 	struct nft_ctx *nft_ctx = nullptr;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == nullptr) {
@@ -109,10 +109,10 @@ out:
 	return ret;
 }
 
-void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
-	const C8 *ip_p = ip_buf;
-	C8 *nft_buf = nullptr;
-	U64 cmd_n = 0;
+void net_nft_dos_ban(struct nft_ctx *nft_ctx, const char *ip_buf, u32 ban_time) {
+	const char *ip_p = ip_buf;
+	char *nft_buf = nullptr;
+	u64 cmd_n = 0;
 
 	if (memcmp(ip_buf, IPV4_MAP, IPV4_MAP_N) == 0) {
 		ip_p += IPV4_MAP_N;
@@ -139,11 +139,11 @@ out:
 	nft_buf = nullptr;
 }
 
-static I32 _name_get(C8 *buf, U64 buf_n) {
-	I32 ret = 0;
+static s32 _name_get(char *buf, u64 buf_n) {
+	s32 ret = 0;
 	FILE *fp = nullptr;
-	C8 *glp = nullptr;
-	U64 gln = 0;
+	char *glp = nullptr;
+	u64 gln = 0;
 
 	fp = fopen(ROUTE_PATH, "r");
 	if (fp == nullptr) {
@@ -152,8 +152,8 @@ static I32 _name_get(C8 *buf, U64 buf_n) {
 		goto out;
 	}
 
-	C8 dst_buf[16];
-	C8 net_buf[16];
+	char dst_buf[16];
+	char net_buf[16];
 	while (getline(&glp, &gln, fp) != -1) {
 		if (sscanf(glp, "%15s %15s", net_buf, dst_buf) == 2) {
 			if (memcmp(dst_buf, ROUTE_DST, STR_LEN(ROUTE_DST)) == 0) {

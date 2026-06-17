@@ -9,6 +9,6 @@
 #include "factype.h"
 
 void fws_child_run(struct fws_child_ctx *child_ctx);
-I32 fws_parent_run(struct fws_parent_ctx *parent_ctx);
+s32 fws_parent_run(struct fws_parent_ctx *parent_ctx);
 
 #endif

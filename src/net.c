@@ -19,11 +19,11 @@
 #define REQ_VALUE_MAX 1024
 #define REQ_UA_MAX 16
 
-I32 net_server_init(U16 port) {
+s32 net_server_init(u16 port) {
 	struct sockaddr_in6 server_addr;
-	const I32 opt = 1;
+	const s32 opt = 1;
 
-	I32 server_fd = socket(AF_INET6, SOCK_STREAM, 0);
+	s32 server_fd = socket(AF_INET6, SOCK_STREAM, 0);
 	if (server_fd < 0) {
 		return -1;
 	}
@@ -44,15 +44,15 @@ I32 net_server_init(U16 port) {
 	return server_fd;
 }
 
-void net_host_build(C8 *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
-	C8 port_buf[8] = {0};
+void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf) {
+	char port_buf[8] = {0};
 	memset(port_buf, '\0', sizeof(port_buf));
 	if (conf->https_port != 443) {
 		snprintf(port_buf, sizeof(port_buf), ":%hu", conf->https_port);
 	}
 
-	U64 n = strnlen(http_req->subdomain, sizeof(http_req->subdomain));
-	C8 *p = host_buf;
+	u64 n = strnlen(http_req->subdomain, sizeof(http_req->subdomain));
+	char *p = host_buf;
 	*p = '\0';
 	memcpy(p, http_req->subdomain, n);
 	p += n;

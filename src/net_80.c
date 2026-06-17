@@ -14,11 +14,11 @@
 
 #define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 
-I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
-	C8 recv_buf[8192] = {0};
+s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
+	char recv_buf[8192] = {0};
 
-	I32 recv_size;
-	I32 recv_total_size = 0;
+	s32 recv_size;
+	s32 recv_total_size = 0;
 	while (1) {
 		recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
 		if (recv_size == 0) {
@@ -41,9 +41,9 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 	http_req.subdomain[0] = '\0';
 	http_req.uri[0] = '\0';
 
-	const C8 *p1 = recv_buf;
-	const C8 *p2 = memchr(p1, ' ', sizeof(http_req.method));
-	U64 n;
+	const char *p1 = recv_buf;
+	const char *p2 = memchr(p1, ' ', sizeof(http_req.method));
+	u64 n;
 	if (p2 == nullptr) {
 		return -1;
 	}
@@ -93,7 +93,7 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 				memcpy(http_req.subdomain, "www", sizeof("www"));
 			} else {
 				p2 = p1;
-				for (U64 i=0; i<sizeof(http_req.subdomain); i++) {
+				for (u64 i=0; i<sizeof(http_req.subdomain); i++) {
 					if (p2[i] == '.') {
 						p2 += i;
 						break;
@@ -115,11 +115,11 @@ I32 net_80_443_redir(I32 client_80_fd, const struct fws_conf *config) {
 
 	}
 
-	C8 host_buf[512];
+	char host_buf[512];
 	net_host_build(host_buf, &http_req, config);
 
-	U64 res_n = snprintf(nullptr, 0, RES_301, host_buf, http_req.uri);
-	C8 *res_buf = malloc(res_n+1);
+	u64 res_n = snprintf(nullptr, 0, RES_301, host_buf, http_req.uri);
+	char *res_buf = malloc(res_n+1);
 	if (res_buf == nullptr) {
 		return -1;
 	}

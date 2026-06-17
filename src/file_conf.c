@@ -43,16 +43,16 @@
 #define CONF_KEYS_ENUM(key) key,
 #define CONF_KEYS_ARR(key) #key,
 
-static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len);
-static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf);
-static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n);
-static I32 _tool_conf_bool_set(U8 *member, const C8 *val);
-static I32 _tool_allow_ports_check(const C8 *p);
+static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len);
+static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf);
+static s32 _tool_conf_str_set(char *member, const char *val, u64 member_n);
+static s32 _tool_conf_bool_set(u8 *member, const char *val);
+static s32 _tool_allow_ports_check(const char *p);
 
-I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
-	C8 *conf_buf = nullptr;
-	I32 conf_fd = -1;
-	I32 ret = 0;
+s32 file_conf_read(struct fws_conf *conf, const char *path) {
+	char *conf_buf = nullptr;
+	s32 conf_fd = -1;
+	s32 ret = 0;
 
 	conf->allow_ports[0] = '\0';
 
@@ -69,14 +69,14 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 		goto out;
 	}
 
-	U64 conf_len = conf_stat.st_size + 1;
+	u64 conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
 	if (conf_buf == nullptr) {
 		ret = -1;
 		goto out;
 	}
 
-	I64 read_ret = read(conf_fd, conf_buf, conf_len-1);
+	s64 read_ret = read(conf_fd, conf_buf, conf_len-1);
 	if (read_ret < 0) {
 		ret = -1;
 		goto out;
@@ -102,31 +102,31 @@ out:
 	return ret;
 }
 
-static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) {
-	I32 ret = 0;
+static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len) {
+	s32 ret = 0;
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const C8 *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
+	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
-	const C8 *p_end = nullptr;
-	U64 n = 0;
-	const C8 *p = conf_buf;
-	U64 total_n = 0;
+	const char *p_end = nullptr;
+	u64 n = 0;
+	const char *p = conf_buf;
+	u64 total_n = 0;
 	while (total_n < conf_len) {
 		if (*p == '#') {
 			goto next_line;
 		}
 
-		for (U64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
+		for (u64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
 			p_end = memchr(p, ' ', CONF_KEY_MAX);
 			if (p_end == nullptr) {
 				return -1;
 			}
-			U64 conf_key_len = p_end - p;
+			u64 conf_key_len = p_end - p;
 			if (conf_key_len == CONF_KEY_MAX) {
 				goto next_line;
 			}
 
-			U64 key_len = strnlen(keys[i], CONF_KEY_MAX);
+			u64 key_len = strnlen(keys[i], CONF_KEY_MAX);
 			if (conf_key_len != key_len) {
 				continue;
 			}
@@ -166,12 +166,12 @@ next_line:
 	return 0;
 }
 
-static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
-	I32 ret = 0;
+static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
+	s32 ret = 0;
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const C8 *p2 = nullptr;
-	U64 n = 0;
-	I64 port = -1;
+	const char *p2 = nullptr;
+	u64 n = 0;
+	s64 port = -1;
 	switch (i) {
 		case HTTP_PORT:
 			port = strtol(p, nullptr, 10);
@@ -179,7 +179,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
 			}
-			conf->http_port = (U16) port;
+			conf->http_port = (u16) port;
 			break;
 		case HTTPS_PORT:
 			port = strtol(p, nullptr, 10);
@@ -187,7 +187,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
 			}
-			conf->https_port = (U16) port;
+			conf->https_port = (u16) port;
 			break;
 
 		case ALLOW_PORTS:
@@ -207,13 +207,13 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 
 		case LIM_SWAP_TIME:
-			conf->lim_swap_time = (U32) strtol(p, nullptr, 10);
+			conf->lim_swap_time = (u32) strtol(p, nullptr, 10);
 			break;
 		case LIM_PAGE:
-			conf->lim_page = (U32) strtol(p, nullptr, 10);
+			conf->lim_page = (u32) strtol(p, nullptr, 10);
 			break;
 		case LIM_RES:
-			conf->lim_res = (U32) strtol(p, nullptr, 10);
+			conf->lim_res = (u32) strtol(p, nullptr, 10);
 			break;
 
 		case NFT:
@@ -223,16 +223,16 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case PPS_LIMIT:
-			conf->pps_limit = (U32) strtol(p, nullptr, 10);
+			conf->pps_limit = (u32) strtol(p, nullptr, 10);
 			break;
 		case PPS_BURST:
-			conf->pps_burst = (U32) strtol(p, nullptr, 10);
+			conf->pps_burst = (u32) strtol(p, nullptr, 10);
 			break;
 		case BAN_LIM:
-			conf->ban_lim = (U32) strtol(p, nullptr, 10);
+			conf->ban_lim = (u32) strtol(p, nullptr, 10);
 			break;
 		case BAN_TIME:
-			conf->ban_time = (U32) strtol(p, nullptr, 10);
+			conf->ban_time = (u32) strtol(p, nullptr, 10);
 			break;
 
 		case HSTS:
@@ -242,7 +242,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case HSTS_MAX_AGE:
-			conf->hsts_max_age = (U32) strtol(p, nullptr, 10);
+			conf->hsts_max_age = (u32) strtol(p, nullptr, 10);
 			break;
 
 		case DOMAIN:
@@ -280,27 +280,27 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 	return 0;
 }
 
-static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n) {
-	const C8 *p1 = val + 1;
+static s32 _tool_conf_str_set(char *member, const char *val, u64 member_n) {
+	const char *p1 = val + 1;
 	if (*(p1-1) != '"') {
 		printf("facows.conf: error: require double quote before write string\n");
 		return -1;
 	}
 
-	const C8 *p2 = memchr(p1, '"', member_n-1);
+	const char *p2 = memchr(p1, '"', member_n-1);
 	if (p2 == nullptr) {
 		printf("facows.conf: error: very large value, lower than %zu\n", member_n-1);
 		return -1;
 	}
 
-	U64 n = p2 - p1;
+	u64 n = p2 - p1;
 	memcpy(member, p1, n);
 	member[n] = '\0';
 
 	return 0;
 }
 
-static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
+static s32 _tool_conf_bool_set(u8 *member, const char *val) {
 	if (memcmp(val, TRUE, STR_LEN(TRUE)) == 0) {
 		if (*(val+STR_LEN(TRUE)) == ' ' || *(val+STR_LEN(TRUE)) == '\n') {
 			*member = 1;
@@ -323,10 +323,10 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
 	return 0;
 }
 
-static I32 _tool_allow_ports_check(const C8 *p) {
-	C8 *ep = nullptr;
+static s32 _tool_allow_ports_check(const char *p) {
+	char *ep = nullptr;
 	while (*p != '\n' && *p != '\0') {
-		I64 port = strtol(p, &ep, 10);
+		s64 port = strtol(p, &ep, 10);
 		if (p == ep) {
 			p++;
 			continue;
