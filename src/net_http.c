@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
@@ -33,7 +32,7 @@ I32 net_http_req_parse(C8 *req_buf, struct fws_http_req *http_req, const C8 *dom
 	_line_parse(req_buf, http_req);
 	_uri_parse(http_req);
 
-	for (U64 i=0; i<fac_memclen(req_buf, '\0', REQ_MAX); i++) {
+	for (U64 i=0; i<strnlen(req_buf, REQ_MAX); i++) {
 		req_buf[i] = tolower(req_buf[i]);
 	}
 
@@ -55,11 +54,11 @@ I32 net_http_res_build(struct fws_http_res *http_res, const C8 *path, U64 path_n
 
 	const C8 *p1 = path;
 	const C8 *p2;
-	U64 n = fac_memclen(p1, '\0', path_n);
+	U64 n = strnlen(p1, path_n);
 
 	while (1) {
 		p2 = memchr(p1, '.', n);
-		if (p2 == FAC_NULL) {
+		if (p2 == nullptr) {
 			break;
 		}
 
@@ -87,12 +86,12 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 	C8 host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	U64 n = snprintf(FAC_NULL, 0, RES_301, host_buf, file->uri_path);
+	U64 n = snprintf(nullptr, 0, RES_301, host_buf, file->uri_path);
 	C8 *res_buf = malloc(n+1);
 	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);
-	res_buf = FAC_NULL;
+	res_buf = nullptr;
 }
 
 static void _res_init(struct fws_http_res *http_res) {
@@ -109,9 +108,9 @@ static void _http_init(struct fws_http_req *http_req) {
 	http_req->browser[0] = '\0';
 	http_req->subdomain[0] = '\0';
 	http_req->uri[0] = '\0';
-	http_req->path = FAC_NULL;
+	http_req->path = nullptr;
 	http_req->path_n = 0;
-	http_req->query = FAC_NULL;
+	http_req->query = nullptr;
 	http_req->query_n = 0;
 }
 
@@ -120,7 +119,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 	const C8 *p1 = req_buf;
 	const C8 *p2 = memchr(p1, ' ', sizeof(http_req->method));
 	U64 n;
-	if (p2 == FAC_NULL) {
+	if (p2 == nullptr) {
 		// err_log
 		return 1;
 	}
@@ -133,7 +132,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 
 	p1 += n + 1;
 	p2 = memchr(p1, ' ', sizeof(http_req->uri));
-	if (p2 == FAC_NULL) {
+	if (p2 == nullptr) {
 		return 1;
 	}
 	n = p2 - p1;
@@ -145,7 +144,7 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 
 	p1 += n + 1;
 	p2 = memchr(p1, '\r', sizeof(http_req->version));
-	if (p2 == FAC_NULL) {
+	if (p2 == nullptr) {
 		return 1;
 	}
 	n = p2 - p1;
@@ -160,11 +159,11 @@ static I32 _line_parse(const C8 *req_buf, struct fws_http_req *http_req) {
 static void _uri_parse(struct fws_http_req *http_req) {
 	C8 *p1 = http_req->uri;
 	C8 *p2;
-	U64 uri_len = fac_memclen(http_req->uri, '\0', sizeof(http_req->uri));
+	U64 uri_len = strnlen(http_req->uri, sizeof(http_req->uri));
 
 	http_req->path = p1;
 	p2 = memchr(http_req->uri, '?', uri_len);
-	if (p2 == FAC_NULL) {
+	if (p2 == nullptr) {
 		http_req->path_n = uri_len;
 	} else {
 		http_req->path_n = p2 - p1;
@@ -181,7 +180,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 	const C8 *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
 	U64 n;
 
-	if (p2 == FAC_NULL || *(p2+1) != '\n') {
+	if (p2 == nullptr || *(p2+1) != '\n') {
 		return 1;
 	}
 	p1 = p2 + 2;
@@ -192,15 +191,15 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 		}
 
 		p2 = memchr(p1, ':', REQ_KEY_MAX);
-		if (p2 == FAC_NULL) {
+		if (p2 == nullptr) {
 			return 1;
 		}
 
 		for (U64 i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
-			if (memcmp(p1, keyword[i], fac_memclen(keyword[i], '\0', sizeof(keyword[i]))) == 0) {
+			if (memcmp(p1, keyword[i], strnlen(keyword[i], sizeof(keyword[i]))) == 0) {
 				p1 = p2 + 1;
 				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
-				if (p2 == FAC_NULL) {
+				if (p2 == nullptr) {
 					return 1;
 				}
 				while (*p1 == ' ') {
@@ -216,7 +215,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 							return 1;
 						}
 
-						if (memcmp(p1, domain, fac_memclen(domain, '\0', domain_n)) == 0) {
+						if (memcmp(p1, domain, strnlen(domain, domain_n)) == 0) {
 							memcpy(http_req->subdomain, "www", sizeof("www"));
 						} else {
 							p2 = p1;
@@ -247,10 +246,10 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, os_type[i][0], p2-p3+1);
-								if (p4 == FAC_NULL) {
+								if (p4 == nullptr) {
 									break;
 								}
-								if (memcmp(p4, os_type[i], fac_memclen(os_type[i], '\0', sizeof(os_type[i]))) == 0) {
+								if (memcmp(p4, os_type[i], strnlen(os_type[i], sizeof(os_type[i]))) == 0) {
 									memcpy(http_req->os, os_type[i], sizeof(os_type[i]));
 									flag = 1;
 									break;
@@ -271,10 +270,10 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 							p3 = p1;
 							while (1) {
 								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
-								if (p4 == FAC_NULL) {
+								if (p4 == nullptr) {
 									break;
 								}
-								if (memcmp(p4, browser_type[i], fac_memclen(browser_type[i], '\0', sizeof(browser_type[i]))) == 0) {
+								if (memcmp(p4, browser_type[i], strnlen(browser_type[i], sizeof(browser_type[i]))) == 0) {
 									memcpy(http_req->browser, browser_type[i], sizeof(browser_type[i]));
 									flag = 1;
 									break;
@@ -317,7 +316,7 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 		}
 
 		p2 = memchr(p1, '\r', REQ_VALUE_MAX);
-		if (p2 == FAC_NULL || *(p2+1) != '\n') {
+		if (p2 == nullptr || *(p2+1) != '\n') {
 			return 1;
 		}
 		p1 = p2 + 2;
@@ -327,12 +326,12 @@ static I32 _header_parse(const C8 *req_buf, struct fws_http_req *http_req, const
 }
 
 /*static I32 _err_check(const struct fws_http_req *http_req) {
-	if (memcmp(http_req->method, "GET", fac_memclen(http_req->method, '\0', sizeof(http_req->method))) != 0) {
+	if (memcmp(http_req->method, "GET", strnlen(http_req->method, sizeof(http_req->method))) != 0) {
 		// attack_log
 		return 1; // 405 Method Not Allowed
 	}
 
-	if (memcmp(http_req->version, "HTTP/1.1", fac_memclen(http_req->version, '\0', sizeof(http_req->version))) != 0) {
+	if (memcmp(http_req->version, "HTTP/1.1", strnlen(http_req->version, sizeof(http_req->version))) != 0) {
 		// warn_log
 		return 1;
 	}

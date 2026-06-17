@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 #include "file.h"
@@ -22,8 +21,8 @@ static void _fws_exit(I32 sig);
 
 I32 main(void) {
 	static const C8 conf_path_str[] = "/etc/facows/facows.conf";
-	struct fws_parent_ctx *parent_ctx_p = FAC_NULL;
-	struct fws_child_ctx *child_ctx_p = FAC_NULL;
+	struct fws_parent_ctx *parent_ctx_p = nullptr;
+	struct fws_child_ctx *child_ctx_p = nullptr;
 	I32 pipe_fds[2] = {-1, -1};
 	I32 pipe_read_fd = -1;
 	I32 pipe_write_fd = -1;
@@ -31,13 +30,13 @@ I32 main(void) {
 
 	struct sigaction fws_sa = {0};
 	fws_sa.sa_handler = _fws_exit;
-	ret = sigaction(SIGINT, &fws_sa, FAC_NULL);
+	ret = sigaction(SIGINT, &fws_sa, nullptr);
 	if (ret < 0) {
 		fprintf(stderr, "main(): sigaction(): failed\n");
 		ret = 1;
 		goto out;
 	}
-	ret = sigaction(SIGTERM, &fws_sa, FAC_NULL);
+	ret = sigaction(SIGTERM, &fws_sa, nullptr);
 	if (ret < 0) {
 		fprintf(stderr, "main(): sigaction(): failed\n");
 		ret = 1;
@@ -78,7 +77,7 @@ I32 main(void) {
 
 	if (pid == 0) {
 		child_ctx_p = malloc(sizeof(struct fws_child_ctx));
-		if (child_ctx_p == FAC_NULL) {
+		if (child_ctx_p == nullptr) {
 			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
@@ -90,11 +89,11 @@ I32 main(void) {
 
 		fws_child_run(child_ctx_p);
 		free(child_ctx_p);
-		child_ctx_p = FAC_NULL;
+		child_ctx_p = nullptr;
 
 	} else {
 		parent_ctx_p = malloc(sizeof(struct fws_parent_ctx));
-		if (parent_ctx_p == FAC_NULL) {
+		if (parent_ctx_p == nullptr) {
 			fprintf(stderr, "main(): malloc(): failed\n");
 			ret = 1;
 			goto out;
@@ -112,15 +111,15 @@ I32 main(void) {
 			goto out;
 		}
 		free(parent_ctx_p);
-		parent_ctx_p = FAC_NULL;
+		parent_ctx_p = nullptr;
 	}
 
 	ret = 0;
 out:
 	free(child_ctx_p);
-	child_ctx_p = FAC_NULL;
+	child_ctx_p = nullptr;
 	free(parent_ctx_p);
-	parent_ctx_p = FAC_NULL;
+	parent_ctx_p = nullptr;
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;

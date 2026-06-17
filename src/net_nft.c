@@ -61,8 +61,8 @@ static I32 _name_get(C8 *buf, U64 buf_n);
 
 I32 net_nft_init(const struct fws_conf *conf) {
 	I32 ret = 0;
-	struct nft_ctx *nft_ctx = FAC_NULL;
-	C8 *nft_buf = FAC_NULL;
+	struct nft_ctx *nft_ctx = nullptr;
+	C8 *nft_buf = nullptr;
 
 	C8 name_buf[16] = {0};
 	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
@@ -71,13 +71,13 @@ I32 net_nft_init(const struct fws_conf *conf) {
 	}
 
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
-	if (nft_ctx == FAC_NULL) {
+	if (nft_ctx == nullptr) {
 		printf("facows_nft: can not create nft context\n");
 		ret = -1;
 		goto out;
 	}
 
-	U64 n = snprintf(FAC_NULL, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
+	U64 n = snprintf(nullptr, 0, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_buf = malloc(n+1);
 	snprintf(nft_buf, n+1, NFT_INIT, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
@@ -85,17 +85,17 @@ I32 net_nft_init(const struct fws_conf *conf) {
 	ret = 0;
 out:
 	nft_ctx_free(nft_ctx);
-	nft_ctx = FAC_NULL;
+	nft_ctx = nullptr;
 	free(nft_buf);
-	nft_buf = FAC_NULL;
+	nft_buf = nullptr;
 	return ret;
 }
 
 I32 net_nft_fini(void) {
 	I32 ret = 0;
-	struct nft_ctx *nft_ctx = FAC_NULL;
+	struct nft_ctx *nft_ctx = nullptr;
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
-	if (nft_ctx == FAC_NULL) {
+	if (nft_ctx == nullptr) {
 		printf("facows_nft: can not create nft context\n");
 		ret = -1;
 		goto out;
@@ -105,28 +105,28 @@ I32 net_nft_fini(void) {
 	ret = 0;
 out:
 	nft_ctx_free(nft_ctx);
-	nft_ctx = FAC_NULL;
+	nft_ctx = nullptr;
 	return ret;
 }
 
 void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
 	const C8 *ip_p = ip_buf;
-	C8 *nft_buf = FAC_NULL;
+	C8 *nft_buf = nullptr;
 	U64 cmd_n = 0;
 
 	if (memcmp(ip_buf, IPV4_MAP, IPV4_MAP_N) == 0) {
 		ip_p += IPV4_MAP_N;
-		cmd_n = snprintf(FAC_NULL, 0, NFT_BAN4, ip_p, ban_time);
+		cmd_n = snprintf(nullptr, 0, NFT_BAN4, ip_p, ban_time);
 		nft_buf = malloc(cmd_n+1);
-		if (nft_buf == FAC_NULL) {
+		if (nft_buf == nullptr) {
 			goto out;
 		}
 		snprintf(nft_buf, cmd_n+1, NFT_BAN4, ip_p, ban_time);
 
 	} else {
-		cmd_n = snprintf(FAC_NULL, 0, NFT_BAN6, ip_p, ban_time);
+		cmd_n = snprintf(nullptr, 0, NFT_BAN6, ip_p, ban_time);
 		nft_buf = malloc(cmd_n+1);
-		if (nft_buf == FAC_NULL) {
+		if (nft_buf == nullptr) {
 			goto out;
 		}
 		snprintf(nft_buf, cmd_n+1, NFT_BAN6, ip_p, ban_time);
@@ -136,17 +136,17 @@ void net_nft_dos_ban(struct nft_ctx *nft_ctx, const C8 *ip_buf, U32 ban_time) {
 
 out:
 	free(nft_buf);
-	nft_buf = FAC_NULL;
+	nft_buf = nullptr;
 }
 
 static I32 _name_get(C8 *buf, U64 buf_n) {
 	I32 ret = 0;
-	FILE *fp = FAC_NULL;
-	C8 *glp = FAC_NULL;
+	FILE *fp = nullptr;
+	C8 *glp = nullptr;
 	U64 gln = 0;
 
 	fp = fopen(ROUTE_PATH, "r");
-	if (fp == FAC_NULL) {
+	if (fp == nullptr) {
 		fprintf(stderr, "net_nft/_name_get(): open failed %s\n", ROUTE_PATH);
 		ret = -1;
 		goto out;
@@ -177,10 +177,10 @@ static I32 _name_get(C8 *buf, U64 buf_n) {
 	ret = 0;
 out:
 	free(glp);
-	glp = FAC_NULL;
-	if (fp != FAC_NULL) {
+	glp = nullptr;
+	if (fp != nullptr) {
 		fclose(fp);
-		fp = FAC_NULL;
+		fp = nullptr;
 	}
 	return ret;
 }

@@ -49,7 +49,7 @@ restore_st->abc = 2;
 - Must use explicit type.
 - - `int a = 10;` -> `I32 a = 10;`
 - - `unsinged int a = 10;` -> `U32 a = 10;`
-- Must memory freed `mem = FAC_NULL;`, and after file diescriptor closed `fd = -1`. E.g., `free(mem); mem = FAC_NULL; if (fd > 0) { close(fd); fd = -1; }`
+- Must memory freed `mem = NULL;`, and after file diescriptor closed `fd = -1`. E.g., `free(mem); mem = NULL; if (fd > 0) { close(fd); fd = -1; }`
 
 **Should**
 - Should not header pollution.
@@ -67,7 +67,7 @@ void func(void) {
     static const C8 abc_str[] = "abc";
 
     /* require free */
-    C8 *ptr = FAC_NULL;
+    C8 *ptr = NULL;
 
     /* file desciptor */
     I32 fd = -1;

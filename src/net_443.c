@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
@@ -21,7 +20,7 @@
 I32 net_443_init(U8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	SSL_library_init();
-	const SSL_METHOD *ssl_method = FAC_NULL;
+	const SSL_METHOD *ssl_method = nullptr;
 	ssl_method = TLS_server_method();
 	*ssl_ctx = SSL_CTX_new(ssl_method);
 	if (SSL_CTX_use_certificate_file(*ssl_ctx, config->ssl_cert, SSL_FILETYPE_PEM) <= 0) {
@@ -57,7 +56,7 @@ I32 net_443_read(U8 *ssl_opq, C8 *dst_buf, U64 buf_size) {
 		total_read_size += read_ret;
 		if (total_read_size >= 4095) {
 			return 431;
-		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != FAC_NULL) {
+		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
 			break;
 		}
 	}
@@ -100,12 +99,12 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	U64 written = 0;
 	I32 ret = 0;
 
-	C8 *res_buf = FAC_NULL;
+	C8 *res_buf = nullptr;
 
 	if (http_res->hsts_max_age != 0) {
-		ret = snprintf(FAC_NULL, 0, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+		ret = snprintf(nullptr, 0, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
 	} else {
-		ret = snprintf(FAC_NULL, 0, http_res_fmt, http_res->content, size, http_res->date);
+		ret = snprintf(nullptr, 0, http_res_fmt, http_res->content, size, http_res->date);
 	}
 	if (ret < 0) {
 		ret = -1;
@@ -114,7 +113,7 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 
 	n = (U64) ret;
 	res_buf = malloc(n+1);
-	if (res_buf == FAC_NULL) {
+	if (res_buf == nullptr) {
 		ret = -1;
 		goto out;
 	}
@@ -138,7 +137,7 @@ I32 net_443_res_write(U8 *ssl_opq, struct fws_http_res *http_res, I64 size) {
 	ret = 0;
 out:
 	free(res_buf);
-	res_buf = FAC_NULL;
+	res_buf = nullptr;
 	return ret;
 }
 
@@ -169,9 +168,9 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	U64 written = 0;
 	I32 ret = 0;
 
-	C8 *html_fmt = FAC_NULL;
-	C8 *html_buf = FAC_NULL;
-	C8 *res_buf = FAC_NULL;
+	C8 *html_fmt = nullptr;
+	C8 *html_buf = nullptr;
+	C8 *res_buf = nullptr;
 	I32 html_fd = -1;
 
 	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
@@ -184,7 +183,7 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		goto out;
 	}
 	html_fmt = malloc(html_stat.st_size+1);
-	if (html_fmt == FAC_NULL) {
+	if (html_fmt == nullptr) {
 		ret = -1;
 		goto out;
 	}
@@ -205,14 +204,14 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		}
 	}
 
-	ret = snprintf(FAC_NULL, 0, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
+	ret = snprintf(nullptr, 0, html_fmt, http_msg[msg_i].code, http_msg[msg_i].code, http_msg[msg_i].msg);
 	if (ret < 0) {
 		ret = -1;
 		goto out;
 	}
 	html_n = (U64) ret;
 	html_buf = malloc(html_n+1);
-	if (html_buf == FAC_NULL) {
+	if (html_buf == nullptr) {
 		ret = -1;
 		goto out;
 	}
@@ -223,14 +222,14 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	}
 
 	if (code == 429) {
-		ret = snprintf(FAC_NULL, 0, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(nullptr, 0, res_429_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;
 		}
 		res_n = (U64) ret;
 		res_buf = malloc(res_n+1);
-		if (res_buf == FAC_NULL) {
+		if (res_buf == nullptr) {
 			ret = -1;
 			goto out;
 		}
@@ -241,14 +240,14 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 		}
 
 	} else {
-		ret = snprintf(FAC_NULL, 0, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
+		ret = snprintf(nullptr, 0, res_err_fmt, http_msg[msg_i].code, http_msg[msg_i].msg, html_n);
 		if (ret < 0) {
 			ret = -1;
 			goto out;
 		}
 		res_n = (U64) ret;
 		res_buf = malloc(res_n+1);
-		if (res_buf == FAC_NULL) {
+		if (res_buf == nullptr) {
 			ret = -1;
 			goto out;
 		}
@@ -273,11 +272,11 @@ I32 net_443_err_write(U8 *ssl_opq, I32 code) {
 	ret = 0;
 out:
 	free(res_buf);
-	res_buf = FAC_NULL;
+	res_buf = nullptr;
 	free(html_buf);
-	html_buf = FAC_NULL;
+	html_buf = nullptr;
 	free(html_fmt);
-	html_fmt = FAC_NULL;
+	html_fmt = nullptr;
 	if (html_fd >= 0) {
 		close(html_fd);
 		html_fd = -1;

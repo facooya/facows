@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "file.h"
 
@@ -22,7 +21,7 @@ static I32 _uri_path_build(struct fws_file *file);
 static I32 _path_build(struct fws_file *file, C8 *raw_path_buf, I32 dir);
 
 I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const C8 *web_root, U64 web_root_n) {
-	C8 *path_rp = FAC_NULL;
+	C8 *path_rp = nullptr;
 	I32 ret = 0;
 
 	memset(file, 0, sizeof(struct fws_file));
@@ -30,7 +29,7 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 	file->uri_path[http_req->path_n] = '\0';
 	file->uri_path_n = http_req->path_n;
 
-	U64 web_root_len = fac_memclen(web_root, '\0', web_root_n);
+	U64 web_root_len = strnlen(web_root, web_root_n);
 	if (web_root_len == web_root_n) {
 		ret = -1;
 		goto out;
@@ -54,19 +53,19 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		goto out;
 	}
 
-	path_rp = realpath(raw_path_buf, FAC_NULL);
-	if (path_rp == FAC_NULL) {
+	path_rp = realpath(raw_path_buf, nullptr);
+	if (path_rp == nullptr) {
 		ret = 404;
 		goto out;
 	}
-	U64 path_rp_n = fac_memclen(path_rp, FAC_NUL, sizeof(file->path));
+	U64 path_rp_n = strnlen(path_rp, sizeof(file->path));
 	if (path_rp_n >= sizeof(file->path)) {
 		ret = -1;
 		goto out;
 	}
 	memcpy(file->path, path_rp, path_rp_n+1);
 	free(path_rp);
-	path_rp = NULL;
+	path_rp = nullptr;
 
 	ret = memcmp(file->path, web_root, web_root_len);
 	if (ret != 0) {
@@ -77,12 +76,12 @@ I32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 	ret = 0;
 out:
 	free(path_rp);
-	path_rp = NULL;
+	path_rp = nullptr;
 	return ret;
 }
 
 static I32 _uri_path_build(struct fws_file *file) {
-	C8 *p1 = FAC_NULL;
+	C8 *p1 = nullptr;
 	I32 ret = 0;
 
 	const C8 last_chr = *(file->uri_path+(file->uri_path_n-1));
@@ -91,7 +90,7 @@ static I32 _uri_path_build(struct fws_file *file) {
 	}
 
 	p1 = memrchr(file->uri_path, '/', file->uri_path_n);
-	if (p1 == FAC_NULL) {
+	if (p1 == nullptr) {
 		return -1;
 	}
 
@@ -128,7 +127,7 @@ static I32 _path_build(struct fws_file *file, C8 *raw_path_buf, I32 dir) {
 	I32 ret = 0;
 
 	C8 *p = memchr(raw_path_buf, '\0', sizeof(file->path));
-	if (p == FAC_NULL) {
+	if (p == nullptr) {
 		return -1;
 	}
 

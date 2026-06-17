@@ -6,12 +6,10 @@ SAN_A = address,undefined
 SAN_T = thread,undefined
 
 CC = gcc
-CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_T) -std=c11 -D_GNU_SOURCE
+CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_T) -std=c23 -D_GNU_SOURCE
 CFLAGS_O2B = -g -fstack-protector-all -fsanitize=$(SAN_T)
 
 SRCS = \
-lib/fac_utils.c \
-\
 src/facows.c \
 src/fws.c \
 \

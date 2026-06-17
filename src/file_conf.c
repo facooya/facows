@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "file.h"
 
@@ -51,7 +50,7 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val);
 static I32 _tool_allow_ports_check(const C8 *p);
 
 I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
-	C8 *conf_buf = FAC_NULL;
+	C8 *conf_buf = nullptr;
 	I32 conf_fd = -1;
 	I32 ret = 0;
 
@@ -72,7 +71,7 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 
 	U64 conf_len = conf_stat.st_size + 1;
 	conf_buf = malloc(conf_len+1);
-	if (conf_buf == FAC_NULL) {
+	if (conf_buf == nullptr) {
 		ret = -1;
 		goto out;
 	}
@@ -95,7 +94,7 @@ I32 file_conf_read(struct fws_conf *conf, const C8 *path) {
 	ret = 0;
 out:
 	free(conf_buf);
-	conf_buf = FAC_NULL;
+	conf_buf = nullptr;
 	if (conf_fd >= 0) {
 		close(conf_fd);
 		conf_fd = -1;
@@ -108,6 +107,7 @@ static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) 
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const C8 *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
+	const C8 *p_end = nullptr;
 	U64 n = 0;
 	const C8 *p = conf_buf;
 	U64 total_n = 0;
@@ -117,12 +117,16 @@ static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) 
 		}
 
 		for (U64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
-			U64 conf_key_len = fac_memclen(p, ' ', CONF_KEY_MAX);
+			p_end = memchr(p, ' ', CONF_KEY_MAX);
+			if (p_end == nullptr) {
+				return -1;
+			}
+			U64 conf_key_len = p_end - p;
 			if (conf_key_len == CONF_KEY_MAX) {
 				goto next_line;
 			}
 
-			U64 key_len = fac_memclen(keys[i], '\0', CONF_KEY_MAX);
+			U64 key_len = strnlen(keys[i], CONF_KEY_MAX);
 			if (conf_key_len != key_len) {
 				continue;
 			}
@@ -146,7 +150,11 @@ static I32 _conf_parse(struct fws_conf *conf, const C8 *conf_buf, U64 conf_len) 
 		}
 
 next_line:
-		n = fac_memclen(p, '\n', conf_len - total_n);
+		p_end = memchr(p, '\n', conf_len-total_n);
+		if (p_end == nullptr) {
+			return -1;
+		}
+		n = p_end - p;
 		total_n += n + 1;
 		p += n + 1;
 		while (*p == '\n') {
@@ -161,12 +169,12 @@ next_line:
 static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 	I32 ret = 0;
 	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const C8 *p2 = FAC_NULL;
+	const C8 *p2 = nullptr;
 	U64 n = 0;
 	I64 port = -1;
 	switch (i) {
 		case HTTP_PORT:
-			port = strtol(p, FAC_NULL, 10);
+			port = strtol(p, nullptr, 10);
 			if (port < 0 || port >= 65536) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
@@ -174,7 +182,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			conf->http_port = (U16) port;
 			break;
 		case HTTPS_PORT:
-			port = strtol(p, FAC_NULL, 10);
+			port = strtol(p, nullptr, 10);
 			if (port < 0 || port >= 65536) {
 				fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
 				return -1;
@@ -184,7 +192,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 
 		case ALLOW_PORTS:
 			p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
-			if (p2 == FAC_NULL) {
+			if (p2 == nullptr) {
 				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
 				return -1;
 			}
@@ -199,13 +207,13 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			break;
 
 		case LIM_SWAP_TIME:
-			conf->lim_swap_time = (U32) strtol(p, FAC_NULL, 10);
+			conf->lim_swap_time = (U32) strtol(p, nullptr, 10);
 			break;
 		case LIM_PAGE:
-			conf->lim_page = (U32) strtol(p, FAC_NULL, 10);
+			conf->lim_page = (U32) strtol(p, nullptr, 10);
 			break;
 		case LIM_RES:
-			conf->lim_res = (U32) strtol(p, FAC_NULL, 10);
+			conf->lim_res = (U32) strtol(p, nullptr, 10);
 			break;
 
 		case NFT:
@@ -215,16 +223,16 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case PPS_LIMIT:
-			conf->pps_limit = (U32) strtol(p, FAC_NULL, 10);
+			conf->pps_limit = (U32) strtol(p, nullptr, 10);
 			break;
 		case PPS_BURST:
-			conf->pps_burst = (U32) strtol(p, FAC_NULL, 10);
+			conf->pps_burst = (U32) strtol(p, nullptr, 10);
 			break;
 		case BAN_LIM:
-			conf->ban_lim = (U32) strtol(p, FAC_NULL, 10);
+			conf->ban_lim = (U32) strtol(p, nullptr, 10);
 			break;
 		case BAN_TIME:
-			conf->ban_time = (U32) strtol(p, FAC_NULL, 10);
+			conf->ban_time = (U32) strtol(p, nullptr, 10);
 			break;
 
 		case HSTS:
@@ -234,7 +242,7 @@ static I32 _conf_parse_value(U64 i, const C8 *p, struct fws_conf *conf) {
 			}
 			break;
 		case HSTS_MAX_AGE:
-			conf->hsts_max_age = (U32) strtol(p, FAC_NULL, 10);
+			conf->hsts_max_age = (U32) strtol(p, nullptr, 10);
 			break;
 
 		case DOMAIN:
@@ -280,7 +288,7 @@ static I32 _tool_conf_str_set(C8 *member, const C8 *val, U64 member_n) {
 	}
 
 	const C8 *p2 = memchr(p1, '"', member_n-1);
-	if (p2 == FAC_NULL) {
+	if (p2 == nullptr) {
 		printf("facows.conf: error: very large value, lower than %zu\n", member_n-1);
 		return -1;
 	}
@@ -316,7 +324,7 @@ static I32 _tool_conf_bool_set(U8 *member, const C8 *val) {
 }
 
 static I32 _tool_allow_ports_check(const C8 *p) {
-	C8 *ep = FAC_NULL;
+	C8 *ep = nullptr;
 	while (*p != '\n' && *p != '\0') {
 		I64 port = strtol(p, &ep, 10);
 		if (p == ep) {

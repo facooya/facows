@@ -4,7 +4,6 @@
  */
 
 #include "factype.h"
-#include "fac_utils.h"
 #include "types.h"
 #include "net.h"
 
@@ -52,7 +51,7 @@ void net_host_build(C8 *host_buf, const struct fws_http_req *http_req, const str
 		snprintf(port_buf, sizeof(port_buf), ":%hu", conf->https_port);
 	}
 
-	U64 n = fac_memclen(http_req->subdomain, '\0', sizeof(http_req->subdomain));
+	U64 n = strnlen(http_req->subdomain, sizeof(http_req->subdomain));
 	C8 *p = host_buf;
 	*p = '\0';
 	memcpy(p, http_req->subdomain, n);
@@ -61,12 +60,12 @@ void net_host_build(C8 *host_buf, const struct fws_http_req *http_req, const str
 	p++;
 	*p = '\0';
 
-	n = fac_memclen(conf->domain, '\0', sizeof(conf->domain));
+	n = strnlen(conf->domain, sizeof(conf->domain));
 	memcpy(p, conf->domain, n);
 	p += n;
 	*p = '\0';
 
-	n = fac_memclen(port_buf, '\0', sizeof(port_buf));
+	n = strnlen(port_buf, sizeof(port_buf));
 	memcpy(p, port_buf, n);
 	p += n;
 	*p = '\0';
