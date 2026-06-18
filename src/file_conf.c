@@ -15,12 +15,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define STR_LEN(str) (sizeof(str) - 1)
-#define TRUE "true"
-#define FALSE "false"
-#define PREFIX_ALLOW_PORTS ", "
-
-#define CONF_KEY_MAX 16
+/* Key names of 'facows.conf'. */
 #define CONF_KEYS(KEY) \
 	KEY(HTTP_PORT) \
 	KEY(HTTPS_PORT) \
@@ -43,10 +38,12 @@
 #define CONF_KEYS_ENUM(key) key,
 #define CONF_KEYS_ARR(key) #key,
 
+enum {CONF_KEYS(CONF_KEYS_ENUM)};
+
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len);
 static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf);
 static s32 _tool_conf_str_set(char *member, const char *val, u64 member_n);
-static s32 _tool_conf_bool_set(u8 *member, const char *val);
+static s32 _tool_conf_bool_set(bool *member, const char *val);
 static s32 _tool_allow_ports_check(const char *p);
 
 s32 file_conf_read(struct fws_conf *conf, const char *path) {
@@ -104,8 +101,7 @@ out:
 
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len) {
 	s32 ret = 0;
-	enum {CONF_KEYS(CONF_KEYS_ENUM)};
-	const char *keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
+	static const char *const keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
 
 	const char *p_end = nullptr;
 	u64 n = 0;
@@ -117,16 +113,17 @@ static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len
 		}
 
 		for (u64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
-			p_end = memchr(p, ' ', CONF_KEY_MAX);
+			constexpr u64 conf_key_max = 16;
+			p_end = memchr(p, ' ', conf_key_max);
 			if (p_end == nullptr) {
 				return -1;
 			}
 			u64 conf_key_len = p_end - p;
-			if (conf_key_len == CONF_KEY_MAX) {
+			if (conf_key_len == conf_key_max) {
 				goto next_line;
 			}
 
-			u64 key_len = strnlen(keys[i], CONF_KEY_MAX);
+			u64 key_len = strnlen(keys[i], conf_key_max);
 			if (conf_key_len != key_len) {
 				continue;
 			}
@@ -168,7 +165,6 @@ next_line:
 
 static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 	s32 ret = 0;
-	enum {CONF_KEYS(CONF_KEYS_ENUM)};
 	const char *p2 = nullptr;
 	u64 n = 0;
 	s64 port = -1;
@@ -191,6 +187,8 @@ static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 			break;
 
 		case ALLOW_PORTS:
+			static const char comma_str[] = ", ";
+			constexpr u64 comma_str_len = sizeof(comma_str) - 1;
 			p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
 			if (p2 == nullptr) {
 				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
@@ -201,9 +199,9 @@ static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 				return -1;
 			}
 			n = p2 - p;
-			memcpy(conf->allow_ports, PREFIX_ALLOW_PORTS, STR_LEN(PREFIX_ALLOW_PORTS));
-			memcpy(conf->allow_ports+STR_LEN(PREFIX_ALLOW_PORTS), p, n);
-			conf->allow_ports[n+STR_LEN(PREFIX_ALLOW_PORTS)] = '\0';
+			memcpy(conf->allow_ports, comma_str, comma_str_len);
+			memcpy(conf->allow_ports+comma_str_len, p, n);
+			conf->allow_ports[n+comma_str_len] = '\0';
 			break;
 
 		case LIM_SWAP_TIME:
@@ -217,7 +215,7 @@ static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 			break;
 
 		case NFT:
-			ret = _tool_conf_bool_set(&conf->nft, p);
+			ret = _tool_conf_bool_set(&conf->use_nft, p);
 			if (ret < 0) {
 				return -1;
 			}
@@ -236,7 +234,7 @@ static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 			break;
 
 		case HSTS:
-			ret = _tool_conf_bool_set(&conf->hsts, p);
+			ret = _tool_conf_bool_set(&conf->use_hsts, p);
 			if (ret < 0) {
 				return -1;
 			}
@@ -300,17 +298,24 @@ static s32 _tool_conf_str_set(char *member, const char *val, u64 member_n) {
 	return 0;
 }
 
-static s32 _tool_conf_bool_set(u8 *member, const char *val) {
-	if (memcmp(val, TRUE, STR_LEN(TRUE)) == 0) {
-		if (*(val+STR_LEN(TRUE)) == ' ' || *(val+STR_LEN(TRUE)) == '\n') {
-			*member = 1;
+static s32 _tool_conf_bool_set(bool *member, const char *val) {
+	static const char true_str[] = "true";
+	static const char false_str[] = "false";
+
+	constexpr u64 true_str_len = sizeof(true_str) - 1;
+	constexpr u64 false_str_len = sizeof(false_str) - 1;
+	s32 true_cmp = memcmp(val, true_str, true_str_len);
+	s32 false_cmp = memcmp(val, false_str, false_str_len);
+	if (true_cmp == 0) {
+		if (*(val+true_str_len) == ' ' || *(val+true_str_len) == '\n') {
+			*member = true;
 		} else {
 			printf("facows.conf: error: bool type error\n");
 			return -1;
 		}
-	} else if (memcmp(val, FALSE, STR_LEN(FALSE)) == 0) {
-		if (*(val+STR_LEN(FALSE)) == ' ' || *(val+STR_LEN(FALSE)) == '\n') {
-			*member = 0;
+	} else if (false_cmp == 0) {
+		if (*(val+false_str_len) == ' ' || *(val+false_str_len) == '\n') {
+			*member = false;
 		} else {
 			printf("facows.conf: error: bool type error\n");
 			return -1;

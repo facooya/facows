@@ -51,7 +51,7 @@ s32 main(void) {
 		goto out;
 	}
 
-	if (conf.nft == 1) {
+	if (conf.use_nft) {
 		ret = net_nft_init(&conf);
 		if (ret < 0) {
 			fprintf(stderr, "main(): net_nft_init(): failed\n");

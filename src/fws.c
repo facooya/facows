@@ -26,7 +26,7 @@
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
-static const u64 nft_arr_cap = 1024;
+constexpr u64 nft_arr_cap = 1024;
 
 static void *_fws_thrd_run(void *thrd_ctx_opq_p);
 static void *_fws_swap_thrd_run(void *swap_ctx_opq_p);
@@ -37,7 +37,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	static const char apache_str[] = "apache";
 	static const char http_str[] = "http";
 	static const char nobody_str[] = "nobody";
-	static const char * const uname_str_arr[] = {www_data_str, apache_str, http_str, nobody_str};
+	static const char *const uname_str_arr[] = {www_data_str, apache_str, http_str, nobody_str};
 	SSL_CTX *ssl_ctx_p = nullptr;
 	struct fws_nft *nft_a_arr_p = nullptr;
 	struct fws_nft *nft_b_arr_p = nullptr;
@@ -301,7 +301,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		ret = -1;
 		goto out;
 	}
-	if (parent_ctx_p->conf_p->nft == 1) {
+	if (parent_ctx_p->conf_p->use_nft) {
 		ret = net_nft_fini();
 		if (ret < 0) {
 			fprintf(stderr, "fws_parent_run(): net_nft_fini(): error\n");
@@ -432,7 +432,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		if (nft_arr[nft_i].html_cnt > conf_p->lim_page || nft_arr[nft_i].no_html_cnt > conf_p->lim_res) {
 			nft_arr[nft_i].dos_cnt++;
 
-			if (conf_p->nft == 1 && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
+			if (conf_p->use_nft && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
 				write(thrd_ctx_p->write_fd, ip_buf, INET6_ADDRSTRLEN);
 			}
 
@@ -468,7 +468,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
-			if (conf_p->hsts == 1) {
+			if (conf_p->use_hsts) {
 				http_res.hsts_max_age = conf_p->hsts_max_age;
 			}
 			ret = net_443_res_write((u8*)ssl, &http_res, file.size);

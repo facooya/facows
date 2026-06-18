@@ -3,9 +3,6 @@
 - epoll, io_uring
 - kTLS
 
-## Refactoring
-- Replace `#define` with `static const`
-
 ## ETC
 - add log
 - reduce header

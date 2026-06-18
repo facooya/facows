@@ -12,9 +12,8 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#define RES_301 "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-
 s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
+	static const char res_301_fmt[] = "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 	char recv_buf[8192] = {0};
 
 	s32 recv_size;
@@ -118,12 +117,12 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
 	char host_buf[512];
 	net_host_build(host_buf, &http_req, config);
 
-	u64 res_n = snprintf(nullptr, 0, RES_301, host_buf, http_req.uri);
+	u64 res_n = snprintf(nullptr, 0, res_301_fmt, host_buf, http_req.uri);
 	char *res_buf = malloc(res_n+1);
 	if (res_buf == nullptr) {
 		return -1;
 	}
-	snprintf(res_buf, res_n+1, RES_301, host_buf, http_req.uri);
+	snprintf(res_buf, res_n+1, res_301_fmt, host_buf, http_req.uri);
 	send(client_80_fd, res_buf, strnlen(res_buf, sizeof(res_buf)), 0);
 	free(res_buf);
 	res_buf = nullptr;

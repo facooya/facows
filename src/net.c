@@ -14,11 +14,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define REQ_MAX 8192
-#define REQ_KEY_MAX 64
-#define REQ_VALUE_MAX 1024
-#define REQ_UA_MAX 16
-
 s32 net_server_init(u16 port) {
 	struct sockaddr_in6 server_addr;
 	const s32 opt = 1;

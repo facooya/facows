@@ -14,9 +14,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define SHARE_DIR "/usr/share/facows/"
-#define SHARE_ERR_HTML "/usr/share/facows/error_page.html"
-
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	SSL_library_init();
@@ -159,6 +156,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 	static const char res_429_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\n"
 		"Content-Length: %lu\r\nRetry-After: 60\r\n\r\n";
+	static const char err_page_path[] = "/usr/share/facows/error_page.html";
 
 	SSL *ssl = (SSL *) ssl_opq;
 	struct stat html_stat = {0};
@@ -173,7 +171,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 	char *res_buf = nullptr;
 	s32 html_fd = -1;
 
-	html_fd = open(SHARE_ERR_HTML, O_RDONLY);
+	html_fd = open(err_page_path, O_RDONLY);
 	if (html_fd < 0) {
 		ret = -1;
 		goto out;

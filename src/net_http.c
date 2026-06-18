@@ -13,26 +13,18 @@
 #include <ctype.h>
 #include <openssl/ssl.h>
 
-#define RES_301 "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-
-#define REQ_MAX 8192
-#define REQ_KEY_MAX 64
-#define REQ_VALUE_MAX 1024
-#define REQ_UA_MAX 16
-
-static void _http_init(struct fws_http_req *http_req);
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req);
 static void _uri_parse(struct fws_http_req *http_req);
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
 //static s32 _err_check(const struct fws_http_req *http_req);
-static void _res_init(struct fws_http_res *http_res);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
-	_http_init(http_req);
+	constexpr u64 req_max = 8192;
+	memset(http_req, 0, sizeof(struct fws_http_req));
 	_line_parse(req_buf, http_req);
 	_uri_parse(http_req);
 
-	for (u64 i=0; i<strnlen(req_buf, REQ_MAX); i++) {
+	for (u64 i=0; i<strnlen(req_buf, req_max); i++) {
 		req_buf[i] = tolower(req_buf[i]);
 	}
 
@@ -41,7 +33,7 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 }
 
 s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path_n) {
-	_res_init(http_res);
+	memset(http_res, 0, sizeof(struct fws_http_res));
 
 	time_t raw_time;
 	time(&raw_time);
@@ -82,36 +74,17 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 }
 
 void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, u8 *ssl_opq) {
+	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 	SSL *ssl = (SSL *) ssl_opq;
 	char host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	u64 n = snprintf(nullptr, 0, RES_301, host_buf, file->uri_path);
+	u64 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
 	char *res_buf = malloc(n+1);
-	snprintf(res_buf, n+1, RES_301, host_buf, file->uri_path);
+	snprintf(res_buf, n+1, res_301_fmt, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);
 	res_buf = nullptr;
-}
-
-static void _res_init(struct fws_http_res *http_res) {
-	http_res->date[0] = '\0';
-	http_res->content[0] = '\0';
-}
-
-static void _http_init(struct fws_http_req *http_req) {
-	http_req->ip[0] = '\0';
-	http_req->lang[0] = '\0';
-	http_req->version[0] = '\0';
-	http_req->method[0] = '\0';
-	http_req->os[0] = '\0';
-	http_req->browser[0] = '\0';
-	http_req->subdomain[0] = '\0';
-	http_req->uri[0] = '\0';
-	http_req->path = nullptr;
-	http_req->path_n = 0;
-	http_req->query = nullptr;
-	http_req->query_n = 0;
 }
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req) {
@@ -173,11 +146,13 @@ static void _uri_parse(struct fws_http_req *http_req) {
 }
 
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
+	constexpr u64 req_key_max = 64;
+	constexpr u64 req_value_max = 1024;
 	enum key_idx {HOST, UA, AL};
-	const char keyword[][REQ_KEY_MAX] = {"host", "user-agent", "accept-language"};
+	static const char *const keyword[] = {"host", "user-agent", "accept-language"};
 
 	const char *p1 = req_buf;
-	const char *p2 = memchr(p1, '\r', REQ_VALUE_MAX);
+	const char *p2 = memchr(p1, '\r', req_value_max);
 	u64 n;
 
 	if (p2 == nullptr || *(p2+1) != '\n') {
@@ -190,15 +165,15 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 			break;
 		}
 
-		p2 = memchr(p1, ':', REQ_KEY_MAX);
+		p2 = memchr(p1, ':', req_key_max);
 		if (p2 == nullptr) {
 			return 1;
 		}
 
-		for (u64 i=0; i<sizeof(keyword)/REQ_KEY_MAX; i++) {
+		for (u64 i=0; i<sizeof(keyword)/sizeof(keyword[0]); i++) {
 			if (memcmp(p1, keyword[i], strnlen(keyword[i], sizeof(keyword[i]))) == 0) {
 				p1 = p2 + 1;
-				p2 = memchr(p1, '\r', REQ_VALUE_MAX);
+				p2 = memchr(p1, '\r', req_value_max);
 				if (p2 == nullptr) {
 					return 1;
 				}
@@ -232,12 +207,11 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						break;
 
 					case UA:
+						static const char *const os_type[] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
+						static const char *const browser_type[] = {"firefox", "edg", "chrome", "safari"};
 						if (http_req->os[0] != '\0' || http_req->browser[0] != '\0') {
 							return 1;
 						}
-
-						const char os_type[][REQ_UA_MAX] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
-						const char browser_type[][REQ_UA_MAX] = {"firefox", "edg", "chrome", "safari"};
 
 						const char *p3;
 						const char *p4;
@@ -315,7 +289,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 			}
 		}
 
-		p2 = memchr(p1, '\r', REQ_VALUE_MAX);
+		p2 = memchr(p1, '\r', req_value_max);
 		if (p2 == nullptr || *(p2+1) != '\n') {
 			return 1;
 		}

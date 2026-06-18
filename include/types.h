@@ -20,8 +20,8 @@ struct fws_conf {
 	u32 lim_page;
 	u32 lim_res;
 
-	u8 nft;
-	u8 hsts;
+	bool use_nft;
+	bool use_hsts;
 
 	char allow_ports[128];
 	char domain[128];
