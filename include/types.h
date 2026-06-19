@@ -8,6 +8,12 @@
 
 #include "factype.h"
 
+struct fws_lookup {
+	u64 offset;
+	u8 type;
+	char *key_name;
+};
+
 struct fws_conf {
 	u16 http_port;
 	u16 https_port;

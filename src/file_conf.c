@@ -8,6 +8,7 @@
 #include "file.h"
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -15,30 +16,31 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-/* Key names of 'facows.conf'. */
-#define CONF_KEYS(KEY) \
-	KEY(HTTP_PORT) \
-	KEY(HTTPS_PORT) \
-	KEY(NFT) \
-	KEY(ALLOW_PORTS) \
-	KEY(LIM_SWAP_TIME) \
-	KEY(LIM_PAGE) \
-	KEY(LIM_RES) \
-	KEY(PPS_LIMIT) \
-	KEY(PPS_BURST) \
-	KEY(BAN_LIM) \
-	KEY(BAN_TIME) \
-	KEY(DOMAIN) \
-	KEY(WEB_ROOT) \
-	KEY(WEB_LOG) \
-	KEY(SSL_CERT) \
-	KEY(SSL_KEY) \
-	KEY(HSTS) \
-	KEY(HSTS_MAX_AGE)
-#define CONF_KEYS_ENUM(key) key,
-#define CONF_KEYS_ARR(key) #key,
+enum {U32_T, U16_T, BOOL_T, CHAR_T};
+#define CONF_LIST(X) \
+	X(HTTP_PORT, http_port, U16_T) \
+	X(HTTPS_PORT, https_port, U16_T) \
+	X(ALLOW_PORTS, allow_ports, CHAR_T) \
+	X(NFT, use_nft, BOOL_T) \
+	X(LIM_SWAP_TIME, lim_swap_time, U32_T) \
+	X(LIM_PAGE, lim_page, U32_T) \
+	X(LIM_RES, lim_res, U32_T) \
+	X(PPS_LIMIT, pps_limit, U32_T) \
+	X(PPS_BURST, pps_burst, U32_T) \
+	X(BAN_LIM, ban_lim, U32_T) \
+	X(BAN_TIME, ban_time, U32_T) \
+	X(DOMAIN, domain, CHAR_T) \
+	X(WEB_ROOT, web_root, CHAR_T) \
+	X(WEB_LOG, web_log, CHAR_T) \
+	X(SSL_CERT, ssl_cert, CHAR_T) \
+	X(SSL_KEY, ssl_key, CHAR_T) \
+	X(HSTS, use_hsts, BOOL_T) \
+	X(HSTS_MAX_AGE, hsts_max_age, U32_T)
+#define CONF_LIST_ENUM(key, member, type) key,
+#define CONF_LIST_LOOKUP(key, member, x_type) [key] = {.offset = offsetof(struct fws_conf, member), .type = x_type, .key_name = #key},
 
-enum {CONF_KEYS(CONF_KEYS_ENUM)};
+enum {CONF_LIST(CONF_LIST_ENUM) CONF_LIST_CAP};
+struct fws_lookup conf_lookup[CONF_LIST_CAP] = {CONF_LIST(CONF_LIST_LOOKUP)};
 
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len);
 static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf);
@@ -101,8 +103,6 @@ out:
 
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len) {
 	s32 ret = 0;
-	static const char *const keys[] = {CONF_KEYS(CONF_KEYS_ARR)};
-
 	const char *p_end = nullptr;
 	u64 n = 0;
 	const char *p = conf_buf;
@@ -112,7 +112,7 @@ static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len
 			goto next_line;
 		}
 
-		for (u64 i=0; i<sizeof(keys)/sizeof(keys[0]); i++) {
+		for (u64 i=0; i<CONF_LIST_CAP; i++) {
 			constexpr u64 conf_key_max = 16;
 			p_end = memchr(p, ' ', conf_key_max);
 			if (p_end == nullptr) {
@@ -123,11 +123,11 @@ static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len
 				goto next_line;
 			}
 
-			u64 key_len = strnlen(keys[i], conf_key_max);
+			u64 key_len = strnlen(conf_lookup[i].key_name, conf_key_max);
 			if (conf_key_len != key_len) {
 				continue;
 			}
-			ret = memcmp(p, keys[i], key_len);
+			ret = memcmp(p, conf_lookup[i].key_name, key_len);
 			if (ret != 0) {
 				continue;
 			}
@@ -191,7 +191,7 @@ static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf) {
 			constexpr u64 comma_str_len = sizeof(comma_str) - 1;
 			p2 = memchr(p, '\n', sizeof(conf->allow_ports)-1);
 			if (p2 == nullptr) {
-				printf("facows.conf: error: very large value, lower than %zu\n", sizeof(conf->allow_ports)-1);
+				printf("facows.conf: error: very large value, lower than %lu\n", sizeof(conf->allow_ports)-1);
 				return -1;
 			}
 			ret = _tool_allow_ports_check(p);
