@@ -16,11 +16,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-enum {U32_T, U16_T, BOOL_T, CHAR_T};
+enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T};
 #define CONF_LIST(X) \
 	X(HTTP_PORT, http_port, U16_T) \
 	X(HTTPS_PORT, https_port, U16_T) \
-	X(ALLOW_PORTS, allow_ports, CHAR_T) \
+	X(ALLOW_PORTS, allow_ports, AP_T) \
 	X(NFT, use_nft, BOOL_T) \
 	X(LIM_SWAP_TIME, lim_swap_time, U32_T) \
 	X(LIM_PAGE, lim_page, U32_T) \
@@ -36,17 +36,22 @@ enum {U32_T, U16_T, BOOL_T, CHAR_T};
 	X(SSL_KEY, ssl_key, CHAR_T) \
 	X(HSTS, use_hsts, BOOL_T) \
 	X(HSTS_MAX_AGE, hsts_max_age, U32_T)
-#define CONF_LIST_ENUM(key, member, type) key,
-#define CONF_LIST_LOOKUP(key, member, x_type) [key] = {.offset = offsetof(struct fws_conf, member), .type = x_type, .key_name = #key},
+#define CONF_LIST_ENUM(x_key, x_member, x_type) x_key,
+#define CONF_LIST_LOOKUP(x_key, x_member, x_type) [x_key] = {.offset = offsetof(struct fws_conf, x_member), .type = x_type, .key = #x_key, .size = sizeof(((struct fws_conf*)nullptr)->x_member)},
 
 enum {CONF_LIST(CONF_LIST_ENUM) CONF_LIST_CAP};
-struct fws_lookup conf_lookup[CONF_LIST_CAP] = {CONF_LIST(CONF_LIST_LOOKUP)};
+struct fws_lookup conf_lookup_arr[CONF_LIST_CAP] = {CONF_LIST(CONF_LIST_LOOKUP)};
 
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len);
 static s32 _conf_parse_value(u64 i, const char *p, struct fws_conf *conf);
 static s32 _tool_conf_str_set(char *member, const char *val, u64 member_n);
 static s32 _tool_conf_bool_set(bool *member, const char *val);
 static s32 _tool_allow_ports_check(const char *p);
+static s32 _type_u32(u64 i, const char *p_base, struct fws_conf *conf_p);
+static s32 _type_u16(u64 i, const char *p_base, struct fws_conf *conf_p);
+static s32 _type_bool(u64 i, const char *p_base, struct fws_conf *conf_p);
+static s32 _type_char(u64 i, const char *p_base, struct fws_conf *conf_p);
+static s32 _type_ap(u64 i, const char *p_base, struct fws_conf *conf_p);
 
 s32 file_conf_read(struct fws_conf *conf, const char *path) {
 	char *conf_buf = nullptr;
@@ -102,6 +107,13 @@ out:
 }
 
 static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len) {
+	static s32 (*const _conf_parse_val_arr[])(u64 i, const char *p, struct fws_conf *conf) = {
+		[U32_T] = _type_u32,
+		[U16_T] = _type_u16,
+		[BOOL_T] = _type_bool,
+		[CHAR_T] = _type_char,
+		[AP_T] = _type_ap
+	};
 	s32 ret = 0;
 	const char *p_end = nullptr;
 	u64 n = 0;
@@ -123,11 +135,11 @@ static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len
 				goto next_line;
 			}
 
-			u64 key_len = strnlen(conf_lookup[i].key_name, conf_key_max);
+			u64 key_len = strnlen(conf_lookup_arr[i].key, conf_key_max);
 			if (conf_key_len != key_len) {
 				continue;
 			}
-			ret = memcmp(p, conf_lookup[i].key_name, key_len);
+			ret = memcmp(p, conf_lookup_arr[i].key, key_len);
 			if (ret != 0) {
 				continue;
 			}
@@ -139,7 +151,8 @@ static s32 _conf_parse(struct fws_conf *conf, const char *conf_buf, u64 conf_len
 				p++;
 			}
 
-			ret = _conf_parse_value(i, p, conf);
+			(void) _conf_parse_value(i, p, conf);
+			ret = _conf_parse_val_arr[conf_lookup_arr[i].type](i, p, conf);
 			if (ret < 0) {
 				return -1;
 			}
@@ -159,7 +172,97 @@ next_line:
 			p++;
 		}
 	}
+	return 0;
+}
 
+static s32 _type_u32(u64 i, const char *p_base, struct fws_conf *conf_p) {
+	u32 *member = (u32 *) ((u8 *) conf_p + conf_lookup_arr[i].offset);
+	*member = (u32) strtol(p_base, nullptr, 10);
+	return 0;
+}
+
+static s32 _type_u16(u64 i, const char *p_base, struct fws_conf *conf_p) {
+	s64 port = strtol(p_base, nullptr, 10);
+	if (port < 0 || port >= 65536) {
+		fprintf(stderr, "file_conf/_conf_parse(): out of port range\n");
+		return -1;
+	}
+	u16 *member = (u16 *) ((u8 *) conf_p + conf_lookup_arr[i].offset);
+	*member = (u16) port;
+	return 0;
+}
+
+static s32 _type_bool(u64 i, const char *p_base, struct fws_conf *conf_p) {
+	static const char true_str[] = "true";
+	static const char false_str[] = "false";
+	constexpr u64 true_str_len = sizeof(true_str) - 1;
+	constexpr u64 false_str_len = sizeof(false_str) - 1;
+
+	s32 true_cmp = memcmp(p_base, true_str, true_str_len);
+	s32 false_cmp = memcmp(p_base, false_str, false_str_len);
+	bool *member = (bool *) ((u8 *) conf_p + conf_lookup_arr[i].offset);
+	if (true_cmp == 0) {
+		if (*(p_base+true_str_len) == ' ' || *(p_base+true_str_len) == '\n') {
+			*member = true;
+		} else {
+			printf("facows.conf: error: bool type error\n");
+			return -1;
+		}
+	} else if (false_cmp == 0) {
+		if (*(p_base+false_str_len) == ' ' || *(p_base+false_str_len) == '\n') {
+			*member = false;
+		} else {
+			printf("facows.conf: error: bool type error\n");
+			return -1;
+		}
+	} else {
+		printf("facows.conf: error: type error\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static s32 _type_char(u64 i, const char *p_base, struct fws_conf *conf_p) {
+	const char *p1 = p_base + 1;
+	if (*(p1-1) != '"') {
+		printf("facows.conf: error: require double quote before write string\n");
+		return -1;
+	}
+
+	const char *p2 = memchr(p1, '"', conf_lookup_arr[i].size-1);
+	if (p2 == nullptr) {
+		printf("facows.conf: error: very large value, lower than %zu\n", conf_lookup_arr[i].size-1);
+		return -1;
+	}
+
+	u64 n = (u64) (p2 - p1);
+	char *member = (char *) ((u8 *) conf_p + conf_lookup_arr[i].offset);
+	memcpy(member, p1, n);
+	member[n] = '\0';
+	return 0;
+}
+
+static s32 _type_ap(u64 i, const char *p_base, struct fws_conf *conf_p) {
+	static const char comma_str[] = ", ";
+	constexpr u64 comma_str_len = sizeof(comma_str) - 1;
+
+	const char *p_end = memchr(p_base, '\n', conf_lookup_arr[i].size-1);
+	if (p_end == nullptr) {
+		printf("facows.conf: error: very large value, lower than %lu\n", conf_lookup_arr[i].size-1);
+		return -1;
+	}
+
+	s32 ret = _tool_allow_ports_check(p_base);
+	if (ret < 0) {
+		return -1;
+	}
+	u64 n = (u64) (p_end - p_base);
+
+	char *member = (char *) ((u8 *) conf_p + conf_lookup_arr[i].offset);
+	memcpy(member, comma_str, comma_str_len);
+	memcpy(member+comma_str_len, p_base, n);
+	member[n+comma_str_len] = '\0';
 	return 0;
 }
 

@@ -6,7 +6,6 @@
 ## ETC
 - add log
 - reduce header
-- file conf change switch to lookup table
 
 ---
 

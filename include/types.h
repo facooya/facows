@@ -10,8 +10,9 @@
 
 struct fws_lookup {
 	u64 offset;
+	u64 size;
 	u8 type;
-	char *key_name;
+	char *key;
 };
 
 struct fws_conf {
