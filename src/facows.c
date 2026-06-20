@@ -76,9 +76,9 @@ s32 main(void) {
 	}
 
 	if (pid == 0) {
-		child_ctx_p = malloc(sizeof(struct fws_child_ctx));
+		child_ctx_p = calloc(sizeof(struct fws_child_ctx), sizeof(struct fws_child_ctx));
 		if (child_ctx_p == nullptr) {
-			fprintf(stderr, "main(): malloc(): failed\n");
+			fprintf(stderr, "main(): calloc(): failed\n");
 			ret = 1;
 			goto out;
 		}
@@ -92,9 +92,9 @@ s32 main(void) {
 		child_ctx_p = nullptr;
 
 	} else {
-		parent_ctx_p = malloc(sizeof(struct fws_parent_ctx));
+		parent_ctx_p = calloc(sizeof(struct fws_parent_ctx), sizeof(struct fws_parent_ctx));
 		if (parent_ctx_p == nullptr) {
-			fprintf(stderr, "main(): malloc(): failed\n");
+			fprintf(stderr, "main(): calloc(): failed\n");
 			ret = 1;
 			goto out;
 		}

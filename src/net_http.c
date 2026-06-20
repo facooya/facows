@@ -80,7 +80,7 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 	net_host_build(host_buf, http_req, conf);
 
 	u64 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
-	char *res_buf = malloc(n+1);
+	char *res_buf = calloc(n+1, 1);
 	snprintf(res_buf, n+1, res_301_fmt, host_buf, file->uri_path);
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);

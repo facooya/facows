@@ -42,7 +42,7 @@ enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T};
 	.offset = offsetof(struct fws_conf, x_member), \
 	.size = sizeof(((struct fws_conf *) nullptr)->x_member), \
 	.type = x_type, \
-	.key = #x_key, \
+	.key = #x_key \
 },
 
 static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_len);
@@ -96,7 +96,7 @@ s32 file_conf_read(struct fws_conf *conf_p, const char *path) {
 	}
 
 	u64 conf_len = conf_stat.st_size + 1;
-	conf_buf = malloc(conf_len+1);
+	conf_buf = calloc(conf_len+1, 1);
 	if (conf_buf == nullptr) {
 		ret = -1;
 		goto out;

@@ -118,7 +118,7 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
 	net_host_build(host_buf, &http_req, config);
 
 	u64 res_n = snprintf(nullptr, 0, res_301_fmt, host_buf, http_req.uri);
-	char *res_buf = malloc(res_n+1);
+	char *res_buf = calloc(res_n+1, 1);
 	if (res_buf == nullptr) {
 		return -1;
 	}

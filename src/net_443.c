@@ -109,7 +109,7 @@ s32 net_443_res_write(u8 *ssl_opq, struct fws_http_res *http_res, s64 size) {
 	}
 
 	n = (u64) ret;
-	res_buf = malloc(n+1);
+	res_buf = calloc(n+1, 1);
 	if (res_buf == nullptr) {
 		ret = -1;
 		goto out;
@@ -180,7 +180,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 		ret = -1;
 		goto out;
 	}
-	html_fmt = malloc(html_stat.st_size+1);
+	html_fmt = calloc(html_stat.st_size+1, 1);
 	if (html_fmt == nullptr) {
 		ret = -1;
 		goto out;
@@ -208,7 +208,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 		goto out;
 	}
 	html_n = (u64) ret;
-	html_buf = malloc(html_n+1);
+	html_buf = calloc(html_n+1, 1);
 	if (html_buf == nullptr) {
 		ret = -1;
 		goto out;
@@ -226,7 +226,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 			goto out;
 		}
 		res_n = (u64) ret;
-		res_buf = malloc(res_n+1);
+		res_buf = calloc(res_n+1, 1);
 		if (res_buf == nullptr) {
 			ret = -1;
 			goto out;
@@ -244,7 +244,7 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 			goto out;
 		}
 		res_n = (u64) ret;
-		res_buf = malloc(res_n+1);
+		res_buf = calloc(res_n+1, 1);
 		if (res_buf == nullptr) {
 			ret = -1;
 			goto out;

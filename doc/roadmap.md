@@ -5,7 +5,6 @@
 
 ## ETC
 - add log
-- reduce header
 
 ---
 

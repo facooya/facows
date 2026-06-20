@@ -190,14 +190,13 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 	ret = 0;
 out:
-	{ /* thrd wait for terminate */
-		u64 thrd_join_ms = 0;
-		while (thrd_n > 0) {
-			poll(nullptr, 0, 100);
-			thrd_join_ms += 100;
-			if (thrd_join_ms > 5000) {
-				break;
-			}
+	/* thrd wait for terminate */
+	u64 thrd_join_ms = 0;
+	while (thrd_n > 0) {
+		poll(nullptr, 0, 100);
+		thrd_join_ms += 100;
+		if (thrd_join_ms > 5000) {
+			break;
 		}
 	}
 
@@ -330,7 +329,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	SSL *ssl = nullptr;
 	struct fws_thrd_ctx *thrd_ctx_p = nullptr;
 	s32 client_fd = -1;
-	s32 ssl_shutdown_flag = -1;
+	bool need_ssl_shutdown = false;
 	s32 ret = 0;
 
 	thrd_ctx_p = (struct fws_thrd_ctx *) thrd_ctx_opq_p;
@@ -367,7 +366,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		ret = -1;
 		goto out;
 	}
-	ssl_shutdown_flag = 1;
+	need_ssl_shutdown = true;
 
 	pthread_mutex_t *nft_lock_p = (pthread_mutex_t *) thrd_ctx_p->nft_lock_opq_p;
 	const struct fws_conf *conf_p = thrd_ctx_p->conf_p;
@@ -482,8 +481,8 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 
 	ret = 0;
 out:
-	/* ssl shutdown */
-	if (ssl_shutdown_flag >= 0) {
+	/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
+	if (need_ssl_shutdown) {
 		u32 ssl_timeout = 0;
 		s32 ssl_stat = SSL_shutdown(ssl);
 		if (ssl_stat == 0) {
@@ -509,10 +508,8 @@ out:
 		client_fd = -1;
 	}
 
-	{
-		_Atomic s32 *thrd_n_p = (_Atomic s32 *) thrd_ctx_p->thrd_n_opq_p;
-		(*thrd_n_p)--;
-	}
+	_Atomic s32 *thrd_n_p = (_Atomic s32 *) thrd_ctx_p->thrd_n_opq_p;
+	(*thrd_n_p)--;
 	free(thrd_ctx_p);
 	thrd_ctx_p = nullptr;
 	return nullptr;
