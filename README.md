@@ -22,7 +22,7 @@ Testing ...
 - Log: `/var/log/facows/`
 - Configure: `/etc/facows/`
 
-### Dependancy Install
+### Dependency Install
 ```sh
 sudo apt update
 sudo apt install git make libssl-dev nftables libnftables-dev
@@ -64,7 +64,6 @@ sudo ./build/facows
 
 System daemon:
 ```sh
-sudo useradd -r -s /usr/sbin/nologin facows
 sudo systemctl enable facows
 sudo systemctl start facows
 ```
@@ -78,6 +77,21 @@ Program exit `ctrl + c` or `kill PID`.
 System daemon:
 ```sh
 sudo systemctl stop facows
+```
+
+**Uninstall**
+```sh
+sudo make uninstall
+```
+
+Manual path:
+```sh
+/usr/local/bin/facows # For 'ExecStart' path in 'systemd'.
+/etc/systemd/system/facows.service # For 'systemd'.
+
+/etc/facows/ # For configuration to 'Facows'.
+/usr/share/facows/ # For error pages.
+/var/www/facows/ # For example pages.
 ```
 
 **Upgrade**

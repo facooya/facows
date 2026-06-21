@@ -57,6 +57,16 @@ install:
 
 -include $(DEPS)
 
+uninstall:
+	systemctl stop facows
+	systemctl disable facows
+	rm /etc/systemd/system/facows.service
+	systemctl daemon-reload
+
+	rm /usr/local/bin/facows
+	rm -r /etc/facows/
+	rm -r /usr/share/facows/
+
 clean:
 	find build/ -name "*.o" -delete
 	find build/ -name "*.d" -delete
