@@ -17,9 +17,15 @@ static const char index_str[] = "index";
 static const char index_html_str[] = "index.html";
 static const char html_ext_str[] = ".html";
 
-static s32 _raw_path_build(char *raw_path_buf, const char *uri_path, const char *web_root, u64 web_root_len);
+static s32 _raw_path_build(
+	char *path_buf,
+	const char *uri_path,
+	const char *web_root,
+	u64 web_root_len,
+	const struct fws_http_req *http_req
+);
 static s32 _uri_path_build(struct fws_file *file);
-static s32 _path_build(struct fws_file *file, char *raw_path_buf, s32 dir);
+static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir);
 
 s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const char *web_root, u64 web_root_n) {
 	char *path_rp = nullptr;
@@ -36,21 +42,8 @@ s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		goto out;
 	}
 
-	char raw_path_buf[4096];
-	_raw_path_build(raw_path_buf, file->uri_path, web_root, web_root_len);
-
 	char path_buf[4096] = {0};
-	const char *raw_path_p = raw_path_buf;
-	char *path_buf_p = path_buf;
-	memcpy(path_buf_p, raw_path_p, web_root_len+1);
-	raw_path_p += web_root_len;
-	path_buf_p += web_root_len + 1; /* The '+1' Add slash. */
-	memcpy(path_buf_p, http_req->subdomain, strnlen(http_req->subdomain, 64));
-	path_buf_p += strnlen(http_req->subdomain, 64);
-	memcpy(path_buf_p, raw_path_p, strnlen(raw_path_buf, sizeof(raw_path_buf))-web_root_len);
-	path_buf_p += strnlen(raw_path_buf, sizeof(raw_path_buf)) - web_root_len;
-	*path_buf_p = '\0';
-	printf("%s\n", path_buf);
+	_raw_path_build(path_buf, file->uri_path, web_root, web_root_len, http_req);
 
 	s32 code = _uri_path_build(file);
 	if (code == 301) {
@@ -138,23 +131,23 @@ static s32 _uri_path_build(struct fws_file *file) {
 	return 0;
 }
 
-static s32 _path_build(struct fws_file *file, char *raw_path_buf, s32 dir) {
+static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir) {
 	s32 ret = 0;
 
-	char *p = memchr(raw_path_buf, '\0', sizeof(file->path));
+	char *p = memchr(path_buf, '\0', sizeof(file->path));
 	if (p == nullptr) {
 		return -1;
 	}
 
 	struct stat file_stat = {0};
 	if (dir == 1) {
-		ret = stat(raw_path_buf, &file_stat);
+		ret = stat(path_buf, &file_stat);
 		if (ret != 0) {
 			return 404;
 		} else {
 			memcpy(p, index_html_str, sizeof(index_html_str));
 
-			ret = stat(raw_path_buf, &file_stat);
+			ret = stat(path_buf, &file_stat);
 			if (ret == 0) {
 				file->size = file_stat.st_size;
 			} else {
@@ -163,10 +156,10 @@ static s32 _path_build(struct fws_file *file, char *raw_path_buf, s32 dir) {
 		}
 
 	} else {
-		ret = stat(raw_path_buf, &file_stat);
+		ret = stat(path_buf, &file_stat);
 		if (ret != 0) {
 			memcpy(p, html_ext_str, sizeof(html_ext_str));
-			ret = stat(raw_path_buf, &file_stat);
+			ret = stat(path_buf, &file_stat);
 			if (ret != 0) {
 				return 404;
 			}
@@ -180,12 +173,25 @@ static s32 _path_build(struct fws_file *file, char *raw_path_buf, s32 dir) {
 	return 0;
 }
 
-static s32 _raw_path_build(char *raw_path_buf, const char *uri_path, const char *web_root, u64 web_root_len) {
-	memcpy(raw_path_buf, web_root, web_root_len);
-	raw_path_buf[web_root_len] = '\0';
+static s32 _raw_path_build(
+	char *path_buf,
+	const char *uri_path,
+	const char *web_root,
+	u64 web_root_len,
+	const struct fws_http_req *http_req
+) {
+	char *path_buf_p = path_buf;
+	memcpy(path_buf_p, web_root, web_root_len);
+	path_buf_p += web_root_len;
+	*path_buf_p = '/';
+	path_buf_p++;
+	u64 subdomain_len = strnlen(http_req->subdomain, sizeof(http_req->subdomain));
+	memcpy(path_buf_p, http_req->subdomain, subdomain_len);
+	path_buf_p += subdomain_len;
+	*path_buf_p = '\0';
 
 	const char *p1 = uri_path;
-	char *p2 = raw_path_buf + web_root_len;
+	char *p2 = path_buf_p;
 	while (1) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
