@@ -13,7 +13,7 @@
 #include <sys/socket.h>
 
 s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
-	static const char res_301_fmt[] = "HTTP/1.1 301 Move permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+	static const char res_301_fmt[] = "HTTP/1.1 301 Moved Permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 	char recv_buf[8192] = {0};
 
 	s32 recv_size;
@@ -123,7 +123,7 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
 		return -1;
 	}
 	snprintf(res_buf, res_n+1, res_301_fmt, host_buf, http_req.uri);
-	send(client_80_fd, res_buf, strnlen(res_buf, sizeof(res_buf)), 0);
+	send(client_80_fd, res_buf, strnlen(res_buf, res_n+1), 0);
 	free(res_buf);
 	res_buf = nullptr;
 	return 0;
