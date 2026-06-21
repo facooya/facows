@@ -7,6 +7,7 @@
 #include "types.h"
 #include "file.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -38,6 +39,19 @@ s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 	char raw_path_buf[4096];
 	_raw_path_build(raw_path_buf, file->uri_path, web_root, web_root_len);
 
+	char path_buf[4096] = {0};
+	const char *raw_path_p = raw_path_buf;
+	char *path_buf_p = path_buf;
+	memcpy(path_buf_p, raw_path_p, web_root_len+1);
+	raw_path_p += web_root_len;
+	path_buf_p += web_root_len + 1; /* The '+1' Add slash. */
+	memcpy(path_buf_p, http_req->subdomain, strnlen(http_req->subdomain, 64));
+	path_buf_p += strnlen(http_req->subdomain, 64);
+	memcpy(path_buf_p, raw_path_p, strnlen(raw_path_buf, sizeof(raw_path_buf))-web_root_len);
+	path_buf_p += strnlen(raw_path_buf, sizeof(raw_path_buf)) - web_root_len;
+	*path_buf_p = '\0';
+	printf("%s\n", path_buf);
+
 	s32 code = _uri_path_build(file);
 	if (code == 301) {
 		ret = code;
@@ -47,17 +61,18 @@ s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const
 		goto out;
 	}
 
-	code = _path_build(file, raw_path_buf, code);
+	code = _path_build(file, path_buf, code);
 	if (code != 0) {
 		ret = code;
 		goto out;
 	}
 
-	path_rp = realpath(raw_path_buf, nullptr);
+	path_rp = realpath(path_buf, nullptr);
 	if (path_rp == nullptr) {
 		ret = 404;
 		goto out;
 	}
+
 	u64 path_rp_n = strnlen(path_rp, sizeof(file->path));
 	if (path_rp_n >= sizeof(file->path)) {
 		ret = -1;
