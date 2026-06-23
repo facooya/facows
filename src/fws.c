@@ -28,6 +28,7 @@
 
 constexpr u64 nft_arr_cap = 1024;
 
+static void *_fws_thrd_80_run(void *thrd_80_ctx_opq_p);
 static void *_fws_thrd_run(void *thrd_ctx_opq_p);
 static void *_fws_swap_thrd_run(void *swap_ctx_opq_p);
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx_p);
@@ -150,18 +151,19 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		if ((fws_fds[0].revents & POLLIN) != 0) {
 			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, (u32*)&client_addr);
 
-			if (net_80_443_redir(client_http_fd, child_ctx_p->conf_p) < 0) {
-				if (client_http_fd >= 0) {
-					close(client_http_fd);
-					client_http_fd = -1;
-				}
-				continue;
+			struct fws_thrd_80_ctx *thrd_80_ctx_p = calloc(1, sizeof(struct fws_thrd_80_ctx));
+			if (thrd_80_ctx_p == nullptr) {
+				ret = 1;
+				goto out;
 			}
+			thrd_80_ctx_p->conf_p = child_ctx_p->conf_p;
+			thrd_80_ctx_p->fd = client_http_fd;
+			thrd_80_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
 
-			if (client_http_fd >= 0) {
-				close(client_http_fd);
-				client_http_fd = -1;
-			}
+			thrd_n++;
+			u64 thrd_80_id = 0;
+			pthread_create(&thrd_80_id, nullptr, _fws_thrd_80_run, (void*)thrd_80_ctx_p);
+			pthread_detach(thrd_80_id);
 
 		} else if ((fws_fds[1].revents & POLLIN) != 0) {
 			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, (u32*)&client_addr);
@@ -171,8 +173,12 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				ret = 1;
 				goto out;
 			}
-			memset(thrd_ctx_p, 0, sizeof(struct fws_thrd_ctx));
-			memcpy(thrd_ctx_p->client_ip_buf, client_addr.sin6_addr.s6_addr, sizeof(client_addr.sin6_addr.s6_addr));
+			memcpy(
+				thrd_ctx_p->client_ip_buf,
+				client_addr.sin6_addr.s6_addr,
+				sizeof(client_addr.sin6_addr.s6_addr)
+			);
+
 			thrd_ctx_p->fd = client_fd;
 			thrd_ctx_p->write_fd = child_ctx_p->pipe_write_fd;
 			thrd_ctx_p->ssl_ctx_opq_p = (u8 *) ssl_ctx_p;
@@ -190,17 +196,17 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 	ret = 0;
 out:
-	/* thrd wait for terminate */
+	/* Thread wait for terminate */
 	u64 thrd_join_ms = 0;
 	while (thrd_n > 0) {
 		poll(nullptr, 0, 100);
 		thrd_join_ms += 100;
-		if (thrd_join_ms > 5000) {
+		if (thrd_join_ms > 3000) {
 			break;
 		}
 	}
 
-	/* 300ms wait for safety */
+	/* Wait 300 ms for safety */
 	poll(nullptr, 0, 300);
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
@@ -322,6 +328,48 @@ out:
 		parent_ctx_p->pipe_write_fd = -1;
 	}
 	return ret;
+}
+
+static void *_fws_thrd_80_run(void *thrd_80_ctx_opq_p) {
+	struct fws_thrd_80_ctx *thrd_80_ctx_p = nullptr;
+	s32 client_80_fd = -1;
+	s32 ret = -1;
+
+	thrd_80_ctx_p = (struct fws_thrd_80_ctx *) thrd_80_ctx_opq_p;
+
+	client_80_fd = thrd_80_ctx_p->fd;
+	if (client_80_fd < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	struct timeval sock_tv = {0};
+	sock_tv.tv_sec = 2;
+	sock_tv.tv_usec = 0;
+	ret = setsockopt(client_80_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&sock_tv, sizeof(sock_tv));
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	ret = net_80_443_redir(client_80_fd, thrd_80_ctx_p->conf_p);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	ret = 0;
+out:
+	if (client_80_fd >= 0) {
+		close(client_80_fd);
+		client_80_fd = -1;
+	}
+
+	_Atomic s32 *thrd_n_p = (_Atomic s32 *) thrd_80_ctx_p->thrd_n_opq_p;
+	(*thrd_n_p)--;
+	free(thrd_80_ctx_p);
+	thrd_80_ctx_p = nullptr;
+	return nullptr;
 }
 
 static void *_fws_thrd_run(void *thrd_ctx_opq_p) {

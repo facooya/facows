@@ -27,7 +27,12 @@ static s32 _raw_path_build(
 static s32 _uri_path_build(struct fws_file *file);
 static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir);
 
-s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req, const char *web_root, u64 web_root_n) {
+s32 file_parse(
+	struct fws_file *file,
+	const struct fws_http_req *http_req,
+	const char *web_root,
+	u64 web_root_n
+) {
 	char *path_rp = nullptr;
 	s32 ret = 0;
 

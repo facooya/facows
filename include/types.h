@@ -87,6 +87,12 @@ struct fws_thrd_ctx {
 	struct fws_nft **nft_arr_pp;
 };
 
+struct fws_thrd_80_ctx {
+	struct fws_conf *conf_p;
+	s32 fd;
+	s32 *thrd_n_opq_p;
+};
+
 struct fws_swap_ctx {
 	s64 global_time;
 	s64 swap_time;

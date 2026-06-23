@@ -18,12 +18,13 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
 
 	s32 recv_size;
 	s32 recv_total_size = 0;
-	while (1) {
+	while (true) {
 		recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
+		if (recv_size < 0) {
+			return -1;
+		}
 		if (recv_size == 0) {
 			break;
-		} else if (recv_size == -1) {
-			return -1;
 		}
 
 		recv_total_size += recv_size;
@@ -31,7 +32,8 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
 
 		if (recv_total_size >= 8191) {
 			return -1;
-		} else if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
+		}
+		if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
 			break;
 		}
 	}

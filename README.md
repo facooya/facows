@@ -1,5 +1,6 @@
 # Facows
-Testing ...
+Site of use `Facows`: `dev.facooya.com`.
+- Originaly `facooya.com` (`www.facooya.com`), but have not content. So please go to the `dev.facooya.com`.
 
 **Limitations**
 - Linux only
@@ -102,6 +103,14 @@ make
 sudo make install
 sudo systemctl restart facows
 ```
+
+### Configuration File
+If chagned:
+```sh
+sudo systemctl restart facows
+```
+
+---
 
 ### Reference Links
 - Create SSL Certificate [SSL](/doc/ssl.md)
