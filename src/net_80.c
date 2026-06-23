@@ -12,121 +12,159 @@
 #include <string.h>
 #include <sys/socket.h>
 
-s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config) {
-	static const char res_301_fmt[] = "HTTP/1.1 301 Moved Permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-	char recv_buf[8192] = {0};
+s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
+	static const char res_301_fmt[] = "HTTP/1.1 301 Moved Permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\nServer: Facooya-Web-Server\r\n\r\n";
+	static const char nl_str[] = "\r\n";
+	static const char nl2_str[] = "\r\n\r\n";
+	static const char host_key_str[] = "Host:";
+	static const char www_str[] = "www";
+	char *res_buf = nullptr;
+	s32 ret = -1;
+	const char *ret_p = nullptr;
 
-	s32 recv_size;
-	s32 recv_total_size = 0;
+	/* Receive request header */
+	constexpr u64 recv_buf_cap = 8192;
+	constexpr u64 recv_max = recv_buf_cap - 1;
+	char recv_buf[recv_buf_cap] = {0};
+	u32 recv_acc = 0;
 	while (true) {
-		recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
+		s32 recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
 		if (recv_size < 0) {
-			return -1;
+			ret = -1;
+			goto out;
 		}
 		if (recv_size == 0) {
 			break;
 		}
 
-		recv_total_size += recv_size;
-		recv_buf[recv_total_size] = '\0';
+		recv_acc += recv_size;
+		recv_buf[recv_acc] = '\0';
 
-		if (recv_total_size >= 8191) {
-			return -1;
+		if (recv_acc >= recv_max) {
+			ret = -1;
+			goto out;
 		}
-		if (memmem(recv_buf, recv_total_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
+
+		ret_p = memmem(recv_buf, recv_acc, nl2_str, sizeof(nl2_str)-1);
+		if (ret_p != nullptr) {
 			break;
 		}
 	}
 
-	struct fws_http_req http_req;
+	/* Parsing URI */
+	struct fws_http_req http_req = {0};
 	http_req.subdomain[0] = '\0';
 	http_req.uri[0] = '\0';
-
-	const char *p1 = recv_buf;
-	const char *p2 = memchr(p1, ' ', sizeof(http_req.method));
-	u64 n;
-	if (p2 == nullptr) {
-		return -1;
+	const char *p_start = recv_buf;
+	const char *p_end = memchr(p_start, ' ', sizeof(http_req.method));
+	if (p_end == nullptr) {
+		ret = -1;
+		goto out;
 	}
-	n = p2 - p1;
+	u64 n = p_end - p_start;
 	if (n >= sizeof(http_req.method)) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
-	p1 += n + 1;
-	p2 = memchr(p1, ' ', sizeof(http_req.uri));
-	if (p2 == nullptr) {
-		return -1;
+	p_start += n + 1;
+	p_end = memchr(p_start, ' ', sizeof(http_req.uri));
+	if (p_end == nullptr) {
+		ret = -1;
+		goto out;
 	}
-	n = p2 - p1;
+	n = p_end - p_start;
 	if (n >= sizeof(http_req.uri)) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
-	memcpy(http_req.uri, p1, n);
+	memcpy(http_req.uri, p_start, n);
 	http_req.uri[n] = '\0';
 
-	p1 = recv_buf;
-	p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
-	if (p2 == nullptr) {
-		return -1;
+	p_start = recv_buf;
+	p_end = memmem(p_start, 1024, nl_str, sizeof(nl_str)-1);
+	if (p_end == nullptr) {
+		ret = -1;
+		goto out;
 	}
-	p1 = p2 + 2;
+	p_start = p_end + 2;
 
-	while (1) {
-		if (memcmp(p1, "\r\n", sizeof("\r\n")-1) == 0) {
+	/* Parsing subdomain */
+	ret = strnlen(conf_p->domain, sizeof(conf_p->domain));
+	if (ret == sizeof(conf_p->domain)) {
+		ret = -1;
+		goto out;
+	}
+	u64 domain_len = (u64) ret;
+	while (true) {
+		ret = memcmp(p_start, nl_str, sizeof(nl_str)-1);
+		if (ret == 0) {
 			break;
 		}
 
-		if (memcmp(p1, "Host", strnlen("host", sizeof("host"))) == 0) {
+		ret = strncasecmp(p_start, host_key_str, sizeof(host_key_str)-1);
+		if (ret == 0) {
 			if (http_req.subdomain[0] != '\0') {
-				return -1;
+				ret = -1;
+				goto out;
 			}
 
-			p2 = memchr(p1, ':', 64);
-			if (p2 == nullptr) {
-				return -1;
+			p_end = memchr(p_start, ':', 64);
+			if (p_end == nullptr) {
+				ret = -1;
+				goto out;
 			}
-			p1 = p2 + 1;
-			while (*p1 == ' ') {
-				p1++;
+			p_start = p_end + 1;
+			while (*p_start == ' ') {
+				p_start++;
 			}
 
-			if (memcmp(p1, config->domain, strnlen(config->domain, sizeof(config->domain))) == 0) {
-				memcpy(http_req.subdomain, "www", sizeof("www"));
+			ret = memcmp(p_start, conf_p->domain, domain_len);
+			if (ret == 0) {
+				memcpy(http_req.subdomain, www_str, sizeof(www_str));
 			} else {
-				p2 = p1;
+				p_end = p_start;
 				for (u64 i=0; i<sizeof(http_req.subdomain); i++) {
-					if (p2[i] == '.') {
-						p2 += i;
+					if (p_end[i] == '.') {
+						p_end += i;
 						break;
 					}
 				}
 
-				n = p2 - p1;
-				memcpy(http_req.subdomain, p1, n);
+				n = p_end - p_start;
+				memcpy(http_req.subdomain, p_start, n);
 				http_req.subdomain[n] = '\0';
 			}
 			break;
 		}
 
-		p2 = memmem(p1, 1024, "\r\n", sizeof("\r\n")-1);
-		if (p2 == nullptr) {
-			return -1;
+		p_end = memmem(p_start, 1024, nl_str, sizeof(nl_str)-1);
+		if (p_end == nullptr) {
+			ret = -1;
+			goto out;
 		}
-		p1 = p2 + 2;
-
+		p_start = p_end + 2;
 	}
 
-	char host_buf[512];
-	net_host_build(host_buf, &http_req, config);
+	/* Send 301 response */
+	char host_buf[512] = {0};
+	net_host_build(host_buf, &http_req, conf_p);
 
 	u64 res_n = snprintf(nullptr, 0, res_301_fmt, host_buf, http_req.uri);
-	char *res_buf = calloc(res_n+1, 1);
+	res_buf = calloc(res_n+1, 1);
 	if (res_buf == nullptr) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 	snprintf(res_buf, res_n+1, res_301_fmt, host_buf, http_req.uri);
-	send(client_80_fd, res_buf, strnlen(res_buf, res_n+1), 0);
+	ret = send(client_80_fd, res_buf, strnlen(res_buf, res_n+1), 0);
+	if (ret < 0) {
+		ret = -1;
+		goto out;
+	}
+
+	ret = 0;
+out:
 	free(res_buf);
 	res_buf = nullptr;
-	return 0;
+	return ret;
 }

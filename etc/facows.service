@@ -7,7 +7,7 @@ After=network-online.target
 Type=simple
 ExecStart=/usr/local/bin/facows
 Restart=always
-TimeoutStopSec=3
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 

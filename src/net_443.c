@@ -88,8 +88,12 @@ out:
 }
 
 s32 net_443_res_write(u8 *ssl_opq, struct fws_http_res *http_res, s64 size) {
-	static const char http_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\n\r\n";
-	static const char http_hsts_res_fmt[] = "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\nDate: %s\r\nStrict-Transport-Security: max-age=%u;\r\n\r\n";
+	static const char http_res_fmt[] =
+		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
+		"Date: %s\r\nServer: Facooya-Web-Server\r\n\r\n";
+	static const char http_hsts_res_fmt[] =
+		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
+		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n\r\n";
 
 	SSL *ssl = (SSL *) ssl_opq;
 	u64 n = 0;
@@ -152,10 +156,11 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 		{.code = 501, .msg = "Not Implemented"}
 	};
 	static const char res_err_fmt[] =
-		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n\r\n";
+		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n"
+		"Server: Facooya-Web-Server\r\n\r\n";
 	static const char res_429_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\n"
-		"Content-Length: %lu\r\nRetry-After: 60\r\n\r\n";
+		"Content-Length: %lu\r\nRetry-After: 60\r\nServer: Facooya-Web-Server\r\n\r\n";
 	static const char err_page_path[] = "/usr/share/facows/error_page.html";
 
 	SSL *ssl = (SSL *) ssl_opq;
