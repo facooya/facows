@@ -143,7 +143,9 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 	printf("Facows start\n");
 	while (true) {
-		if (poll(fws_fds, 2, -1) < 0 && (*sig_flag_p == SIGINT || *sig_flag_p == SIGTERM)) {
+		ret = poll(fws_fds, 2, -1);
+		bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
+		if (ret < 0 && sig_cond) {
 			break;
 		}
 
@@ -201,7 +203,8 @@ out:
 	while (thrd_n > 0) {
 		poll(nullptr, 0, 100);
 		thrd_join_ms += 100;
-		if (thrd_join_ms > 3000) {
+		if (thrd_join_ms > 5000) {
+			fprintf(stderr, "fws_child_run(): thread join timeout %d\n", thrd_n);
 			break;
 		}
 	}
@@ -578,7 +581,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq_p) {
 		if (ret < 0) {
 			break;
 		}
-		if (*sig_flag_p == SIGINT) {
+		if (*sig_flag_p == SIGINT || *sig_flag_p == SIGTERM) {
 			break;
 		}
 		swap_ctx_p->global_time = time(nullptr);
