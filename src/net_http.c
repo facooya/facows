@@ -62,10 +62,10 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 		memcpy(http_res->content, "text/html", sizeof("text/html"));
 	} else if (memcmp(p1, "css", sizeof("css")) == 0) {
 		memcpy(http_res->content, "text/css", sizeof("text/css"));
+	} else if (memcmp(p1, "js", sizeof("js")) == 0) {
+		memcpy(http_res->content, "text/javascript", sizeof("text/javascript"));
 	} else if (memcmp(p1, "svg", sizeof("svg")) == 0) {
 		memcpy(http_res->content, "image/svg+xml", sizeof("image/svg+xml"));
-	} else if (memcmp(p1, "php", sizeof("php")) == 0) {
-		memcpy(http_res->content, "text/html", sizeof("text/html"));
 	} else {
 		return 1;
 	}
