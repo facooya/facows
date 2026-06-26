@@ -49,6 +49,7 @@ struct fws_http_res {
 	u32 hsts_max_age;
 	s32 code;
 	s32 connection;
+	bool is_origin_self;
 	char content[16];
 	char date[32];
 };
@@ -61,6 +62,7 @@ struct fws_http_req {
 	char os[16];
 	char browser[16];
 	char subdomain[64];
+	char origin[512];
 	char uri[4096];
 	char *path;
 	s64 path_n;

@@ -15,6 +15,7 @@ MIME_UNKNOWN "application/octet-stream"
 
 ## ETC
 - add log
+- no content 204 for `favicon.ico`.
 
 ## Secure
 - webroot protect to webroot+subdomain

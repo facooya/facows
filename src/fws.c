@@ -430,17 +430,17 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 			goto out;
 		}
 
-		struct fws_http_req http = {0};
-		ret = net_http_req_parse(req_buf, &http, conf_p->domain, sizeof(conf_p->domain));
+		struct fws_http_req http_req = {0};
+		ret = net_http_req_parse(req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
 		if (ret != 0) {
 			ret = -1;
 			goto out;
 		}
 
 		struct fws_file file = {0};
-		s32 status_code = file_parse(&file, &http, conf_p->web_root, sizeof(conf_p->web_root));
+		s32 status_code = file_parse(&file, &http_req, conf_p->web_root, sizeof(conf_p->web_root));
 		if (status_code == 301) {
-			net_http_path_redir(&http, conf_p, &file, (u8*)ssl);
+			net_http_path_redir(&http_req, conf_p, &file, (u8*)ssl);
 			ret = -1;
 			goto out;
 		}
@@ -518,10 +518,13 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(&http_res, file.path, sizeof(file.path));
+			if (http_req.origin[0] != '\0') {
+				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);
+			}
 			if (conf_p->use_hsts) {
 				http_res.hsts_max_age = conf_p->hsts_max_age;
 			}
-			ret = net_443_res_write((u8*)ssl, &http_res, file.size);
+			ret = net_443_res_write((u8*)ssl, &http_res, file.size, &http_req);
 			if (ret != 0) {
 				ret = -1;
 				goto out;

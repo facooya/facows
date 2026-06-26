@@ -48,7 +48,7 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 	const char *p2;
 	u64 n = strnlen(p1, path_n);
 
-	while (1) {
+	while (true) {
 		p2 = memchr(p1, '.', n);
 		if (p2 == nullptr) {
 			break;
@@ -85,6 +85,24 @@ void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *c
 	SSL_write(ssl, res_buf, n);
 	free(res_buf);
 	res_buf = nullptr;
+}
+
+bool net_http_origin_self_check(const struct fws_http_req *http_req, const struct fws_conf *conf_p) {
+	u64 domain_len = strnlen(conf_p->domain, sizeof(conf_p->domain));
+	if (domain_len == sizeof(conf_p->domain)) {
+		return false;
+	}
+	const char *p_scan = memmem(http_req->origin, sizeof(http_req->origin), conf_p->domain, domain_len);
+	if (p_scan == nullptr) {
+		return false;
+	}
+	if (*(p_scan-1) != '.' && *(p_scan-1) != '/') {
+		return false;
+	}
+	if (*(p_scan+domain_len) != ':' && *(p_scan+domain_len) != '\0') {
+		return false;
+	}
+	return true;
 }
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req) {
@@ -148,8 +166,8 @@ static void _uri_parse(struct fws_http_req *http_req) {
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
 	constexpr u64 req_key_max = 64;
 	constexpr u64 req_value_max = 1024;
-	enum key_idx {HOST, UA, AL};
-	static const char *const keyword[] = {"host", "user-agent", "accept-language"};
+	enum key_idx {HOST, UA, AL, ORIGIN};
+	static const char *const keyword[] = {"host", "user-agent", "accept-language", "origin"};
 
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, '\r', req_value_max);
@@ -160,7 +178,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	}
 	p1 = p2 + 2;
 
-	while (1) {
+	while (true) {
 		if (memcmp(p1, "\r\n", sizeof("\r\n")-1) == 0) {
 			break;
 		}
@@ -270,7 +288,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						}
 
 						p2 = p1;
-						while (1) {
+						while (true) {
 							if (*p2 == ',') {
 								break;
 							} else if (*p2 == ';') {
@@ -283,6 +301,11 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						n = p2 - p1;
 						memcpy(http_req->lang, p1, n);
 						http_req->lang[n] = '\0';
+						break;
+
+					case ORIGIN:
+						memcpy(http_req->origin, p1, n);
+						http_req->origin[n] = '\0';
 						break;
 				}
 				break;

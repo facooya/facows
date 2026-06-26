@@ -37,7 +37,7 @@ s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size) {
 	SSL *ssl = (SSL *) ssl_opq;
 	s32 total_read_size = 0;
 	s32 read_ret = 0;
-	while (1) {
+	while (true) {
 		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
 		if (read_ret <= 0) {
 			const s32 err_code = SSL_get_error(ssl, read_ret);
@@ -87,44 +87,72 @@ out:
 	return ret;
 }
 
-s32 net_443_res_write(u8 *ssl_opq, struct fws_http_res *http_res, s64 size) {
+s32 net_443_res_write(
+	u8 *ssl_opq,
+	struct fws_http_res *http_res,
+	s64 size,
+	const struct fws_http_req *http_req
+) {
 	static const char http_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
 		"Date: %s\r\nServer: Facooya-Web-Server\r\n\r\n";
 	static const char http_hsts_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
 		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n\r\n";
+	static const char acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n\r\n";
 
 	SSL *ssl = (SSL *) ssl_opq;
 	u64 n = 0;
 	u64 written = 0;
 	s32 ret = 0;
 
-	char *res_buf = nullptr;
+	constexpr u64 res_buf_cap = 8192;
+	char res_buf[res_buf_cap] = {0};
 
 	if (http_res->hsts_max_age != 0) {
-		ret = snprintf(nullptr, 0, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
+		ret = snprintf(
+			res_buf,
+			res_buf_cap,
+			http_hsts_res_fmt,
+			http_res->content,
+			size,
+			http_res->date,
+			http_res->hsts_max_age
+		);
 	} else {
-		ret = snprintf(nullptr, 0, http_res_fmt, http_res->content, size, http_res->date);
+		ret = snprintf(
+			res_buf,
+			res_buf_cap,
+			http_res_fmt,
+			http_res->content,
+			size,
+			http_res->date
+		);
 	}
 	if (ret < 0) {
 		ret = -1;
 		goto out;
 	}
 
-	n = (u64) ret;
-	res_buf = calloc(n+1, 1);
-	if (res_buf == nullptr) {
+	n = strnlen(res_buf, res_buf_cap);
+	if (n == res_buf_cap) {
 		ret = -1;
 		goto out;
 	}
 
-	if (http_res->hsts_max_age != 0) {
-		ret = snprintf(res_buf, n+1, http_hsts_res_fmt, http_res->content, size, http_res->date, http_res->hsts_max_age);
-	} else {
-		ret = snprintf(res_buf, n+1, http_res_fmt, http_res->content, size, http_res->date);
+	char *res_buf_p = res_buf;
+	res_buf_p += n;
+	res_buf_p -= 2;
+	if (http_res->is_origin_self) {
+		char acao_buf[512] = {0};
+		n = snprintf(acao_buf, sizeof(acao_buf), acao_fmt, http_req->origin);
+		memcpy(res_buf_p, acao_buf, n);
+		res_buf_p += n;
+		*res_buf_p = '\0';
 	}
-	if (ret < 0) {
+
+	n = strnlen(res_buf, res_buf_cap);
+	if (n == res_buf_cap) {
 		ret = -1;
 		goto out;
 	}
@@ -137,8 +165,6 @@ s32 net_443_res_write(u8 *ssl_opq, struct fws_http_res *http_res, s64 size) {
 
 	ret = 0;
 out:
-	free(res_buf);
-	res_buf = nullptr;
 	return ret;
 }
 
