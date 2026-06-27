@@ -118,5 +118,5 @@ sudo systemctl restart facows
 ---
 
 > FWS: Facooya Web Server  
-> FACOWS: FACOoya Web Server   
-> Authors 2026 Facooya and Fanone Facooya
+> FACOWS: FACOoya Web Server  
+> Maintained by Facooya and Fanone Facooya, 2026  

@@ -272,4 +272,4 @@ out:
 
 ---
 
-> Authors 2026 Facooya and Fanone Facooya
+> Maintained by Facooya and Fanone Facooya, 2026

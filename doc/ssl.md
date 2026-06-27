@@ -62,19 +62,18 @@ systemctl list-timers | grep certbot
 For example:
 ```sh
 sudo certbot certonly --dry-run --webroot \
---cert-name <first_domain> --expand \
+--cert-name <first_domain> \
 -w <webroot> -d <domain> \
 -w <new_webroot> -d <new_domain> \
 ```
 ```sh
 sudo certbot certonly --dry-run --webroot \
---cert-name example.com --expand \
+--cert-name example.com \
 -w /var/www/example/ -d example.com \ # already exist
 -w /var/www/example/www/ -d www.example.com \ # already exist
 -w /var/www/example/test/ -d test.example.com \ # already exist
 -w /var/www/example/add/ -d add.example.com \ # add new
 -w /var/www/example/expand/ -d expand.example.com \ # add new
-
 ```
 
 ---
@@ -102,4 +101,4 @@ sudo apt install libssl-dev
 
 ---
 
-> Authors 2026 Facooya and Fanone Facooya
+> Maintained by Facooya and Fanone Facooya, 2026

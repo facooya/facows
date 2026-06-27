@@ -502,7 +502,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		} else {
 			nft_arr[nft_i].no_html_cnt++;
 		}
-		if (nft_arr[nft_i].html_cnt > conf_p->lim_res || nft_arr[nft_i].no_html_cnt > conf_p->lim_res) {
+		if (nft_arr[nft_i].html_cnt > conf_p->lim_page || nft_arr[nft_i].no_html_cnt > conf_p->lim_res) {
 			nft_arr[nft_i].dos_cnt++;
 			status_code = 429;
 		}
@@ -595,6 +595,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq_p) {
 	(*thrd_n_p)--;
 	free(swap_ctx_p);
 	swap_ctx_p = nullptr;
+	fprintf(stdout, "_fws_swap_thrd_run(): Done\n");
 	return nullptr;
 }
 

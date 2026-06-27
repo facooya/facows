@@ -1,6 +1,4 @@
-# SPDX-License-Identifier: MIT
-#
-# Copyright 2026 Facooya and Fanone Facooya
+# Maintained by Facooya and Fanone Facooya, 2026
 
 SAN_A = address,undefined
 SAN_T = thread,undefined
