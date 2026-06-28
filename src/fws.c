@@ -188,6 +188,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			thrd_ctx_p->nft_arr_pp = &nft_arr_p;
 			thrd_ctx_p->nft_lock_opq_p = (u8 *) &nft_lock;
 			thrd_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
+			thrd_ctx_p->sig_flag_opq_p = (s32 *) sig_flag_p;
 
 			thrd_n++;
 			u64 fws_thrd = 0;
@@ -391,15 +392,6 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		goto out;
 	}
 
-	struct timeval sock_tv = {0};
-	sock_tv.tv_sec = 2;
-	sock_tv.tv_usec = 0;
-	ret = setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&sock_tv, sizeof(sock_tv));
-	if (ret < 0) {
-		ret = -1;
-		goto out;
-	}
-
 	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thrd_ctx_p->ssl_ctx_opq_p;
 	ssl = SSL_new(ssl_ctx_p);
 	if (ssl == nullptr) {
@@ -424,10 +416,12 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	while (true) {
 		static const char html_ext_str[] = ".html";
 		char req_buf[8192] = {0};
-		ret = net_443_read((u8*)ssl, req_buf, sizeof(req_buf));
-		if (ret != 0) {
+		ret = net_443_read((u8*)ssl, req_buf, sizeof(req_buf), client_fd, thrd_ctx_p->sig_flag_opq_p);
+		if (ret < 0) {
 			ret = -1;
 			goto out;
+		} else if (ret == 0) {
+			break;
 		}
 
 		struct fws_http_req http_req = {0};

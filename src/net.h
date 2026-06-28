@@ -15,7 +15,7 @@ void net_host_build(char *host_buf, const struct fws_http_req *http_req, const s
 s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config);
 
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config);
-s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size);
+s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *sig_flag_opq_p);
 s32 net_443_write(u8 *ssl_opq, const char *path);
 s32 net_443_res_write(
 	u8 *ssl_opq,

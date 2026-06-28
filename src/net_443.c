@@ -9,10 +9,13 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <openssl/ssl.h>
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <openssl/ssl.h>
 
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
@@ -33,28 +36,71 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	return 0;
 }
 
-s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size) {
+s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *sig_flag_opq_p) {
 	SSL *ssl = (SSL *) ssl_opq;
+	struct pollfd ssl_poll = {0};
+	_Atomic s32 *sig_flag_p = (_Atomic s32 *) sig_flag_opq_p;
 	s32 total_read_size = 0;
 	s32 read_ret = 0;
-	while (true) {
-		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
-		if (read_ret <= 0) {
-			const s32 err_code = SSL_get_error(ssl, read_ret);
-			if (err_code == SSL_ERROR_WANT_READ) {
-				return -1;
+	s32 ret = -1;
 
-			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-				return 400;
+	ssl_poll.fd = client_fd;
+	ssl_poll.events = POLLIN;
+
+	s32 poll_err = 0;
+	while (true) {
+		if (SSL_pending(ssl) > 0) {
+			ret = 1;
+			ssl_poll.revents = POLLIN;
+		} else {
+			poll_err = 0;
+			ret = poll(&ssl_poll, 1, 3000);
+			poll_err = errno;
+			bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
+			if (ret < 0 && sig_cond) {
+				break;
 			}
-			return 500;
 		}
 
-		total_read_size += read_ret;
-		if (total_read_size >= 4095) {
-			return 431;
-		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
-			break;
+		if (ret == 0) {
+			if (total_read_size == 0) {
+				return 0;
+			}
+			return -1;
+		} else if (ret < 0) {
+			if (poll_err == EINTR) {
+				continue;
+			}
+			return -1;
+		}
+
+		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
+			read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
+			ssl_poll.events = POLLIN;
+			if (read_ret <= 0) {
+				const s32 err_code = SSL_get_error(ssl, read_ret);
+				if (err_code == SSL_ERROR_WANT_READ) {
+					continue;
+				} else if (err_code == SSL_ERROR_WANT_WRITE) {
+					ssl_poll.events = POLLOUT;
+					continue;
+				} else if (err_code == SSL_ERROR_ZERO_RETURN) {
+					if (total_read_size != 0) {
+						return 400;
+					}
+					return 0;
+				}
+				return 500;
+			}
+	
+			total_read_size += read_ret;
+			if (total_read_size >= 4095) {
+				return 431;
+			} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
+				return 1;
+			}
+		} else {
+			return -1;
 		}
 	}
 	return 0;
@@ -95,10 +141,12 @@ s32 net_443_res_write(
 ) {
 	static const char http_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
-		"Date: %s\r\nServer: Facooya-Web-Server\r\n\r\n";
+		"Date: %s\r\nServer: Facooya-Web-Server\r\n"
+		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\n";
 	static const char http_hsts_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
-		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n\r\n";
+		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n"
+		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\n";
 	static const char acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n\r\n";
 
 	SSL *ssl = (SSL *) ssl_opq;
@@ -183,10 +231,11 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 	};
 	static const char res_err_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\nContent-Length: %lu\r\n"
-		"Server: Facooya-Web-Server\r\n\r\n";
+		"Server: Facooya-Web-Server\r\nConnection: close\r\n\r\n";
 	static const char res_429_fmt[] =
 		"HTTP/1.1 %d %s\r\nContent-Type: text/html\r\n"
-		"Content-Length: %lu\r\nRetry-After: 60\r\nServer: Facooya-Web-Server\r\n\r\n";
+		"Content-Length: %lu\r\nRetry-After: 60\r\nServer: Facooya-Web-Server\r\n"
+		"Connection: close\r\n\r\n";
 	static const char err_page_path[] = "/usr/share/facows/error_page.html";
 
 	SSL *ssl = (SSL *) ssl_opq;

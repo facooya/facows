@@ -60,7 +60,7 @@ s32 file_parse(
 	}
 
 	code = _path_build(file, path_buf, code);
-	if (code != 0) {
+	if (code != 0 && code != 204) {
 		ret = code;
 		goto out;
 	}

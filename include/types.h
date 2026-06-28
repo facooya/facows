@@ -50,7 +50,7 @@ struct fws_http_res {
 	s32 code;
 	s32 connection;
 	bool is_origin_self;
-	char content[16];
+	char content[64];
 	char date[32];
 };
 
@@ -81,6 +81,7 @@ struct fws_thrd_ctx {
 	s32 fd;
 	s32 write_fd;
 	s32 *thrd_n_opq_p;
+	s32 *sig_flag_opq_p;
 
 	u8 client_ip_buf[16];
 	u8 *ssl_ctx_opq_p;

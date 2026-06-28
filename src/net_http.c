@@ -64,9 +64,18 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 		memcpy(http_res->content, "text/css", sizeof("text/css"));
 	} else if (memcmp(p1, "js", sizeof("js")) == 0) {
 		memcpy(http_res->content, "text/javascript", sizeof("text/javascript"));
+	} else if (memcmp(p1, "txt", sizeof("txt")) == 0) {
+		memcpy(http_res->content, "text/plain", sizeof("text/plain"));
+
 	} else if (memcmp(p1, "svg", sizeof("svg")) == 0) {
 		memcpy(http_res->content, "image/svg+xml", sizeof("image/svg+xml"));
+	} else if (memcmp(p1, "ico", sizeof("ico")) == 0) {
+		memcpy(http_res->content, "image/x-icon", sizeof("image/x-icon"));
+
+	} else if (memcmp(p1, "xml", sizeof("xml")) == 0) {
+		memcpy(http_res->content, "application/xml", sizeof("application/xml"));
 	} else {
+		memcpy(http_res->content, "application/octet-stream", sizeof("application/octet-stream"));
 		return 1;
 	}
 
