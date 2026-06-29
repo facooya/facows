@@ -4,12 +4,13 @@ Site of use `Facows`: `dev.facooya.com`.
 
 **Limitations**
 - Linux only.
-- Only SSL, must have ssl certificate and private key.
+- Only SSL, must have SSL certificate and private key.
 - Not support PHP, only static files.
-- Only http 1.1.
-- Poll method.
+- Only HTTP `1.1`.
+- Using `poll`.
 - Only html extendsion for clean url, but forced.
-- Not support upload/download for large files, because socket timeout 2 seconds.
+- Not support upload/download for large files.
+- If subdomain `abc`, must directory name is `/WEB_ROOT/abc`.
 
 **Features**
 - Support configuration file.
@@ -18,10 +19,10 @@ Site of use `Facows`: `dev.facooya.com`.
 - URL redirect from http to https.
 - Redirect html extenstion for clean url.
 
-**Implement**
-- poll.
-- - Must upgrade will epoll, may upgrade will io_uring.
-- kTLS.
+**Implementations**
+- The `poll`.
+- - Must upgrade will `epoll`, may upgrade will `io_uring`.
+- Kernel TLS, The `kTLS`.
 - - If fail kernel TLS, convert to user-space TLS.
 
 ### Default Path
@@ -47,8 +48,8 @@ sudo systemctl start nftables
 ```
 
 **Check for kTLS**
-Openssl version over than 3.0.4.
-Linux kernel version over than 5.6.
+Openssl version over than `3.0.4`.
+Linux kernel version over than `5.6`.
 
 kTLS:
 ```sh

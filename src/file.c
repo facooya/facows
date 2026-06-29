@@ -21,8 +21,7 @@ static s32 _raw_path_build(
 	char *path_buf,
 	const char *uri_path,
 	const char *web_root,
-	u64 web_root_len,
-	const struct fws_http_req *http_req
+	u64 web_root_len
 );
 static s32 _uri_path_build(struct fws_file *file);
 static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir);
@@ -48,7 +47,7 @@ s32 file_parse(
 	}
 
 	char path_buf[4096] = {0};
-	_raw_path_build(path_buf, file->uri_path, web_root, web_root_len, http_req);
+	_raw_path_build(path_buf, file->uri_path, web_root, web_root_len);
 
 	s32 code = _uri_path_build(file);
 	if (code == 301) {
@@ -182,17 +181,13 @@ static s32 _raw_path_build(
 	char *path_buf,
 	const char *uri_path,
 	const char *web_root,
-	u64 web_root_len,
-	const struct fws_http_req *http_req
+	u64 web_root_len
 ) {
 	char *path_buf_p = path_buf;
 	memcpy(path_buf_p, web_root, web_root_len);
 	path_buf_p += web_root_len;
 	*path_buf_p = '/';
 	path_buf_p++;
-	u64 subdomain_len = strnlen(http_req->subdomain, sizeof(http_req->subdomain));
-	memcpy(path_buf_p, http_req->subdomain, subdomain_len);
-	path_buf_p += subdomain_len;
 	*path_buf_p = '\0';
 
 	const char *p1 = uri_path;

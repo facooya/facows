@@ -443,8 +443,24 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 			goto out;
 		}
 
+		/* webroot = webroot + subdomain */
+		char web_root_buf[256] = {0};
+		char *web_root_buf_p = web_root_buf;
+		u64 conf_web_root_len = strnlen(conf_p->web_root, sizeof(conf_p->web_root));
+		memcpy(web_root_buf_p, conf_p->web_root, conf_web_root_len);
+		web_root_buf_p += conf_web_root_len;
+		*web_root_buf_p = '\0';
+		if (http_req.subdomain[0] != '\0') {
+			*web_root_buf_p = '/';
+			web_root_buf_p++;
+			u64 req_subdomain_len = strnlen(http_req.subdomain, sizeof(http_req.subdomain));
+			memcpy(web_root_buf_p, http_req.subdomain, req_subdomain_len);
+			web_root_buf_p += req_subdomain_len;
+			*web_root_buf_p = '\0';
+		}
+
 		struct fws_file file = {0};
-		s32 status_code = file_parse(&file, &http_req, conf_p->web_root, sizeof(conf_p->web_root));
+		s32 status_code = file_parse(&file, &http_req, web_root_buf, sizeof(web_root_buf));
 		if (status_code == 301) {
 			net_http_path_redir(&http_req, conf_p, &file, (u8*)ssl);
 			ret = -1;
