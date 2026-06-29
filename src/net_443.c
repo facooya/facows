@@ -19,7 +19,6 @@
 
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
-	SSL_library_init();
 	const SSL_METHOD *ssl_method = nullptr;
 	ssl_method = TLS_server_method();
 	*ssl_ctx = SSL_CTX_new(ssl_method);
@@ -33,6 +32,7 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	}
 
 	SSL_CTX_set_session_cache_mode(*ssl_ctx, SSL_SESS_CACHE_OFF);
+	SSL_CTX_set_options(*ssl_ctx, SSL_OP_ENABLE_KTLS);
 	return 0;
 }
 

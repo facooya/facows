@@ -411,6 +411,18 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	}
 	need_ssl_shutdown = true;
 
+	/* Check for supporting 'kTLS'. */
+	BIO *bio = SSL_get_wbio(ssl);
+	bool is_ktls = (bool) (bio != nullptr && BIO_get_ktls_send(bio) == 1);
+	if (!is_ktls) {
+		fprintf(stdout, "_fws_thrd_run(): BIO_get_ktls_send(): fail\n");
+	}
+	bio = SSL_get_rbio(ssl);
+	is_ktls = (bool) (bio != nullptr && BIO_get_ktls_recv(bio) == 1);
+	if (!is_ktls) {
+		fprintf(stdout, "_fws_thrd_run(): BIO_get_ktls_recv(): fail\n");
+	}
+
 	pthread_mutex_t *nft_lock_p = (pthread_mutex_t *) thrd_ctx_p->nft_lock_opq_p;
 	const struct fws_conf *conf_p = thrd_ctx_p->conf_p;
 	while (true) {

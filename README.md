@@ -3,20 +3,26 @@ Site of use `Facows`: `dev.facooya.com`.
 - Originaly `facooya.com` (`www.facooya.com`), but have not content. So please go to the `dev.facooya.com`.
 
 **Limitations**
-- Linux only
+- Linux only.
 - Only SSL, must have ssl certificate and private key.
 - Not support PHP, only static files.
-- Only http 1.1
-- Poll method
+- Only http 1.1.
+- Poll method.
 - Only html extendsion for clean url, but forced.
 - Not support upload/download for large files, because socket timeout 2 seconds.
 
 **Features**
-- Support configuration file
-- Support regist to system daemon
+- Support configuration file.
+- Support regist to system daemon.
 - If NFT true in conf file, ip ban of dos or flood attack.
-- URL redirect from http to https
-- Redirect html extenstion for clean url
+- URL redirect from http to https.
+- Redirect html extenstion for clean url.
+
+**Implement**
+- poll.
+- - Must upgrade will epoll, may upgrade will io_uring.
+- kTLS.
+- - If fail kernel TLS, convert to user-space TLS.
 
 ### Default Path
 - Web root: `/var/www/facows/`
@@ -38,6 +44,19 @@ Register nftables to systemd:
 ```sh
 sudo systemctl enable nftables
 sudo systemctl start nftables
+```
+
+**Check for kTLS**
+Openssl version over than 3.0.4.
+Linux kernel version over than 5.6.
+
+kTLS:
+```sh
+# Check
+lsmod | grep tls
+
+# Enable
+sudo modprobe tls
 ```
 
 ### Quick Start
