@@ -106,8 +106,82 @@ s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *s
 	return 0;
 }
 
-s32 net_443_write(u8 *ssl_opq, const char *path) {
+s32 net_443_write(u8 *ssl_opq, char *src_buf, u64 buf_size, s32 *sig_flag_opq_p) {
 	SSL *ssl = (SSL *) ssl_opq;
+	struct pollfd ssl_poll = {0};
+	_Atomic s32 *sig_flag_p = (_Atomic s32 *) sig_flag_opq_p;
+	u64 acc_write_size = 0;
+	s32 write_ret = -1;
+	s32 ret = -1;
+
+	s32 client_fd = SSL_get_fd(ssl);
+	if (client_fd < 0) {
+		return -1;
+	}
+	ssl_poll.fd = client_fd;
+	ssl_poll.events = POLLOUT;
+
+	s32 poll_err = 0;
+	while (true) {
+		/* Poll */
+		poll_err = 0;
+		ret = poll(&ssl_poll, 1, 3000);
+		poll_err = errno;
+		bool is_sig = *sig_flag_p == SIGINT || *sig_flag_p == SIGTERM;
+		if (ret < 0 && is_sig) {
+			break;
+		}
+
+		/* Check return value to 'poll'. */
+		if (ret == 0) {
+			if (acc_write_size == 0) {
+				break;
+			}
+			return -1;
+		} else if (ret < 0) {
+			if (poll_err == EINTR) {
+				continue;
+			}
+			return -1;
+		}
+
+		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
+			write_ret = SSL_write(ssl, src_buf, buf_size);
+			ssl_poll.events = POLLOUT;
+
+			/* Error */
+			if (write_ret <= 0) {
+				const s32 err_code = SSL_get_error(ssl, write_ret);
+				if (err_code == SSL_ERROR_WANT_WRITE) {
+					continue;
+				} else if (err_code == SSL_ERROR_WANT_READ) {
+					ssl_poll.events = POLLIN;
+					continue;
+				} else if (err_code == SSL_ERROR_ZERO_RETURN) {
+					if (acc_write_size != 0) {
+						return -1;
+					}
+					break;
+				}
+				return -1;
+			}
+
+			/* Exit */
+			acc_write_size += write_ret;
+			if (acc_write_size == buf_size) {
+				return 1;
+			} else if (acc_write_size > buf_size) {
+				return -1;
+			}
+
+		} else {
+			return -1;
+		}
+	}
+	return 0;
+}
+
+s32 net_443_file_write(u8 *ssl_opq, const char *path, s32 *sig_flag_opq_p) {
 	s32 ret = 0;
 
 	s32 fd = open(path, O_RDONLY);
@@ -115,10 +189,11 @@ s32 net_443_write(u8 *ssl_opq, const char *path) {
 		ret = -1;
 		goto out;
 	}
-	char file_buf[4096];
-	s64 read_size;
+	char file_buf[4096] = {0};
+	s64 read_size = 0;
 	while ((read_size = read(fd, file_buf, sizeof(file_buf))) > 0) {
-		if (SSL_write(ssl, file_buf, read_size) <= 0) {
+		ret = net_443_write(ssl_opq, file_buf, read_size, sig_flag_opq_p);
+		if (ret <= 0) {
 			ret = 1;
 			goto out;
 		}
@@ -137,7 +212,8 @@ s32 net_443_res_write(
 	u8 *ssl_opq,
 	struct fws_http_res *http_res,
 	s64 size,
-	const struct fws_http_req *http_req
+	const struct fws_http_req *http_req,
+	s32 *sig_flag_opq_p
 ) {
 	static const char http_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
@@ -149,9 +225,7 @@ s32 net_443_res_write(
 		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\n";
 	static const char acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n\r\n";
 
-	SSL *ssl = (SSL *) ssl_opq;
 	u64 n = 0;
-	u64 written = 0;
 	s32 ret = 0;
 
 	constexpr u64 res_buf_cap = 8192;
@@ -205,8 +279,8 @@ s32 net_443_res_write(
 		goto out;
 	}
 
-	ret = SSL_write_ex(ssl, res_buf, n, &written);
-	if (ret < 0) {
+	ret = net_443_write(ssl_opq, res_buf, n, sig_flag_opq_p);
+	if (ret <= 0) {
 		ret = -1;
 		goto out;
 	}
@@ -216,7 +290,7 @@ out:
 	return ret;
 }
 
-s32 net_443_err_write(u8 *ssl_opq, s32 code) {
+s32 net_443_err_write(u8 *ssl_opq, s32 code, s32 *sig_flag_opq_p) {
 	struct http_msg { s32 code; char *msg; };
 	static const struct http_msg http_msg[] = {
 		{.code = 500, .msg = "Internal Server Error"}, /* default */
@@ -238,12 +312,10 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 		"Connection: close\r\n\r\n";
 	static const char err_page_path[] = "/usr/share/facows/error_page.html";
 
-	SSL *ssl = (SSL *) ssl_opq;
 	struct stat html_stat = {0};
 	u64 html_n = 0;
 	u64 msg_i = 0;
 	u64 res_n = 0;
-	u64 written = 0;
 	s32 ret = 0;
 
 	char *html_fmt = nullptr;
@@ -336,13 +408,13 @@ s32 net_443_err_write(u8 *ssl_opq, s32 code) {
 		}
 	}
 
-	ret = SSL_write_ex(ssl, res_buf, res_n, &written);
-	if (ret < 0) {
+	ret = net_443_write(ssl_opq, res_buf, res_n, sig_flag_opq_p);
+	if (ret <= 0) {
 		ret = -1;
 		goto out;
 	}
-	ret = SSL_write_ex(ssl, html_buf, html_n, &written);
-	if (ret < 0) {
+	ret = net_443_write(ssl_opq, html_buf, html_n, sig_flag_opq_p);
+	if (ret <= 0) {
 		ret = -1;
 		goto out;
 	}

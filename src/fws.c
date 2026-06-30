@@ -462,7 +462,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		struct fws_file file = {0};
 		s32 status_code = file_parse(&file, &http_req, web_root_buf, sizeof(web_root_buf));
 		if (status_code == 301) {
-			net_http_path_redir(&http_req, conf_p, &file, (u8*)ssl);
+			net_http_path_redir(&http_req, conf_p, &file, (u8*)ssl, thrd_ctx_p->sig_flag_opq_p);
 			ret = -1;
 			goto out;
 		}
@@ -510,7 +510,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 
 			pthread_mutex_unlock(nft_lock_p);
 			status_code = 429;
-			ret = net_443_err_write((u8*)ssl, status_code);
+			ret = net_443_err_write((u8*)ssl, status_code, thrd_ctx_p->sig_flag_opq_p);
 			if (ret < 0) {
 				ret = -1;
 				goto out;
@@ -531,7 +531,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		pthread_mutex_unlock(nft_lock_p);
 
 		if (status_code != 0) {
-			ret = net_443_err_write((u8*)ssl, status_code);
+			ret = net_443_err_write((u8*)ssl, status_code, thrd_ctx_p->sig_flag_opq_p);
 			if (ret < 0) {
 				ret = -1;
 				goto out;
@@ -546,12 +546,12 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 			if (conf_p->use_hsts) {
 				http_res.hsts_max_age = conf_p->hsts_max_age;
 			}
-			ret = net_443_res_write((u8*)ssl, &http_res, file.size, &http_req);
+			ret = net_443_res_write((u8*)ssl, &http_res, file.size, &http_req, thrd_ctx_p->sig_flag_opq_p);
 			if (ret != 0) {
 				ret = -1;
 				goto out;
 			}
-			net_443_write((u8*)ssl, file.path);
+			net_443_file_write((u8*)ssl, file.path, thrd_ctx_p->sig_flag_opq_p);
 		}
 	}
 

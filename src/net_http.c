@@ -82,16 +82,23 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 	return 0;
 }
 
-void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf, const struct fws_file *file, u8 *ssl_opq) {
-	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\nLocation: https://%s%s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-	SSL *ssl = (SSL *) ssl_opq;
+void net_http_path_redir(
+	struct fws_http_req *http_req,
+	const struct fws_conf *conf,
+	const struct fws_file *file,
+	u8 *ssl_opq,
+	s32 *sig_flag_opq_p
+) {
+	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\n"
+		"Location: https://%s%s\r\nContent-Length: 0\r\nConnection: keep-alive\r\n"
+		"Keep-Alive: timeout=3\r\n\r\n";
 	char host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
 	u64 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
 	char *res_buf = calloc(n+1, 1);
 	snprintf(res_buf, n+1, res_301_fmt, host_buf, file->uri_path);
-	SSL_write(ssl, res_buf, n);
+	net_443_write(ssl_opq, res_buf, n, sig_flag_opq_p);
 	free(res_buf);
 	res_buf = nullptr;
 }
@@ -115,12 +122,10 @@ bool net_http_origin_self_check(const struct fws_http_req *http_req, const struc
 }
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req) {
-	// { method
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, ' ', sizeof(http_req->method));
 	u64 n;
 	if (p2 == nullptr) {
-		// err_log
 		return 1;
 	}
 	n = p2 - p1;
