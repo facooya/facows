@@ -33,10 +33,11 @@ Site of use `Facows`: `dev.facooya.com`.
 ### Dependency Install
 ```sh
 sudo apt update
-sudo apt install git make libssl-dev nftables libnftables-dev
+sudo apt install git make gcc libssl-dev nftables libnftables-dev
 ```
 - `git` - For the `git clone`
 - `make` - Build for facows
+- `gcc` - Compile for C
 - `libssl-dev` - Open ssl library in C
 - `nftables` - Network filter for IP ban
 - `libnftables-dev` - Network filter library in C

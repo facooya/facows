@@ -71,6 +71,10 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 		memcpy(http_res->content, "image/svg+xml", sizeof("image/svg+xml"));
 	} else if (memcmp(p1, "ico", sizeof("ico")) == 0) {
 		memcpy(http_res->content, "image/x-icon", sizeof("image/x-icon"));
+	} else if (memcmp(p1, "png", sizeof("png")) == 0) {
+		memcpy(http_res->content, "image/png", sizeof("image/png"));
+	} else if (memcmp(p1, "mp4", sizeof("mp4")) == 0) {
+		memcpy(http_res->content, "video/mp4", sizeof("video/mp4"));
 
 	} else if (memcmp(p1, "xml", sizeof("xml")) == 0) {
 		memcpy(http_res->content, "application/xml", sizeof("application/xml"));
