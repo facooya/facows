@@ -12,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <poll.h>
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
@@ -50,9 +51,19 @@ s32 net_nft_init(const struct fws_conf *conf) {
 	char *nft_buf = nullptr;
 
 	char name_buf[16] = {0};
-	if (_name_get(name_buf, sizeof(name_buf)) < 0) {
-		ret = -1;
-		goto out;
+	s32 name_cnt = 0;
+	while (name_cnt < 5) {
+		memset(name_buf, '\0', sizeof(name_buf));
+		ret = _name_get(name_buf, sizeof(name_buf));
+		if (ret >= 0) {
+			break;
+		}
+		name_cnt++;
+		if (name_cnt == 5) {
+			ret = -1;
+			goto out;
+		}
+		poll(nullptr, 0, 1000);
 	}
 
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
@@ -69,7 +80,9 @@ s32 net_nft_init(const struct fws_conf *conf) {
 
 	ret = 0;
 out:
-	nft_ctx_free(nft_ctx);
+	if (nft_ctx != nullptr) {
+		nft_ctx_free(nft_ctx);
+	}
 	nft_ctx = nullptr;
 	free(nft_buf);
 	nft_buf = nullptr;
