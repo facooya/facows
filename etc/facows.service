@@ -5,7 +5,9 @@ After=network-online.target nftables.service
 
 [Service]
 Type=simple
+ExecStartPre=-/usr/sbin/modprobe tls
 ExecStart=/usr/local/bin/facows
+ExecStopPost=-/usr/sbin/modprobe -r tls
 Restart=always
 RestartSec=5s
 TimeoutStopSec=10

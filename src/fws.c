@@ -151,7 +151,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 		struct sockaddr_in6 client_addr = {0};
 		if ((fws_fds[0].revents & POLLIN) != 0) {
-			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, (u32*)&client_addr);
+			u32 client_addr_len = sizeof(client_addr);
+			client_http_fd = accept(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_len);
 
 			struct fws_thrd_80_ctx *thrd_80_ctx_p = calloc(1, sizeof(struct fws_thrd_80_ctx));
 			if (thrd_80_ctx_p == nullptr) {
@@ -168,7 +169,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			pthread_detach(thrd_80_id);
 
 		} else if ((fws_fds[1].revents & POLLIN) != 0) {
-			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, (u32*)&client_addr);
+			u32 client_addr_len = sizeof(client_addr);
+			client_fd = accept(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_len);
 
 			struct fws_thrd_ctx *thrd_ctx_p = calloc(1, sizeof(struct fws_thrd_ctx));
 			if (thrd_ctx_p == nullptr) {
