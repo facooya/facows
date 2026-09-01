@@ -17,6 +17,7 @@ static const char index_str[] = "index";
 static const char index_html_str[] = "index.html";
 static const char html_ext_str[] = ".html";
 
+static s32 _chr_to_hex(u8 c);
 static s32 _raw_path_build(
 	char *path_buf,
 	const char *uri_path,
@@ -81,7 +82,7 @@ s32 file_parse(
 
 	ret = memcmp(file->path, web_root, web_root_len);
 	if (ret != 0) {
-		ret = -1;
+		ret = 404;
 		goto out;
 	}
 
@@ -177,12 +178,25 @@ static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir) {
 	return 0;
 }
 
+static s32 _chr_to_hex(u8 c) {
+	if (c >= 0x30 && c <= 0x39) {
+		return c - 0x30;
+	} else if (c >= 0x41 && c <= 0x46) {
+		return c - 0x37;
+	} else if (c >= 0x61 && c <= 0x66) {
+		return c - 0x57;
+	}
+
+	return -1;
+}
+
 static s32 _raw_path_build(
 	char *path_buf,
 	const char *uri_path,
 	const char *web_root,
 	u64 web_root_len
 ) {
+	s32 ret = 0;
 	char *path_buf_p = path_buf;
 	memcpy(path_buf_p, web_root, web_root_len);
 	path_buf_p += web_root_len;
@@ -197,42 +211,44 @@ static s32 _raw_path_build(
 			*p2 = '\0';
 			break;
 		} else if (*p1 == '%') {
-			const s32 is_hex_fst_chr = isxdigit((u8)*(p1+1));
-			const s32 is_hex_sec_chr = isxdigit((u8)*(p1+2));
-			if (is_hex_fst_chr != 0 && is_hex_sec_chr != 0) {
-				u8 c1 = *(p1 + 1);
-				u8 c2 = *(p1 + 2);
-
-				if (is_hex_fst_chr != 0) {
-					c1 -= 0x30;
-					c1 <<= 4;
-				} else {
-					if (c1 < 0x50) {
-						c1 += 0x20;
-					}
-					c1 -= 0x57;
-					c1 <<= 4;
-				}
-
-				if (is_hex_sec_chr != 0) {
-					c2 -= 0x30;
-					c1 |= c2;
-				} else {
-					if (c2 < 0x50) {
-						c2 += 0x20;
-					}
-					c2 -= 0x57;
-					c1 |= c2;
-				}
-
-				*p2 = c1;
-				p1 += 3;
+			if (*(p1+1) == '\0') {
+				*p2 = *p1;
 				p2++;
-			} else {
+				*p2 = '\0';
+				break;
+			} else if (*(p1+2) == '\0') {
 				*p2 = *p1;
 				p1++;
 				p2++;
+				*p2 = *p1;
+				p2++;
+				*p2 = '\0';
+				break;
 			}
+
+			ret = _chr_to_hex((u8)*(p1+1));
+			if (ret < 0) {
+				*p2 = *p1;
+				p1++;
+				p2++;
+				continue;
+			}
+			u8 x1 = (u8) ret;
+			ret = _chr_to_hex((u8)*(p1+2));
+			if (ret < 0) {
+				*p2 = *p1;
+				p1++;
+				p2++;
+				continue;
+			}
+			u8 x2 = (u8) ret;
+
+			u8 hex = (x1 << 4);
+			hex |= x2;
+			*p2 = (char)hex;
+			p2++;
+			p1 += 3;
+
 		} else {
 			*p2 = *p1;
 			p1++;
