@@ -58,6 +58,20 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 		p1 = p2 + 1;
 	}
 
+	/* TODO: conf_file.mime_ext[i][j], conf_file.mime_type[i] */
+	/*
+	memcpy(http_res->content, conf_file.mime_default, sizeof(conf_file.mime_default));
+	for (s32 i=0; conf_file.mime_ext.length; i++) {
+		for (s32 j=0; conf_file.mime_ext[i].length; j++) {
+			if (memcmp(p1, conf_file.mime_ext[i][j], sizeof(conf_file.mime_ext[i][j]))) {
+				memset(http_res->content, '\0', sizeof(conf_file.mime_default));
+				memcpy(http_res->content, conf_file.mime_type[i], sizeof(conf_file.mime_type[i]));
+				break;
+			}
+		}
+	}
+	*/
+
 	if (memcmp(p1, "html", sizeof("html")) == 0) {
 		memcpy(http_res->content, "text/html", sizeof("text/html"));
 	} else if (memcmp(p1, "css", sizeof("css")) == 0) {

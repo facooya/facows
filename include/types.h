@@ -36,6 +36,8 @@ struct fws_conf {
 	char web_log[128];
 	char ssl_cert[128];
 	char ssl_key[128];
+	char mime_default[128];
+	char mime[1024];
 };
 
 struct fws_nft {

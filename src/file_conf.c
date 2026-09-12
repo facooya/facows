@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 
 /* Macros for 'facows.conf'. */
-enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T};
+enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T, MIME_T};
 #define CONF_LIST(X) \
 	X(HTTP_PORT, http_port, U16_T) \
 	X(HTTPS_PORT, https_port, U16_T) \
@@ -36,7 +36,9 @@ enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T};
 	X(SSL_CERT, ssl_cert, CHAR_T) \
 	X(SSL_KEY, ssl_key, CHAR_T) \
 	X(HSTS, use_hsts, BOOL_T) \
-	X(HSTS_MAX_AGE, hsts_max_age, U32_T)
+	X(HSTS_MAX_AGE, hsts_max_age, U32_T) \
+	X(MIME, mime, MIME_T) \
+	X(MIME_DEFAULT, mime_default, CHAR_T)
 #define CONF_LIST_ENUM(x_key, x_member, x_type) x_key,
 #define CONF_LIST_LOOKUP(x_key, x_member, x_type) [x_key] = { \
 	.offset = offsetof(struct fws_conf, x_member), \
@@ -76,6 +78,13 @@ static s32 _type_ap_parse(
 	struct fws_conf *conf_p,
 	const struct fws_lookup *conf_lookup_arr
 );
+static s32 _type_mime_parse(
+	u64 conf_idx,
+	const char *p_base,
+	struct fws_conf *conf_p,
+	const struct fws_lookup *conf_lookup_arr
+);
+static s32 _tool_get_str_n(const char *p_start, s32 max_n);
 
 s32 file_conf_read(struct fws_conf *conf_p, const char *path) {
 	char *conf_buf = nullptr;
@@ -141,7 +150,8 @@ static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_l
 		[U16_T] = _type_u16_parse,
 		[BOOL_T] = _type_bool_parse,
 		[CHAR_T] = _type_char_parse,
-		[AP_T] = _type_ap_parse
+		[AP_T] = _type_ap_parse,
+		[MIME_T] = _type_mime_parse
 	};
 	s32 ret = 0;
 
@@ -310,4 +320,193 @@ static s32 _type_ap_parse(u64 conf_idx, const char *p_base, struct fws_conf *con
 	memcpy(member+comma_str_len, p_base, n);
 	member[n+comma_str_len] = '\0';
 	return 0;
+}
+
+static s32 _type_mime_parse(
+	u64 conf_idx,
+	const char *p_base,
+	struct fws_conf *conf_p,
+	const struct fws_lookup *conf_lookup_arr
+) {
+	const char *p_start = memchr(p_base, '{', conf_lookup_arr[conf_idx].size-1);
+	if (p_start == nullptr) {
+		fprintf(stderr, "facows.conf: error: missing '{' at MIME\n");
+		return -1;
+	}
+	if (p_base < p_start) {
+		fprintf(stderr, "_type_mime_parse(): p_base-p_start: invalid range\n");
+		return -1;
+	}
+	s32 mime_skip = p_base - p_start;
+	p_start += mime_skip;
+	p_start++; /* skip '{' */
+
+	const char *p_end = memchr(p_start, '}', (conf_lookup_arr[conf_idx].size-1)-mime_skip);
+	if (p_end == nullptr) {
+		fprintf(stderr, "facows.conf: error: missing '}' at MIME or too long lower than %lu\n", conf_lookup_arr[conf_idx].size-1);
+		return -1;
+	}
+	if (p_end < p_start) {
+		fprintf(stderr, "_type_mime_parse(): p_end-p_start: invalid range\n");
+		return -1;
+	}
+	s32 mime_n = p_end - p_start;
+	if ((u32) mime_n >= conf_lookup_arr[conf_idx].size) {
+		fprintf(stderr, "_type_mime_parse(): mime_n: invalid size\n");
+		return -1;
+	}
+	const char *p_scan = p_start;
+	char *p_dst = conf_p->mime;
+
+	/* [info]
+	p_start == p_scan
+	*(p_start-1) == '{'
+	*p_end == '}'
+	mime_n = p_end - p_start;
+	*/
+	while (mime_n > 0) {
+		/* get mime type string */
+		p_start = memchr(p_scan, '"', mime_n);
+		if (p_start == nullptr) {
+			if (*(p_dst-1) == ']') {
+				break;
+			}
+			fprintf(stderr, "facows.conf: error: missing '\"' at string start\n");
+			return -1;
+		}
+		p_start++; /* skip start '"' */
+		if (p_start < p_scan) {
+			fprintf(stderr, "_type_mime_parse(): p_scan-p_start: invalid range\n");
+			return -1;
+		}
+		s32 mime_skip = p_start - p_scan;
+		mime_n -= mime_skip;
+		s32 mime_len = _tool_get_str_n(p_start, mime_n);
+		if (mime_len < 0) {
+			return -1;
+		}
+		mime_n -= mime_len;
+		p_scan = p_start;
+		p_scan += mime_len;
+		p_scan++; /* skip end '"' */
+	
+		memcpy(p_dst, p_start, mime_len);
+		p_dst += mime_len;
+
+		/* get mime file extension */
+		const char *p_ext_start = memchr(p_scan, '[', mime_n);
+		if (p_ext_start == nullptr) {
+			fprintf(stderr, "facows.conf: error: array not found\n");
+			return -1;
+		}
+		p_ext_start++; /* skip '[' */
+		if (p_ext_start < p_scan) {
+			fprintf(stderr, "_type_mime_parse(): p_ext_start-p_scan: invalid range\n");
+			return -1;
+		}
+		mime_skip = p_ext_start - p_scan;
+		p_scan += mime_skip;
+		mime_n -= mime_skip;
+
+		const char *p_ext_scan = p_ext_start;
+		const char *p_ext_end = memchr(p_ext_scan, ']', mime_n);
+		if (p_ext_end == nullptr) {
+			fprintf(stderr, "facows.conf: error: missing ']' at array end\n");
+			return -1;
+		}
+		if (p_ext_end < p_ext_start) {
+			fprintf(stderr, "_type_mime_parse(): p_ext_end-p_ext_start: invalid range\n");
+			return -1;
+		}
+		s32 ext_n = p_ext_end - p_ext_start;
+		memcpy(p_dst, "[", sizeof("[")-1);
+		p_dst++;
+		p_scan += ext_n;
+		mime_n -= ext_n;
+		bool has_ext_norm = false;
+
+		/* [info]
+		*(p_ext_scan-1) == '['
+		*p_ext_end == ']'
+		p_ext_scan == p_ext_start
+		ext_n == p_ext_end - p_ext_start
+		*/
+		while (ext_n > 0) {
+			p_ext_start = memchr(p_ext_scan, '"', ext_n);
+			if (p_ext_start == nullptr) {
+				p_dst--;
+				if (*p_dst == '[') {
+					fprintf(stderr, "facows.conf: error: extension array empty\n");
+					return -1;
+				}
+				memcpy(p_dst, "]", sizeof("]")-1);
+				p_dst++;
+				has_ext_norm = true;
+				break;
+			}
+			if (p_ext_start < p_ext_scan) {
+				fprintf(stderr, "_type_mime_parse(): error: invalid range\n");
+				return -1;
+			}
+			ext_n -= (p_ext_start - p_ext_scan);
+
+			/* skip start '"' */
+			p_ext_start++;
+			p_ext_scan++;
+			ext_n--;
+
+			if (ext_n <= 0) {
+				fprintf(stderr, "facows.conf: error: missing '\"' at string end\n");
+				return -1;
+			}
+
+			s32 ext_len = _tool_get_str_n(p_ext_start, ext_n);
+			if (ext_len < 0) {
+				return -1;
+			}
+			memcpy(p_dst, p_ext_start, ext_len);
+			p_dst += ext_len;
+			memcpy(p_dst, ",", sizeof(",")-1);
+			p_dst++;
+			p_ext_scan += ext_len;
+			ext_n -= ext_len;
+
+			/* skip end '"' */
+			p_ext_scan++;
+			ext_n--;
+			if (ext_n < 0) {
+				fprintf(stderr, "_type_mime_parse(): error: invalid parsing\n");
+				return -1;
+			} else if (ext_n == 0) {
+				p_dst--;
+				memcpy(p_dst, "]", sizeof("]")-1);
+				p_dst++;
+				has_ext_norm = true;
+				break;
+			}
+		}
+		*p_dst = '\0';
+		if (!has_ext_norm) {
+			return -1;
+		}
+		printf("DONE\n");
+	}
+
+	/* TODO: debug */
+	printf("MIME: %s\n", conf_p->mime);
+
+	return 0;
+}
+
+s32 _tool_get_str_n(const char *p_start, s32 max_n) {
+	const char *p_end = memchr(p_start, '"', max_n);
+	if (p_end == nullptr) {
+		fprintf(stderr, "_tool_get_str_n(): error: missing '\"' at string end\n");
+		return -1;
+	}
+	if (p_start > p_end) {
+		fprintf(stderr, "_tool_get_str_n(): error: string empty\n");
+		return -1;
+	}
+	return p_end - p_start;
 }
