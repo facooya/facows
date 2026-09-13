@@ -420,7 +420,7 @@ static s32 _type_mime_parse(
 			return -1;
 		}
 		s32 ext_n = p_ext_end - p_ext_start;
-		memcpy(p_dst, "[", sizeof("[")-1);
+		memcpy(p_dst, "[", sizeof("["));
 		p_dst++;
 		p_scan += ext_n;
 		mime_n -= ext_n;
@@ -466,12 +466,12 @@ static s32 _type_mime_parse(
 			/* next */
 			p_ext_start = memchr(p_ext_scan, ',', ext_n);
 			if (p_ext_start == nullptr) {
-				memcpy(p_dst, "]", sizeof("]")-1);
+				memcpy(p_dst, "]", sizeof("]"));
 				p_dst++;
 				has_ext_norm = true;
 				break;
 			}
-			memcpy(p_dst, ",", sizeof(",")-1);
+			memcpy(p_dst, ",", sizeof(","));
 			p_dst++;
 
 			if (p_ext_start < p_ext_scan) {

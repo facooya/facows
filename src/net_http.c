@@ -32,7 +32,12 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 	return 0;
 }
 
-s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path_n) {
+s32 net_http_res_build(
+	const struct fws_conf *conf_p,
+	struct fws_http_res *http_res,
+	const char *path,
+	u64 path_n
+) {
 	memset(http_res, 0, sizeof(struct fws_http_res));
 
 	time_t raw_time;
@@ -47,6 +52,7 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 	const char *p1 = path;
 	const char *p2;
 	u64 n = strnlen(p1, path_n);
+	s32 ret = 0;
 
 	while (true) {
 		p2 = memchr(p1, '.', n);
@@ -58,43 +64,92 @@ s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path
 		p1 = p2 + 1;
 	}
 
-	/* TODO: conf_file.mime_ext[i][j], conf_file.mime_type[i] */
-	/*
-	memcpy(http_res->content, conf_file.mime_default, sizeof(conf_file.mime_default));
-	for (s32 i=0; conf_file.mime_ext.length; i++) {
-		for (s32 j=0; conf_file.mime_ext[i].length; j++) {
-			if (memcmp(p1, conf_file.mime_ext[i][j], sizeof(conf_file.mime_ext[i][j]))) {
-				memset(http_res->content, '\0', sizeof(conf_file.mime_default));
-				memcpy(http_res->content, conf_file.mime_type[i], sizeof(conf_file.mime_type[i]));
+	char ext_buf[32] = {0};
+	bool has_find = false;
+	const char *p_start = conf_p->mime;
+	s32 mime_n = strnlen(conf_p->mime, sizeof(conf_p->mime));
+
+	while (mime_n > 0) {
+		const char *p_ext_start = memchr(p_start, '[', mime_n);
+		if (p_ext_start == nullptr) {
+			fprintf(stderr, "net_http_res_build(): error: invalid missing '['\n");
+			return -1;
+		}
+		if (p_ext_start < p_start) {
+			fprintf(stderr, "net_http_res_build(): p_ext_start-p_start: invalid\n");
+			return -1;
+		}
+		s32 mime_len = p_ext_start - p_start;
+		const char *p_ext_end = memchr(p_ext_start, ']', mime_n-mime_len);
+		if (p_ext_end == nullptr) {
+			fprintf(stderr, "net_http_res_build(): error: invalid missing ']'\n");
+			return -1;
+		}
+		if (p_ext_end < p_ext_start) {
+			fprintf(stderr, "net_http_res_build(): p_ext_start-p_start: invalid\n");
+			return -1;
+		}
+		s32 ext_n = p_ext_end - p_ext_start;
+		s32 mime_next_off = (p_ext_end + 1) - p_start;
+		p_ext_start++; /* skip '[' */
+
+		/* [info]
+		*(p_ext_start-1) == '['
+		*p_ext_end == ']'
+		*/
+		while (ext_n > 0) {
+			const char *p_ext_end = memchr(p_ext_start, ',', ext_n);
+			if (p_ext_end == nullptr) {
+				p_ext_end = memchr(p_ext_start, ']', ext_n);
+				if (p_ext_end == nullptr) {
+					fprintf(stderr, "net_http_res_build(): error: invalid\n");
+					return -1;
+				}
+			}
+			if (p_ext_end < p_ext_start) {
+				fprintf(stderr, "net_http_res_build(): p_ext_end-p_ext_start: invalid\n");
+				return -1;
+			}
+			s32 ext_len = p_ext_end - p_ext_start;
+			if ((u32)ext_len >= sizeof(ext_buf)) {
+				fprintf(stderr, "net_http_res_build(): error: invalid extension size\n");
+				return -1;
+			}
+			memset(ext_buf, '\0', sizeof(ext_buf));
+			memcpy(ext_buf, p_ext_start, ext_len);
+			ext_buf[ext_len] = '\0';
+
+			ret = memcmp(p1, ext_buf, ext_len+1);
+			if (ret == 0) {
+				if ((u32)mime_len >= sizeof(http_res->content)) {
+					fprintf(stderr, "net_http_res_build(): error: invalid mime size");
+					return -1;
+				}
+				memset(http_res->content, '\0', sizeof(http_res->content));
+				memcpy(http_res->content, p_start, mime_len);
+
+				has_find = true;
+				break;
+			}
+
+			p_ext_start += (ext_len + 1); /* skip ',' */
+			ext_n -= (ext_len + 1);
+			if (*p_ext_start == ']') {
 				break;
 			}
 		}
+
+		if (has_find) {
+			break;
+		}
+
+		p_start += mime_next_off;
+		mime_n -= mime_next_off;
 	}
-	*/
 
-	if (memcmp(p1, "html", sizeof("html")) == 0) {
-		memcpy(http_res->content, "text/html", sizeof("text/html"));
-	} else if (memcmp(p1, "css", sizeof("css")) == 0) {
-		memcpy(http_res->content, "text/css", sizeof("text/css"));
-	} else if (memcmp(p1, "js", sizeof("js")) == 0) {
-		memcpy(http_res->content, "text/javascript", sizeof("text/javascript"));
-	} else if (memcmp(p1, "txt", sizeof("txt")) == 0) {
-		memcpy(http_res->content, "text/plain", sizeof("text/plain"));
-
-	} else if (memcmp(p1, "svg", sizeof("svg")) == 0) {
-		memcpy(http_res->content, "image/svg+xml", sizeof("image/svg+xml"));
-	} else if (memcmp(p1, "ico", sizeof("ico")) == 0) {
-		memcpy(http_res->content, "image/x-icon", sizeof("image/x-icon"));
-	} else if (memcmp(p1, "png", sizeof("png")) == 0) {
-		memcpy(http_res->content, "image/png", sizeof("image/png"));
-	} else if (memcmp(p1, "mp4", sizeof("mp4")) == 0) {
-		memcpy(http_res->content, "video/mp4", sizeof("video/mp4"));
-
-	} else if (memcmp(p1, "xml", sizeof("xml")) == 0) {
-		memcpy(http_res->content, "application/xml", sizeof("application/xml"));
-	} else {
-		memcpy(http_res->content, "application/octet-stream", sizeof("application/octet-stream"));
-		return 1;
+	if (!has_find) {
+		memset(http_res->content, '\0', sizeof(http_res->content));
+		memcpy(http_res->content, conf_p->mime_default, strnlen(conf_p->mime_default, sizeof(conf_p->mime_default)));
 	}
 
 	return 0;

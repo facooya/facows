@@ -541,7 +541,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 
 		} else {
 			struct fws_http_res http_res = {0};
-			net_http_res_build(&http_res, file.path, sizeof(file.path));
+			net_http_res_build(conf_p, &http_res, file.path, sizeof(file.path));
 			if (http_req.origin[0] != '\0') {
 				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);
 			}

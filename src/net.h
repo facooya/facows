@@ -28,7 +28,12 @@ s32 net_443_res_write(
 s32 net_443_err_write(u8 *ssl_opq, s32 code, s32 *sig_flag_opq_p);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
-s32 net_http_res_build(struct fws_http_res *http_res, const char *path, u64 path_n);
+s32 net_http_res_build(
+	const struct fws_conf *conf_p,
+	struct fws_http_res *http_res,
+	const char *path,
+	u64 path_n
+);
 void net_http_path_redir(
 	struct fws_http_req *http_req,
 	const struct fws_conf *conf,
