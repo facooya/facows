@@ -169,12 +169,13 @@ static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_l
 			constexpr u64 conf_key_max = 16;
 			p_end = memchr(p_scan, ' ', conf_key_max);
 			if (p_end == nullptr) {
+				goto next_line;
+			}
+			if (p_end < p_scan) {
+				fprintf(stderr, "_conf_parse(): p_end-p_scan: invalid range\n");
 				return -1;
 			}
 			u64 conf_key_len = p_end - p_scan;
-			if (conf_key_len == conf_key_max) {
-				goto next_line;
-			}
 
 			u64 key_len = strnlen(conf_lookup_arr[i].key, conf_key_max);
 			if (conf_key_len != key_len) {
@@ -434,21 +435,16 @@ static s32 _type_mime_parse(
 		while (ext_n > 0) {
 			p_ext_start = memchr(p_ext_scan, '"', ext_n);
 			if (p_ext_start == nullptr) {
-				p_dst--;
-				if (*p_dst == '[') {
-					fprintf(stderr, "facows.conf: error: extension array empty\n");
-					return -1;
-				}
-				memcpy(p_dst, "]", sizeof("]")-1);
-				p_dst++;
-				has_ext_norm = true;
-				break;
+				fprintf(stderr, "facows.conf: error: missing '\"' at string start\n");
+				return -1;
 			}
 			if (p_ext_start < p_ext_scan) {
 				fprintf(stderr, "_type_mime_parse(): error: invalid range\n");
 				return -1;
 			}
-			ext_n -= (p_ext_start - p_ext_scan);
+			s32 ext_skip = p_ext_start - p_ext_scan;
+			ext_n -= ext_skip;
+			p_ext_scan = p_ext_start;
 
 			/* skip start '"' */
 			p_ext_start++;
@@ -466,34 +462,31 @@ static s32 _type_mime_parse(
 			}
 			memcpy(p_dst, p_ext_start, ext_len);
 			p_dst += ext_len;
-			memcpy(p_dst, ",", sizeof(",")-1);
-			p_dst++;
-			p_ext_scan += ext_len;
-			ext_n -= ext_len;
 
-			/* skip end '"' */
-			p_ext_scan++;
-			ext_n--;
-			if (ext_n < 0) {
-				fprintf(stderr, "_type_mime_parse(): error: invalid parsing\n");
-				return -1;
-			} else if (ext_n == 0) {
-				p_dst--;
+			/* next */
+			p_ext_start = memchr(p_ext_scan, ',', ext_n);
+			if (p_ext_start == nullptr) {
 				memcpy(p_dst, "]", sizeof("]")-1);
 				p_dst++;
 				has_ext_norm = true;
 				break;
 			}
+			memcpy(p_dst, ",", sizeof(",")-1);
+			p_dst++;
+
+			if (p_ext_start < p_ext_scan) {
+				fprintf(stderr, "_type_mime_parse(): p_ext_start-p_ext_scan: invalid range\n");
+				return -1;
+			}
+			ext_skip = p_ext_start - p_ext_scan;
+			ext_n -= ext_skip;
+			p_ext_scan = p_ext_start;
 		}
 		*p_dst = '\0';
 		if (!has_ext_norm) {
 			return -1;
 		}
-		printf("DONE\n");
 	}
-
-	/* TODO: debug */
-	printf("MIME: %s\n", conf_p->mime);
 
 	return 0;
 }
