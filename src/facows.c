@@ -111,6 +111,8 @@ s32 main(void) {
 		parent_ctx_p->pid = pid;
 		parent_ctx_p->conf_p = &conf;
 
+		pipe_read_fd = -1;
+		pipe_write_fd = -1;
 		ret = fws_parent_run(parent_ctx_p);
 		if (ret < 0) {
 			fprintf(stderr, "main(): fws_parent_run(): error\n");
@@ -127,7 +129,6 @@ out:
 	child_ctx_p = nullptr;
 	free(parent_ctx_p);
 	parent_ctx_p = nullptr;
-	/* TODO: Double close */
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;
