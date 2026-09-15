@@ -481,6 +481,8 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		char ip_buf[INET6_ADDRSTRLEN] = {0};
 		inet_ntop(AF_INET6, client_ip_buf, ip_buf, INET6_ADDRSTRLEN);
 
+		//printf("IP: %s, LOG: %s, %s, %s, %s, %s, %s, %s\n", ip_buf, http_req.lang, http_req.version, http_req.method, http_req.os, http_req.browser, http_req.subdomain, http_req.uri);
+
 		pthread_mutex_lock(nft_lock_p);
 		struct fws_nft *nft_arr = *thrd_ctx_p->nft_arr_pp;
 

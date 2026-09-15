@@ -4,8 +4,10 @@ SAN_A = address,undefined
 SAN_T = thread,undefined
 
 CC = gcc
-CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_T) -std=c23 -D_GNU_SOURCE
-CFLAGS_O2B = -g -fstack-protector-all -fsanitize=$(SAN_T)
+#CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_T) -std=c23 -D_GNU_SOURCE
+#CFLAGS_O2B = -g -fstack-protector-all -fsanitize=$(SAN_T)
+CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -std=c23 -D_GNU_SOURCE
+CFLAGS_O2B = -g
 
 SRCS = \
 src/facows.c \

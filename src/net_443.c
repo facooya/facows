@@ -74,6 +74,10 @@ s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *s
 			return -1;
 		}
 
+		if ((ssl_poll.revents & (POLLHUP|POLLERR)) != 0) {
+			return -1;
+		}
+
 		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
 			read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
 			ssl_poll.events = POLLIN;
@@ -145,8 +149,12 @@ s32 net_443_write(u8 *ssl_opq, char *src_buf, u64 buf_size, s32 *sig_flag_opq_p)
 			return -1;
 		}
 
+		if ((ssl_poll.revents & (POLLHUP|POLLERR)) != 0) {
+			return -1;
+		}
+
 		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
-			write_ret = SSL_write(ssl, src_buf, buf_size);
+			write_ret = SSL_write(ssl, src_buf+acc_write_size, buf_size-acc_write_size);
 			ssl_poll.events = POLLOUT;
 
 			/* Error */

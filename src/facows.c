@@ -42,6 +42,13 @@ s32 main(void) {
 		ret = 1;
 		goto out;
 	}
+	fws_sa.sa_handler = SIG_IGN;
+	ret = sigaction(SIGPIPE, &fws_sa, nullptr);
+	if (ret < 0) {
+		fprintf(stderr, "main(): sigaction(): SIGPIPE failed\n");
+		ret = 1;
+		goto out;
+	}
 
 	struct fws_conf conf = {0};
 	ret = file_conf_read(&conf, conf_path_str);
@@ -120,6 +127,7 @@ out:
 	child_ctx_p = nullptr;
 	free(parent_ctx_p);
 	parent_ctx_p = nullptr;
+	/* TODO: Double close */
 	if (pipe_read_fd >= 0) {
 		close(pipe_read_fd);
 		pipe_read_fd = -1;

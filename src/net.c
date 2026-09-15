@@ -31,7 +31,10 @@ s32 net_server_init(u16 port) {
 	errno = 0;
 	if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
 		printf("%d\n", errno);
-		close(server_fd);
+		if (server_fd >= 0) {
+			close(server_fd);
+			server_fd = -1;
+		}
 		return -1;
 	}
 	listen(server_fd, 128);
