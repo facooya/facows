@@ -313,7 +313,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 
 					case UA:
 						static const char *const os_type[] = {"android", "windows", "iphone", "ipad", "macintoch", "linux"};
-						static const char *const browser_type[] = {"firefox", "edg", "chrome", "safari"};
+						static const char *const browser_type[] = {"fxios", "crios", "firefox", "edg", "chrome", "safari"};
 						if (http_req->os[0] != '\0' || http_req->browser[0] != '\0') {
 							return 1;
 						}

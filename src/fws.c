@@ -119,11 +119,20 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	pthread_mutex_t nft_lock = {0};
 	s32 nft_lock_flag = -1;
 	if (pthread_mutex_init(&nft_lock, nullptr) != 0) {
-		fprintf(stderr, "mutex init failed\n");
+		fprintf(stderr, "nft mutex init failed\n");
 		ret = 1;
 		goto out;
 	}
 	nft_lock_flag = 1;
+
+	pthread_mutex_t log_lock = {0};
+	s32 log_lock_flag = -1;
+	if (pthread_mutex_init(&log_lock, nullptr) != 0) {
+		fprintf(stderr, "log mutex init failed\n");
+		ret = 1;
+		goto out;
+	}
+	log_lock_flag = 1;
 
 	struct fws_nft *nft_arr_p = nft_a_arr_p;
 	struct fws_nft *nft_swap_arr_p = nft_b_arr_p;
@@ -189,6 +198,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			thrd_ctx_p->conf_p = child_ctx_p->conf_p;
 			thrd_ctx_p->nft_arr_pp = &nft_arr_p;
 			thrd_ctx_p->nft_lock_opq_p = (u8 *) &nft_lock;
+			thrd_ctx_p->log_lock_opq_p = (u8 *) &log_lock;
 			thrd_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
 			thrd_ctx_p->sig_flag_opq_p = (s32 *) sig_flag_p;
 
@@ -217,6 +227,10 @@ out:
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
 		nft_lock_flag = -1;
+	}
+	if (log_lock_flag >= 0) {
+		pthread_mutex_destroy(&log_lock);
+		log_lock_flag = -1;
 	}
 
 	SSL_CTX_free(ssl_ctx_p);
@@ -293,6 +307,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		if (nft_event != 0) {
 			char ip_buf[INET6_ADDRSTRLEN] = {0};
 			ret = read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN);
+			/* TODO: log read */
 			if (ret <= 0) {
 				break;
 			} else {
@@ -379,12 +394,17 @@ out:
 }
 
 static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
-	static const u8 empty_ip_buf[16] = {0};
+	static constexpr u32 logSSL = 0;
+	static constexpr u32 logKTLS = 1;
+	static constexpr u32 logRead = 2;
+	static constexpr u32 logReqParse = 3;
+	static constexpr u8 empty_ip_buf[16] = {0};
 	SSL *ssl = nullptr;
 	struct fws_thrd_ctx *thrd_ctx_p = nullptr;
 	s32 client_fd = -1;
 	bool need_ssl_shutdown = false;
 	s32 ret = 0;
+	u32 log_flag = 0; /* ssl, ktls, read, req parse */
 
 	thrd_ctx_p = (struct fws_thrd_ctx *) thrd_ctx_opq_p;
 
@@ -394,20 +414,37 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		goto out;
 	}
 
+	const u8 *client_ip_buf = thrd_ctx_p->client_ip_buf;
+	char ip_buf[INET6_ADDRSTRLEN] = {0};
+	inet_ntop(AF_INET6, client_ip_buf, ip_buf, INET6_ADDRSTRLEN);
+
+	time_t raw_time = {0};
+	time(&raw_time);
+	struct tm tm = {0};
+	gmtime_r(&raw_time, &tm);
+	char time_buf[16] = {0};
+	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", &tm);
+
+	char log_buf[256] = {0};
+	s32 log_acc = snprintf(log_buf, sizeof(log_buf), "%s %s", ip_buf, time_buf);
+
 	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thrd_ctx_p->ssl_ctx_opq_p;
 	ssl = SSL_new(ssl_ctx_p);
 	if (ssl == nullptr) {
+		log_flag |= (1 << logSSL);
 		ret = -1;
 		goto out;
 	}
 
 	ret = SSL_set_fd(ssl, client_fd);
 	if (ret <= 0) {
+		log_flag |= (1 << logSSL);
 		ret = -1;
 		goto out;
 	}
 	ret = SSL_accept(ssl);
 	if (ret <= 0) {
+		log_flag |= (1 << logSSL);
 		ret = -1;
 		goto out;
 	}
@@ -417,30 +454,33 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	BIO *bio = SSL_get_wbio(ssl);
 	bool is_ktls = (bool) (bio != nullptr && BIO_get_ktls_send(bio) == 1);
 	if (!is_ktls) {
-		fprintf(stdout, "_fws_thrd_run(): BIO_get_ktls_send(): fail\n");
+		log_flag |= (1 << logKTLS);
 	}
 	bio = SSL_get_rbio(ssl);
 	is_ktls = (bool) (bio != nullptr && BIO_get_ktls_recv(bio) == 1);
 	if (!is_ktls) {
-		fprintf(stdout, "_fws_thrd_run(): BIO_get_ktls_recv(): fail\n");
+		log_flag |= (1 << logKTLS);
 	}
 
 	pthread_mutex_t *nft_lock_p = (pthread_mutex_t *) thrd_ctx_p->nft_lock_opq_p;
+	pthread_mutex_t *log_lock_p = (pthread_mutex_t *) thrd_ctx_p->log_lock_opq_p;
 	const struct fws_conf *conf_p = thrd_ctx_p->conf_p;
+	struct fws_http_req http_req = {0};
 	while (true) {
 		static const char html_ext_str[] = ".html";
 		char req_buf[8192] = {0};
 		ret = net_443_read((u8*)ssl, req_buf, sizeof(req_buf), client_fd, thrd_ctx_p->sig_flag_opq_p);
 		if (ret < 0) {
+			log_flag |= (1 << logRead);
 			ret = -1;
 			goto out;
 		} else if (ret == 0) {
 			break;
 		}
 
-		struct fws_http_req http_req = {0};
 		ret = net_http_req_parse(req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
 		if (ret != 0) {
+			log_flag |= (1 << logReqParse);
 			ret = -1;
 			goto out;
 		}
@@ -476,12 +516,6 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 		if (ret == 0) {
 			is_html = true;
 		}
-
-		const u8 *client_ip_buf = thrd_ctx_p->client_ip_buf;
-		char ip_buf[INET6_ADDRSTRLEN] = {0};
-		inet_ntop(AF_INET6, client_ip_buf, ip_buf, INET6_ADDRSTRLEN);
-
-		//printf("IP: %s, LOG: %s, %s, %s, %s, %s, %s, %s\n", ip_buf, http_req.lang, http_req.version, http_req.method, http_req.os, http_req.browser, http_req.subdomain, http_req.uri);
 
 		pthread_mutex_lock(nft_lock_p);
 		struct fws_nft *nft_arr = *thrd_ctx_p->nft_arr_pp;
@@ -561,6 +595,13 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 
 	ret = 0;
 out:
+	log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
+
+	pthread_mutex_lock(log_lock_p);
+	/* TODO: log write */
+	//write(thrd_ctx_p->write_fd, log_buf, log_acc+1);
+	pthread_mutex_unlock(log_lock_p);
+
 	/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
 	if (need_ssl_shutdown) {
 		u32 ssl_timeout = 0;

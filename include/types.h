@@ -88,6 +88,7 @@ struct fws_thrd_ctx {
 	u8 client_ip_buf[16];
 	u8 *ssl_ctx_opq_p;
 	u8 *nft_lock_opq_p;
+	u8 *log_lock_opq_p;
 	struct fws_conf *conf_p;
 	struct fws_nft **nft_arr_pp;
 };

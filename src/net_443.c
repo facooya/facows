@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 #include <openssl/ssl.h>
 
+#include <sys/socket.h>
+
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
 	const SSL_METHOD *ssl_method = nullptr;
@@ -74,11 +76,11 @@ s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *s
 			return -1;
 		}
 
-		if ((ssl_poll.revents & (POLLHUP|POLLERR)) != 0) {
+		if ((ssl_poll.revents & (POLLERR)) != 0) {
 			return -1;
 		}
 
-		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
+		if ((ssl_poll.revents & (POLLIN|POLLOUT|POLLHUP)) != 0) {
 			read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
 			ssl_poll.events = POLLIN;
 			if (read_ret <= 0) {
