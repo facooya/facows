@@ -38,7 +38,7 @@ build/:
 	mkdir -p $@
 
 install:
-	mkdir -p /var/www/facows
+	mkdir -p /var/log/facows
 	mkdir -p /etc/facows
 	mkdir -p /usr/share/facows
 
@@ -64,6 +64,7 @@ uninstall:
 	systemctl daemon-reload
 
 	rm /usr/local/bin/facows
+	rm -r /var/log/facows
 	rm -r /etc/facows/
 	rm -r /usr/share/facows/
 

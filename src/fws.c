@@ -271,6 +271,8 @@ out:
 
 s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 	struct nft_ctx *nft_ctx = nullptr;
+	s32 log_fd = -1;
+	s32 ep_fd = -1;
 	s32 ret = 0;
 
 	if (parent_ctx_p->pipe_write_fd >= 0) {
@@ -285,16 +287,16 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		goto out;
 	}
 
-	s32 epfd = epoll_create1(0);
-	struct epoll_event ev = {0};
+	struct epoll_event ep_ctl = {0};
 	struct epoll_event ep_event = {0};
-	ev.events = EPOLLIN;
-	ev.data.fd = parent_ctx_p->pipe_read_fd;
-	epoll_ctl(epfd, EPOLL_CTL_ADD, parent_ctx_p->pipe_read_fd, &ev);
+	ep_fd = epoll_create1(0);
+	ep_ctl.events = EPOLLIN;
+	ep_ctl.data.fd = parent_ctx_p->pipe_read_fd;
+	epoll_ctl(ep_fd, EPOLL_CTL_ADD, parent_ctx_p->pipe_read_fd, &ep_ctl);
 
 	while (true) {
 		errno = 0;
-		ret = epoll_wait(epfd, &ep_event, 1, -1);
+		ret = epoll_wait(ep_fd, &ep_event, 1, -1);
 		if (ret < 0) {
 			const s32 ep_err = errno;
 			_Atomic s32 *sig_flag_p = (_Atomic s32 *) parent_ctx_p->sig_flag_opq_p;
@@ -307,28 +309,46 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 			goto out;
 		}
 
-		if (ep_event.events & EPOLLIN) {
+		if (ep_event.events & (EPOLLIN|EPOLLHUP)) {
 			char read_buf[1024] = {0};
-			ret = read(ev.data.fd, read_buf, sizeof(read_buf));
-			if (ret <= 0) {
+			ret = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
+			if (ret <= 0 && (ep_event.events & EPOLLHUP)) {
 				fprintf(stderr, "fws_parent_run(): error: read '%s'\n", read_buf);
-				continue;
+				ret = -1;
+				goto out;
 			}
 			read_buf[ret] = '\0';
 
 			if (*read_buf == '1') {
-				printf("BAN: %s\n", read_buf+1);
 				net_nft_dos_ban(nft_ctx, read_buf+1, parent_ctx_p->conf_p->ban_time);
 			} else if (*read_buf == '2') {
-				/* TODO: log */
-				printf("Log: %s\n", read_buf+1);
+				static constexpr char log_file_str[] = "/facows.log";
+				static constexpr u32 web_log_n = sizeof(((struct fws_conf*)0)->web_log);
+				char log_path_buf[256] = {0};
+				char *p = log_path_buf;
+				memcpy(p, parent_ctx_p->conf_p->web_log, strnlen(parent_ctx_p->conf_p->web_log, web_log_n));
+				p += strnlen(parent_ctx_p->conf_p->web_log, web_log_n);
+				memcpy(p, log_file_str, sizeof(log_file_str)-1);
+				p += sizeof(log_file_str) - 1;
+				*p = '\0';
+
+				log_fd = open(log_path_buf, (O_WRONLY|O_APPEND|O_CREAT), 0640);
+				if (log_fd < 0) {
+					fprintf(stderr, "fws_parent_run(): warning: can not open log file\n");
+					continue;
+				}
+				write(log_fd, read_buf+1, strnlen(read_buf, sizeof(read_buf))-1);
+				if (log_fd >= 0) {
+					close(log_fd);
+					log_fd = -1;
+				}
 			} else {
-				fprintf(stderr, "fws_parent_run(): warning: unknown type\n");
+				fprintf(stderr, "fws_parent_run(): warning: unknown header\n");
 				continue;
 			}
 
 		} else {
-			fprintf(stderr, "fws_parent_run(): error: EPOLLIN failure\n");
+			fprintf(stderr, "fws_parent_run(): error: not EPOLLIN and not EPOLLHUP, %u\n", ep_event.events);
 			ret = -1;
 			goto out;
 		}
@@ -358,9 +378,13 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = nullptr;
-	if (epfd >= 0) {
-		close(epfd);
-		epfd = -1;
+	if (ep_fd >= 0) {
+		close(ep_fd);
+		ep_fd = -1;
+	}
+	if (log_fd >= 0) {
+		close(log_fd);
+		log_fd = -1;
 	}
 	if (parent_ctx_p->pipe_read_fd >= 0) {
 		close(parent_ctx_p->pipe_read_fd);
