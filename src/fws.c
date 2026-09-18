@@ -23,6 +23,7 @@
 #include <pwd.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/epoll.h>
 #include <arpa/inet.h>
 #include <nftables/libnftables.h>
 
@@ -284,35 +285,52 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		goto out;
 	}
 
-	struct pollfd nft_fd = {0};
-	nft_fd.fd = parent_ctx_p->pipe_read_fd;
-	nft_fd.events = POLLIN | POLLHUP | POLLERR;
+	s32 epfd = epoll_create1(0);
+	struct epoll_event ev = {0};
+	struct epoll_event ep_event = {0};
+	ev.events = EPOLLIN;
+	ev.data.fd = parent_ctx_p->pipe_read_fd;
+	epoll_ctl(epfd, EPOLL_CTL_ADD, parent_ctx_p->pipe_read_fd, &ev);
 
 	while (true) {
 		errno = 0;
-		ret = poll(&nft_fd, 1, -1);
+		ret = epoll_wait(epfd, &ep_event, 1, -1);
 		if (ret < 0) {
-			const s32 poll_err = errno;
+			const s32 ep_err = errno;
 			_Atomic s32 *sig_flag_p = (_Atomic s32 *) parent_ctx_p->sig_flag_opq_p;
 			const s32 sig_cond = (*sig_flag_p == SIGINT || *sig_flag_p == SIGTERM);
-			const s32 poll_cond = (poll_err == EINTR && sig_cond);
-			if (poll_cond == 1) {
+			const s32 ep_cond = (ep_err == EINTR && sig_cond);
+			if (ep_cond == 1) {
 				break;
 			}
 			ret = -1;
 			goto out;
 		}
 
-		const s32 nft_event = nft_fd.revents & (POLLIN|POLLHUP|POLLERR);
-		if (nft_event != 0) {
-			char ip_buf[INET6_ADDRSTRLEN] = {0};
-			ret = read(nft_fd.fd, ip_buf, INET6_ADDRSTRLEN);
-			/* TODO: log read */
+		if (ep_event.events & EPOLLIN) {
+			char read_buf[1024] = {0};
+			ret = read(ev.data.fd, read_buf, sizeof(read_buf));
 			if (ret <= 0) {
-				break;
-			} else {
-				net_nft_dos_ban(nft_ctx, ip_buf, parent_ctx_p->conf_p->ban_time);
+				fprintf(stderr, "fws_parent_run(): error: read '%s'\n", read_buf);
+				continue;
 			}
+			read_buf[ret] = '\0';
+
+			if (*read_buf == '1') {
+				printf("BAN: %s\n", read_buf+1);
+				net_nft_dos_ban(nft_ctx, read_buf+1, parent_ctx_p->conf_p->ban_time);
+			} else if (*read_buf == '2') {
+				/* TODO: log */
+				printf("Log: %s\n", read_buf+1);
+			} else {
+				fprintf(stderr, "fws_parent_run(): warning: unknown type\n");
+				continue;
+			}
+
+		} else {
+			fprintf(stderr, "fws_parent_run(): error: EPOLLIN failure\n");
+			ret = -1;
+			goto out;
 		}
 	}
 
@@ -340,6 +358,10 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = nullptr;
+	if (epfd >= 0) {
+		close(epfd);
+		epfd = -1;
+	}
 	if (parent_ctx_p->pipe_read_fd >= 0) {
 		close(parent_ctx_p->pipe_read_fd);
 		parent_ctx_p->pipe_read_fd = -1;
@@ -426,7 +448,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", &tm);
 
 	char log_buf[256] = {0};
-	s32 log_acc = snprintf(log_buf, sizeof(log_buf), "%s %s", ip_buf, time_buf);
+	s32 log_acc = snprintf(log_buf, sizeof(log_buf), "%d%s %s", 2, ip_buf, time_buf);
 
 	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thrd_ctx_p->ssl_ctx_opq_p;
 	ssl = SSL_new(ssl_ctx_p);
@@ -543,7 +565,15 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 			nft_arr[nft_i].dos_cnt++;
 
 			if (conf_p->use_nft && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
-				write(thrd_ctx_p->write_fd, ip_buf, INET6_ADDRSTRLEN);
+				char nft_buf[INET6_ADDRSTRLEN+1] = {0};
+				s32 nft_n = snprintf(nft_buf, sizeof(nft_buf)-1, "%d%s", 1, ip_buf);
+				if ((u32)nft_n >= sizeof(nft_buf)) {
+					fprintf(stderr, "nft_buf: error: invalid 'nft_n' \n");
+					ret = -1;
+					goto out;
+				}
+				nft_buf[nft_n] = '\0';
+				write(thrd_ctx_p->write_fd, nft_buf, nft_n+1);
 			}
 
 			pthread_mutex_unlock(nft_lock_p);
@@ -598,8 +628,8 @@ out:
 	log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
 
 	pthread_mutex_lock(log_lock_p);
-	/* TODO: log write */
-	//write(thrd_ctx_p->write_fd, log_buf, log_acc+1);
+	log_buf[log_acc] = '\0';
+	write(thrd_ctx_p->write_fd, log_buf, log_acc+1);
 	pthread_mutex_unlock(log_lock_p);
 
 	/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
