@@ -126,15 +126,6 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	}
 	nft_lock_flag = 1;
 
-	pthread_mutex_t log_lock = {0};
-	s32 log_lock_flag = -1;
-	if (pthread_mutex_init(&log_lock, nullptr) != 0) {
-		fprintf(stderr, "log mutex init failed\n");
-		ret = 1;
-		goto out;
-	}
-	log_lock_flag = 1;
-
 	struct fws_nft *nft_arr_p = nft_a_arr_p;
 	struct fws_nft *nft_swap_arr_p = nft_b_arr_p;
 	struct fws_swap_ctx *swap_ctx_p = calloc(1, sizeof(struct fws_swap_ctx));
@@ -199,7 +190,6 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			thrd_ctx_p->conf_p = child_ctx_p->conf_p;
 			thrd_ctx_p->nft_arr_pp = &nft_arr_p;
 			thrd_ctx_p->nft_lock_opq_p = (u8 *) &nft_lock;
-			thrd_ctx_p->log_lock_opq_p = (u8 *) &log_lock;
 			thrd_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
 			thrd_ctx_p->sig_flag_opq_p = (s32 *) sig_flag_p;
 
@@ -228,10 +218,6 @@ out:
 	if (nft_lock_flag >= 0) {
 		pthread_mutex_destroy(&nft_lock);
 		nft_lock_flag = -1;
-	}
-	if (log_lock_flag >= 0) {
-		pthread_mutex_destroy(&log_lock);
-		log_lock_flag = -1;
 	}
 
 	SSL_CTX_free(ssl_ctx_p);
@@ -270,6 +256,8 @@ out:
 }
 
 s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
+	static constexpr char log_file_str[] = "/facows.log";
+	static constexpr u32 web_log_n = sizeof(((struct fws_conf*)0)->web_log);
 	struct nft_ctx *nft_ctx = nullptr;
 	s32 log_fd = -1;
 	s32 ep_fd = -1;
@@ -283,6 +271,21 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == nullptr) {
 		fprintf(stderr, "nft context allocation error\n");
+		ret = -1;
+		goto out;
+	}
+
+	char log_path_buf[256] = {0};
+	char *p = log_path_buf;
+	memcpy(p, parent_ctx_p->conf_p->web_log, strnlen(parent_ctx_p->conf_p->web_log, web_log_n));
+	p += strnlen(parent_ctx_p->conf_p->web_log, web_log_n);
+	memcpy(p, log_file_str, sizeof(log_file_str)-1);
+	p += sizeof(log_file_str) - 1;
+	*p = '\0';
+
+	log_fd = open(log_path_buf, (O_WRONLY|O_APPEND|O_CREAT), 0640);
+	if (log_fd < 0) {
+		fprintf(stderr, "fws_parent_run(): warning: can not open log file\n");
 		ret = -1;
 		goto out;
 	}
@@ -312,36 +315,24 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		if (ep_event.events & (EPOLLIN|EPOLLHUP)) {
 			char read_buf[1024] = {0};
 			ret = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
-			if (ret <= 0 && (ep_event.events & EPOLLHUP)) {
-				fprintf(stderr, "fws_parent_run(): error: read '%s'\n", read_buf);
-				ret = -1;
-				goto out;
+			if (ret <= 0) {
+				fprintf(stderr, "fws_parent_run(): error: read(): %d\n", ret);
+				if (ep_event.events & EPOLLHUP) {
+					fprintf(stderr, "fws_parent_run(): error: EPOLLHUP\n");
+					break;
+				}
+				continue;
 			}
 			read_buf[ret] = '\0';
 
 			if (*read_buf == '1') {
 				net_nft_dos_ban(nft_ctx, read_buf+1, parent_ctx_p->conf_p->ban_time);
 			} else if (*read_buf == '2') {
-				static constexpr char log_file_str[] = "/facows.log";
-				static constexpr u32 web_log_n = sizeof(((struct fws_conf*)0)->web_log);
-				char log_path_buf[256] = {0};
-				char *p = log_path_buf;
-				memcpy(p, parent_ctx_p->conf_p->web_log, strnlen(parent_ctx_p->conf_p->web_log, web_log_n));
-				p += strnlen(parent_ctx_p->conf_p->web_log, web_log_n);
-				memcpy(p, log_file_str, sizeof(log_file_str)-1);
-				p += sizeof(log_file_str) - 1;
-				*p = '\0';
-
-				log_fd = open(log_path_buf, (O_WRONLY|O_APPEND|O_CREAT), 0640);
-				if (log_fd < 0) {
-					fprintf(stderr, "fws_parent_run(): warning: can not open log file\n");
-					continue;
+				ret = write(log_fd, read_buf+1, ret-1);
+				if (ret <= 0) {
+					fprintf(stderr, "fws_parent_run(): error: write(): %d\n", ret);
 				}
-				write(log_fd, read_buf+1, strnlen(read_buf, sizeof(read_buf))-1);
-				if (log_fd >= 0) {
-					close(log_fd);
-					log_fd = -1;
-				}
+				fdatasync(log_fd);
 			} else {
 				fprintf(stderr, "fws_parent_run(): warning: unknown header\n");
 				continue;
@@ -359,7 +350,14 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		parent_ctx_p->pipe_read_fd = -1;
 	}
 
-	ret = waitpid(parent_ctx_p->pid, nullptr, 0);
+	s32 wait_status = 0;
+	ret = waitpid(parent_ctx_p->pid, &wait_status, WNOHANG);
+	if (WIFEXITED(wait_status)) {
+		fprintf(stderr, "EXIT: %d\n", WEXITSTATUS(wait_status));
+	} else if (WIFSIGNALED(wait_status)) {
+		fprintf(stderr, "SIG: %d\n", WTERMSIG(wait_status));
+	}
+
 	if (ret < 0) {
 		fprintf(stderr, "fws_parent_run(): waitpid(): error\n");
 		ret = -1;
@@ -471,7 +469,7 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	char time_buf[16] = {0};
 	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", &tm);
 
-	char log_buf[256] = {0};
+	char log_buf[1024] = {0};
 	s32 log_acc = snprintf(log_buf, sizeof(log_buf), "%d%s %s", 2, ip_buf, time_buf);
 
 	SSL_CTX *ssl_ctx_p = (SSL_CTX *) thrd_ctx_p->ssl_ctx_opq_p;
@@ -509,7 +507,6 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 	}
 
 	pthread_mutex_t *nft_lock_p = (pthread_mutex_t *) thrd_ctx_p->nft_lock_opq_p;
-	pthread_mutex_t *log_lock_p = (pthread_mutex_t *) thrd_ctx_p->log_lock_opq_p;
 	const struct fws_conf *conf_p = thrd_ctx_p->conf_p;
 	struct fws_http_req http_req = {0};
 	while (true) {
@@ -651,10 +648,8 @@ static void *_fws_thrd_run(void *thrd_ctx_opq_p) {
 out:
 	log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
 
-	pthread_mutex_lock(log_lock_p);
 	log_buf[log_acc] = '\0';
-	write(thrd_ctx_p->write_fd, log_buf, log_acc+1);
-	pthread_mutex_unlock(log_lock_p);
+	write(thrd_ctx_p->write_fd, log_buf, log_acc);
 
 	/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
 	if (need_ssl_shutdown) {
