@@ -1,10 +1,7 @@
 # Roadmap
 ## Performance
-- epoll
-- io_uring
-
-## ETC
-- add log
+- epoll, EPOLLET
+- accept4(), SOCK_NONBLOCK
 
 ---
 

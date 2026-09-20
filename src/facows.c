@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <assert.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 _Atomic s32 sig_flag = -1;
@@ -66,7 +67,7 @@ s32 main(void) {
 		}
 	}
 
-	ret = pipe(pipe_fds);
+	ret = pipe2(pipe_fds, O_NONBLOCK|O_CLOEXEC);
 	if (ret < 0) {
 		fprintf(stderr, "main(): pipe(): pipe failed\n");
 		ret = 1;
