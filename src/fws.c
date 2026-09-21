@@ -35,6 +35,7 @@ static void *_fws_swap_thrd_run(void *swap_ctx_opq_p);
 static void _fws_swap_run(struct fws_swap_ctx *swap_ctx_p);
 
 void fws_child_run(struct fws_child_ctx *child_ctx_p) {
+	static constexpr u32 maxEvent = 32;
 	static const char www_data_str[] = "www-data";
 	static const char apache_str[] = "apache";
 	static const char http_str[] = "http";
@@ -43,6 +44,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	SSL_CTX *ssl_ctx_p = nullptr;
 	struct fws_nft *nft_a_arr_p = nullptr;
 	struct fws_nft *nft_b_arr_p = nullptr;
+	s32 fws_epfd = -1;
 	s32 server_http_fd = -1;
 	s32 server_https_fd = -1;
 	s32 client_http_fd = -1;
@@ -111,11 +113,15 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		child_ctx_p->pipe_read_fd = -1;
 	}
 
-	struct pollfd fws_fds[2] = {0};
-	fws_fds[0].fd = server_http_fd;
-	fws_fds[0].events = POLLIN;
-	fws_fds[1].fd = server_https_fd;
-	fws_fds[1].events = POLLIN;
+	struct epoll_event fws_ctl = {0};
+	struct epoll_event fws_event[maxEvent] = {0};
+	fws_epfd = epoll_create1(0);
+	fws_ctl.events = EPOLLIN;
+	fws_ctl.data.fd = server_http_fd;
+	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, server_http_fd, &fws_ctl);
+	fws_ctl.events = EPOLLIN;
+	fws_ctl.data.fd = server_https_fd;
+	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, server_https_fd, &fws_ctl);
 
 	pthread_mutex_t nft_lock = {0};
 	s32 nft_lock_flag = -1;
@@ -144,59 +150,96 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 	printf("Facows start\n");
 	while (true) {
-		ret = poll(fws_fds, 2, -1);
+		errno = 0;
+		ret = epoll_wait(fws_epfd, fws_event, maxEvent, -1);
 		bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
 		if (ret < 0 && sig_cond) {
 			break;
 		}
 
-		struct sockaddr_in6 client_addr = {0};
-		if ((fws_fds[0].revents & POLLIN) != 0) {
-			u32 client_addr_len = sizeof(client_addr);
-			client_http_fd = accept4(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_CLOEXEC);
-
-			struct fws_thrd_80_ctx *thrd_80_ctx_p = calloc(1, sizeof(struct fws_thrd_80_ctx));
-			if (thrd_80_ctx_p == nullptr) {
-				ret = 1;
-				goto out;
+		for (s32 i=0; i<ret; i++) {
+			if ((fws_event[i].events & EPOLLIN) == 0) {
+				fprintf(stderr, "fws_child_run(): error: events: %u\n", fws_event[i].events);
+				continue;
 			}
-			thrd_80_ctx_p->conf_p = child_ctx_p->conf_p;
-			thrd_80_ctx_p->fd = client_http_fd;
-			thrd_80_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
 
-			thrd_n++;
-			u64 thrd_80_id = 0;
-			pthread_create(&thrd_80_id, nullptr, _fws_thrd_80_run, (void*)thrd_80_ctx_p);
-			pthread_detach(thrd_80_id);
-
-		} else if ((fws_fds[1].revents & POLLIN) != 0) {
+			struct sockaddr_in6 client_addr = {0};
 			u32 client_addr_len = sizeof(client_addr);
-			client_fd = accept4(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_CLOEXEC);
+			if (fws_event[i].data.fd == server_http_fd) {
+				client_http_fd = accept4(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_CLOEXEC);
+				if (client_http_fd < 0) {
+					fprintf(stderr, "fws_child_run(): error: http connect %d\n", client_http_fd);
+					continue;
+				}
 
-			struct fws_thrd_ctx *thrd_ctx_p = calloc(1, sizeof(struct fws_thrd_ctx));
-			if (thrd_ctx_p == nullptr) {
-				ret = 1;
-				goto out;
+				struct fws_thrd_80_ctx *thrd_80_ctx_p = calloc(1, sizeof(struct fws_thrd_80_ctx));
+				if (thrd_80_ctx_p == nullptr) {
+					ret = 1;
+					goto out;
+				}
+				thrd_80_ctx_p->conf_p = child_ctx_p->conf_p;
+				thrd_80_ctx_p->fd = client_http_fd;
+				thrd_80_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
+	
+				thrd_n++;
+				u64 thrd_80_id = 0;
+				pthread_create(&thrd_80_id, nullptr, _fws_thrd_80_run, (void*)thrd_80_ctx_p);
+				pthread_detach(thrd_80_id);
+
+				/*fws_ctl.events = EPOLLIN;
+				fws_ctl.data.fd = client_http_fd;
+				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_http_fd, &fws_ctl);
+				if (ret < 0) {
+					close(client_http_fd);
+					client_http_fd = -1;
+					continue;
+				}*/
+
+			} else if (fws_event[i].data.fd == server_https_fd) {
+				client_fd = accept4(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_CLOEXEC);
+				if (client_fd < 0) {
+					fprintf(stderr, "fws_child_run(): error: https connect %d\n", client_fd);
+					continue;
+				}
+
+				struct fws_thrd_ctx *thrd_ctx_p = calloc(1, sizeof(struct fws_thrd_ctx));
+				if (thrd_ctx_p == nullptr) {
+					ret = 1;
+					goto out;
+				}
+				memcpy(
+					thrd_ctx_p->client_ip_buf,
+					client_addr.sin6_addr.s6_addr,
+					sizeof(client_addr.sin6_addr.s6_addr)
+				);
+	
+				thrd_ctx_p->fd = client_fd;
+				thrd_ctx_p->write_fd = child_ctx_p->pipe_write_fd;
+				thrd_ctx_p->ssl_ctx_opq_p = (u8 *) ssl_ctx_p;
+				thrd_ctx_p->conf_p = child_ctx_p->conf_p;
+				thrd_ctx_p->nft_arr_pp = &nft_arr_p;
+				thrd_ctx_p->nft_lock_opq_p = (u8 *) &nft_lock;
+				thrd_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
+				thrd_ctx_p->sig_flag_opq_p = (s32 *) sig_flag_p;
+	
+				thrd_n++;
+				u64 fws_thrd = 0;
+				pthread_create(&fws_thrd, nullptr, _fws_thrd_run, (void*)thrd_ctx_p);
+				pthread_detach(fws_thrd);
+
+				/*fws_ctl.events = EPOLLIN;
+				fws_ctl.data.fd = client_fd;
+				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_fd, &fws_ctl);
+				if (ret < 0) {
+					close(client_fd);
+					client_fd = -1;
+					continue;
+				}*/
+
+			} else {
+				printf("client_fd: %d\n", fws_event[i].data.fd);
+				continue;
 			}
-			memcpy(
-				thrd_ctx_p->client_ip_buf,
-				client_addr.sin6_addr.s6_addr,
-				sizeof(client_addr.sin6_addr.s6_addr)
-			);
-
-			thrd_ctx_p->fd = client_fd;
-			thrd_ctx_p->write_fd = child_ctx_p->pipe_write_fd;
-			thrd_ctx_p->ssl_ctx_opq_p = (u8 *) ssl_ctx_p;
-			thrd_ctx_p->conf_p = child_ctx_p->conf_p;
-			thrd_ctx_p->nft_arr_pp = &nft_arr_p;
-			thrd_ctx_p->nft_lock_opq_p = (u8 *) &nft_lock;
-			thrd_ctx_p->thrd_n_opq_p = (s32 *) &thrd_n;
-			thrd_ctx_p->sig_flag_opq_p = (s32 *) sig_flag_p;
-
-			thrd_n++;
-			u64 fws_thrd = 0;
-			pthread_create(&fws_thrd, nullptr, _fws_thrd_run, (void*)thrd_ctx_p);
-			pthread_detach(fws_thrd);
 		}
 	}
 
