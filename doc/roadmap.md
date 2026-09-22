@@ -1,7 +1,6 @@
 # Roadmap
 ## Performance
-- epoll, EPOLLET
-- accept4(), SOCK_NONBLOCK
+- EPOLLET
 
 ---
 

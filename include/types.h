@@ -8,6 +8,21 @@
 
 #include "factype.h"
 
+struct fws_data_ctx {
+	s32 fd;
+	s32 write_fd;
+	s32 ssl_status;
+	s32 epfd;
+	s32 *sig_flag_opq_p;
+	u8 client_ip_buf[16];
+	u8 *ssl_ctx_opq_p;
+	u8 *ssl_opq_p;
+	u8 *nft_lock_opq_p;
+	u8 *ctl_opq_p;
+	struct fws_conf *conf_p;
+	struct fws_nft **nft_arr_pp;
+};
+
 struct fws_lookup {
 	u64 offset;
 	u64 size;
