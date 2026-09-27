@@ -18,7 +18,7 @@ s32 net_server_init(u16 port) {
 	struct sockaddr_in6 server_addr;
 	const s32 opt = 1;
 
-	s32 server_fd = socket(AF_INET6, SOCK_STREAM, 0);
+	s32 server_fd = socket(AF_INET6, SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
 	if (server_fd < 0) {
 		return -1;
 	}

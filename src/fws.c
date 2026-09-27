@@ -25,6 +25,7 @@
 #include <sys/wait.h>
 #include <sys/epoll.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <nftables/libnftables.h>
 
 constexpr u64 nft_arr_cap = 1024;
@@ -113,21 +114,22 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		child_ctx_p->pipe_read_fd = -1;
 	}
 
-	struct fws_data_ctx *server_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
+	struct fws_data_ctx *http_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
+	struct fws_data_ctx *https_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
 	struct epoll_event fws_ctl = {0};
 	struct epoll_event fws_event[maxEvent] = {0};
 	fws_epfd = epoll_create1(0);
 
-	server_data_ctx_p->conf_p = child_ctx_p->conf_p;
-	server_data_ctx_p->ssl_ctx_opq_p = nullptr;
-	server_data_ctx_p->fd = server_http_fd;
+	http_data_ctx_p->conf_p = child_ctx_p->conf_p;
+	http_data_ctx_p->ssl_ctx_opq_p = nullptr;
+	http_data_ctx_p->fd = server_http_fd;
 	fws_ctl.events = EPOLLIN;
-	fws_ctl.data.ptr = server_data_ctx_p;
+	fws_ctl.data.ptr = http_data_ctx_p;
 	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, server_http_fd, &fws_ctl);
 
-	server_data_ctx_p->fd = server_https_fd;
+	https_data_ctx_p->fd = server_https_fd;
 	fws_ctl.events = EPOLLIN;
-	fws_ctl.data.ptr = server_data_ctx_p;
+	fws_ctl.data.ptr = https_data_ctx_p;
 	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, server_https_fd, &fws_ctl);
 
 	pthread_mutex_t nft_lock = {0};
@@ -158,17 +160,15 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	printf("Facows start\n");
 	while (true) {
 		errno = 0;
-		ret = epoll_wait(fws_epfd, fws_event, maxEvent, -1);
+		s32 event_n = epoll_wait(fws_epfd, fws_event, maxEvent, -1);
 		bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
 		if (ret < 0 && sig_cond) {
 			break;
 		}
 
-		for (s32 i=0; i<ret; i++) {
-			if ((fws_event[i].events & (EPOLLIN|EPOLLOUT)) == 0) {
-				fprintf(stderr, "fws_child_run(): error: events: %u\n", fws_event[i].events);
-				continue;
-			}
+		printf("EVENT_N: %d\n", event_n);
+		for (s32 i=0; i<event_n; i++) {
+			printf("EVENT: %u\n", fws_event[i].events);
 
 			struct sockaddr_in6 client_addr = {0};
 			u32 client_addr_len = sizeof(client_addr);
@@ -189,7 +189,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				ctl_data_ctx_p->fd = client_http_fd;
 				ctl_data_ctx_p->ssl_ctx_opq_p = nullptr;
 
-				fws_ctl.events = EPOLLIN;
+				fws_ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
 				fws_ctl.data.ptr = ctl_data_ctx_p;
 				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_http_fd, &fws_ctl);
 				if (ret < 0) {
@@ -205,6 +205,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 					fprintf(stderr, "fws_child_run(): error: https connect %d\n", client_fd);
 					continue;
 				}
+				int one = 1;
+				setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
 
 				struct fws_data_ctx *ctl_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
 				if (ctl_data_ctx_p == nullptr) {
@@ -226,7 +228,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				ctl_data_ctx_p->epfd = fws_epfd;
 				ctl_data_ctx_p->ctl_opq_p = (u8 *) &fws_ctl;
 
-				fws_ctl.events = EPOLLIN;
+				fws_ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
 				fws_ctl.data.ptr = ctl_data_ctx_p;
 				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_fd, &fws_ctl);
 				if (ret < 0) {
@@ -242,6 +244,17 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				printf("80: %d\n", ret);
 			} else {
 				ret = _fws_443_run(data_ctx_p);
+				if (ret < 0) {
+					epoll_ctl(fws_epfd, EPOLL_CTL_DEL, data_ctx_p->fd, nullptr);
+					if (data_ctx_p->fd >= 0) {
+						close(data_ctx_p->fd);
+						data_ctx_p->fd = -1;
+					}
+					SSL_free((SSL*)data_ctx_p->ssl_opq_p);
+					data_ctx_p->ssl_opq_p = nullptr;
+					free(data_ctx_p);
+					data_ctx_p = nullptr;
+				}
 				printf("443: %d\n", ret);
 			}
 			continue;
@@ -251,7 +264,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	ret = 0;
 out:
 	/* Thread wait for terminate */
-	u64 thrd_join_ms = 0;
+	/*u64 thrd_join_ms = 0;
 	while (thrd_n > 0) {
 		poll(nullptr, 0, 100);
 		thrd_join_ms += 100;
@@ -259,7 +272,7 @@ out:
 			fprintf(stderr, "fws_child_run(): thread join timeout %d\n", thrd_n);
 			break;
 		}
-	}
+	}*/
 
 	/* Wait 300 ms for safety */
 	poll(nullptr, 0, 300);
@@ -480,6 +493,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	static constexpr u32 logReqParse = 3;
 	static constexpr u8 empty_ip_buf[16] = {0};
 	SSL *ssl = nullptr;
+	bool is_end = false;
 	bool need_ssl_shutdown = false;
 	s32 ret = 0;
 	u32 log_flag = 0; /* ssl, ktls, read, req parse */
@@ -520,39 +534,40 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		ssl = (SSL *) data_ctx_p->ssl_opq_p;
 	}
 
-	ERR_clear_error();
-	ret = SSL_accept(ssl);
-	if (ret <= 0) {
-		s32 ssl_err = SSL_get_error(ssl, ret);
-		if (ssl_err == SSL_ERROR_WANT_READ) {
-			ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
-			data_ctx_p->ssl_status = ssl_err;
-			ctl.data.ptr = data_ctx_p;
-			epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-
-			printf("ssl: %d\n", ssl_err);
-			return ssl_err;
-		} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
-			ctl.events = EPOLLOUT|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
-			data_ctx_p->ssl_status = ssl_err;
-			ctl.data.ptr = data_ctx_p;
-			epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-
-			printf("ssl: %d\n", ssl_err);
-			return ssl_err;
+	printf("STATUS: %d\n", data_ctx_p->ssl_status);
+	if (data_ctx_p->ssl_status != 10) {
+		ERR_clear_error();
+		ret = SSL_accept(ssl);
+		if (ret <= 0) {
+			s32 ssl_err = SSL_get_error(ssl, ret);
+			if (ssl_err == SSL_ERROR_WANT_READ) {
+				ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				data_ctx_p->ssl_status = ssl_err;
+				ctl.data.ptr = data_ctx_p;
+				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
+				printf("SSL: %d\n", ssl_err);
+				return ssl_err;
+	
+			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
+				ctl.events = EPOLLOUT|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				data_ctx_p->ssl_status = ssl_err;
+				ctl.data.ptr = data_ctx_p;
+				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
+				printf("SSL: %d\n", ssl_err);
+				return ssl_err;
+			}
+			printf("ERROR_SSL: %d\n", ssl_err);
+	
+			log_flag |= (1 << logSSL);
+			ret = -1;
+			goto out;
 		}
-		printf("ssl_error: %d\n", ssl_err);
-
-		log_flag |= (1 << logSSL);
-		ret = -1;
-		goto out;
+		ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+		data_ctx_p->ssl_status = 10;
+		ctl.data.ptr = data_ctx_p;
+		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
+		need_ssl_shutdown = true;
 	}
-	ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
-	data_ctx_p->ssl_status = 10;
-	ctl.data.ptr = data_ctx_p;
-	epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-	printf("SUCCESS\n");
-	need_ssl_shutdown = true;
 
 	/* Check for supporting 'kTLS'. */
 	BIO *bio = SSL_get_wbio(ssl);
@@ -574,6 +589,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		char req_buf[8192] = {0};
 		ret = net_443_read((u8*)ssl, req_buf, sizeof(req_buf), data_ctx_p->fd, data_ctx_p->sig_flag_opq_p);
 		if (ret < 0) {
+			printf("net_443_read(): error: %d\n", ret);
 			log_flag |= (1 << logRead);
 			ret = -1;
 			goto out;
@@ -685,6 +701,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				ret = -1;
 				goto out;
 			}
+			is_end = true;
 
 		} else {
 			struct fws_http_res http_res = {0};
@@ -701,6 +718,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				goto out;
 			}
 			net_443_file_write((u8*)ssl, file.path, data_ctx_p->sig_flag_opq_p);
+			is_end = true;
 		}
 	}
 
@@ -711,35 +729,38 @@ out:
 	log_buf[log_acc] = '\0';
 	write(data_ctx_p->write_fd, log_buf, log_acc);
 
-	/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
-	if (need_ssl_shutdown) {
-		u32 ssl_timeout = 0;
-		s32 ssl_stat = SSL_shutdown(ssl);
-		if (ssl_stat == 0) {
-			while (ssl_timeout < 2000) {
-				s32 poll_ret = poll(nullptr, 0, 100);
-				if (poll_ret < 0) {
-					break;
+	if (is_end && ret == 0) {
+		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_DEL, data_ctx_p->fd, nullptr);
+		/* Shutdown for ssl, check every 100 ms, timeout 2 sec. */
+		if (need_ssl_shutdown) {
+			u32 ssl_timeout = 0;
+			s32 ssl_stat = SSL_shutdown(ssl);
+			if (ssl_stat == 0) {
+				while (ssl_timeout < 2000) {
+					s32 poll_ret = poll(nullptr, 0, 100);
+					if (poll_ret < 0) {
+						break;
+					}
+					ssl_stat = SSL_shutdown(ssl);
+					if (ssl_stat == 1) {
+						break;
+					}
+					ssl_timeout += 100;
 				}
-				ssl_stat = SSL_shutdown(ssl);
-				if (ssl_stat == 1) {
-					break;
-				}
-				ssl_timeout += 100;
 			}
 		}
+
+		SSL_free(ssl);
+		ssl = nullptr;
+
+		if (data_ctx_p->fd >= 0) {
+			close(data_ctx_p->fd);
+			data_ctx_p->fd = -1;
+		}
+
+		free(data_ctx_p);
+		data_ctx_p = nullptr;
 	}
-
-	SSL_free(ssl);
-	ssl = nullptr;
-
-	if (data_ctx_p->fd >= 0) {
-		close(data_ctx_p->fd);
-		data_ctx_p->fd = -1;
-	}
-
-	free(data_ctx_p);
-	data_ctx_p = nullptr;
 	return ret;
 }
 

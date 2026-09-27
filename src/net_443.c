@@ -40,73 +40,45 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 
 s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *sig_flag_opq_p) {
 	SSL *ssl = (SSL *) ssl_opq;
-	struct pollfd ssl_poll = {0};
 	_Atomic s32 *sig_flag_p = (_Atomic s32 *) sig_flag_opq_p;
 	s32 total_read_size = 0;
 	s32 read_ret = 0;
 	s32 ret = -1;
 
-	ssl_poll.fd = client_fd;
-	ssl_poll.events = POLLIN;
-
-	s32 poll_err = 0;
 	while (true) {
+		printf("READ\n");
 		if (SSL_pending(ssl) > 0) {
 			ret = 1;
-			ssl_poll.revents = POLLIN;
 		} else {
-			poll_err = 0;
-			ret = poll(&ssl_poll, 1, 3000);
-			poll_err = errno;
 			bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
 			if (ret < 0 && sig_cond) {
 				break;
 			}
 		}
 
-		if (ret == 0) {
-			if (total_read_size == 0) {
+		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
+		if (read_ret <= 0) {
+			const s32 err_code = SSL_get_error(ssl, read_ret);
+			if (err_code == SSL_ERROR_WANT_READ) {
+				/* TODO: epoll mod */
+				return 0;
+			} else if (err_code == SSL_ERROR_WANT_WRITE) {
+				/* TODO: epoll mod */
+				break;
+			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
+				if (total_read_size != 0) {
+					return 400;
+				}
 				return 0;
 			}
-			return -1;
-		} else if (ret < 0) {
-			if (poll_err == EINTR) {
-				continue;
-			}
-			return -1;
+			return 500;
 		}
 
-		if ((ssl_poll.revents & (POLLERR)) != 0) {
-			return -1;
-		}
-
-		if ((ssl_poll.revents & (POLLIN|POLLOUT|POLLHUP)) != 0) {
-			read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
-			ssl_poll.events = POLLIN;
-			if (read_ret <= 0) {
-				const s32 err_code = SSL_get_error(ssl, read_ret);
-				if (err_code == SSL_ERROR_WANT_READ) {
-					continue;
-				} else if (err_code == SSL_ERROR_WANT_WRITE) {
-					ssl_poll.events = POLLOUT;
-					continue;
-				} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-					if (total_read_size != 0) {
-						return 400;
-					}
-					return 0;
-				}
-				return 500;
-			}
-	
-			total_read_size += read_ret;
-			if (total_read_size >= 4095) {
-				return 431;
-			} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
-				return 1;
-			}
-		} else {
-			return -1;
+		total_read_size += read_ret;
+		if (total_read_size >= 4095) {
+			return 431;
+		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
+			return 1;
 		}
 	}
 	return 0;
@@ -114,7 +86,6 @@ s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *s
 
 s32 net_443_write(u8 *ssl_opq, char *src_buf, u64 buf_size, s32 *sig_flag_opq_p) {
 	SSL *ssl = (SSL *) ssl_opq;
-	struct pollfd ssl_poll = {0};
 	_Atomic s32 *sig_flag_p = (_Atomic s32 *) sig_flag_opq_p;
 	u64 acc_write_size = 0;
 	s32 write_ret = -1;
@@ -124,67 +95,38 @@ s32 net_443_write(u8 *ssl_opq, char *src_buf, u64 buf_size, s32 *sig_flag_opq_p)
 	if (client_fd < 0) {
 		return -1;
 	}
-	ssl_poll.fd = client_fd;
-	ssl_poll.events = POLLOUT;
 
-	s32 poll_err = 0;
 	while (true) {
-		/* Poll */
-		poll_err = 0;
-		ret = poll(&ssl_poll, 1, 3000);
-		poll_err = errno;
 		bool is_sig = *sig_flag_p == SIGINT || *sig_flag_p == SIGTERM;
 		if (ret < 0 && is_sig) {
 			break;
 		}
 
-		/* Check return value to 'poll'. */
-		if (ret == 0) {
-			if (acc_write_size == 0) {
+		write_ret = SSL_write(ssl, src_buf+acc_write_size, buf_size-acc_write_size);
+
+		/* Error */
+		if (write_ret <= 0) {
+			const s32 err_code = SSL_get_error(ssl, write_ret);
+			if (err_code == SSL_ERROR_WANT_WRITE) {
+				/* TODO: epoll mod */
+				break;
+			} else if (err_code == SSL_ERROR_WANT_READ) {
+				/* TODO: epoll mod */
+				break;
+			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
+				if (acc_write_size != 0) {
+					return -1;
+				}
 				break;
 			}
 			return -1;
-		} else if (ret < 0) {
-			if (poll_err == EINTR) {
-				continue;
-			}
-			return -1;
 		}
 
-		if ((ssl_poll.revents & (POLLHUP|POLLERR)) != 0) {
-			return -1;
-		}
-
-		if ((ssl_poll.revents & (POLLIN|POLLOUT)) != 0) {
-			write_ret = SSL_write(ssl, src_buf+acc_write_size, buf_size-acc_write_size);
-			ssl_poll.events = POLLOUT;
-
-			/* Error */
-			if (write_ret <= 0) {
-				const s32 err_code = SSL_get_error(ssl, write_ret);
-				if (err_code == SSL_ERROR_WANT_WRITE) {
-					continue;
-				} else if (err_code == SSL_ERROR_WANT_READ) {
-					ssl_poll.events = POLLIN;
-					continue;
-				} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-					if (acc_write_size != 0) {
-						return -1;
-					}
-					break;
-				}
-				return -1;
-			}
-
-			/* Exit */
-			acc_write_size += write_ret;
-			if (acc_write_size == buf_size) {
-				return 1;
-			} else if (acc_write_size > buf_size) {
-				return -1;
-			}
-
-		} else {
+		/* Exit */
+		acc_write_size += write_ret;
+		if (acc_write_size == buf_size) {
+			return 1;
+		} else if (acc_write_size > buf_size) {
 			return -1;
 		}
 	}
