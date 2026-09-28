@@ -174,7 +174,12 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			u32 client_addr_len = sizeof(client_addr);
 			struct fws_data_ctx *data_ctx_p = fws_event[i].data.ptr;
 			if (data_ctx_p->fd == server_http_fd) {
-				client_http_fd = accept4(server_http_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_NONBLOCK|SOCK_CLOEXEC);
+				client_http_fd = accept4(
+					server_http_fd,
+					(struct sockaddr*)&client_addr,
+					&client_addr_len,
+					SOCK_NONBLOCK|SOCK_CLOEXEC
+				);
 				if (client_http_fd < 0) {
 					fprintf(stderr, "fws_child_run(): error: http connect %d\n", client_http_fd);
 					continue;
@@ -189,7 +194,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				ctl_data_ctx_p->fd = client_http_fd;
 				ctl_data_ctx_p->ssl_ctx_opq_p = nullptr;
 
-				fws_ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				fws_ctl.events = EPOLLIN;
 				fws_ctl.data.ptr = ctl_data_ctx_p;
 				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_http_fd, &fws_ctl);
 				if (ret < 0) {
@@ -200,7 +205,12 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				continue;
 
 			} else if (data_ctx_p->fd == server_https_fd) {
-				client_fd = accept4(server_https_fd, (struct sockaddr*)&client_addr, &client_addr_len, SOCK_NONBLOCK|SOCK_CLOEXEC);
+				client_fd = accept4(
+					server_https_fd,
+					(struct sockaddr*)&client_addr,
+					&client_addr_len,
+					SOCK_NONBLOCK|SOCK_CLOEXEC
+				);
 				if (client_fd < 0) {
 					fprintf(stderr, "fws_child_run(): error: https connect %d\n", client_fd);
 					continue;
@@ -228,7 +238,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				ctl_data_ctx_p->epfd = fws_epfd;
 				ctl_data_ctx_p->ctl_opq_p = (u8 *) &fws_ctl;
 
-				fws_ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				fws_ctl.events = EPOLLIN;
 				fws_ctl.data.ptr = ctl_data_ctx_p;
 				ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_fd, &fws_ctl);
 				if (ret < 0) {
@@ -541,7 +551,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		if (ret <= 0) {
 			s32 ssl_err = SSL_get_error(ssl, ret);
 			if (ssl_err == SSL_ERROR_WANT_READ) {
-				ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				ctl.events = EPOLLIN;
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
@@ -549,7 +559,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				return ssl_err;
 	
 			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
-				ctl.events = EPOLLOUT|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+				ctl.events = EPOLLOUT;
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
@@ -562,7 +572,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			ret = -1;
 			goto out;
 		}
-		ctl.events = EPOLLIN|EPOLLRDHUP|EPOLLHUP|EPOLLERR;
+		ctl.events = EPOLLIN;
 		data_ctx_p->ssl_status = 10;
 		ctl.data.ptr = data_ctx_p;
 		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
@@ -587,9 +597,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	while (true) {
 		static const char html_ext_str[] = ".html";
 		char req_buf[8192] = {0};
-		ret = net_443_read((u8*)ssl, req_buf, sizeof(req_buf), data_ctx_p->fd, data_ctx_p->sig_flag_opq_p);
+		ret = net_443_read(data_ctx_p, req_buf, sizeof(req_buf));
 		if (ret < 0) {
-			printf("net_443_read(): error: %d\n", ret);
+			fprintf(stderr, "net_443_read(): error: %d\n", ret);
 			log_flag |= (1 << logRead);
 			ret = -1;
 			goto out;
@@ -623,7 +633,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		struct fws_file file = {0};
 		s32 status_code = file_parse(&file, &http_req, web_root_buf, sizeof(web_root_buf));
 		if (status_code == 301) {
-			net_http_path_redir(&http_req, conf_p, &file, (u8*)ssl, data_ctx_p->sig_flag_opq_p);
+			net_http_path_redir(&http_req, conf_p, &file, data_ctx_p);
 			ret = -1;
 			goto out;
 		}
@@ -675,7 +685,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 
 			pthread_mutex_unlock(nft_lock_p);
 			status_code = 429;
-			ret = net_443_err_write((u8*)ssl, status_code, data_ctx_p->sig_flag_opq_p);
+			ret = net_443_err_write(data_ctx_p, status_code);
 			if (ret < 0) {
 				ret = -1;
 				goto out;
@@ -696,7 +706,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		pthread_mutex_unlock(nft_lock_p);
 
 		if (status_code != 0) {
-			ret = net_443_err_write((u8*)ssl, status_code, data_ctx_p->sig_flag_opq_p);
+			ret = net_443_err_write(data_ctx_p, status_code);
 			if (ret < 0) {
 				ret = -1;
 				goto out;
@@ -712,12 +722,12 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			if (conf_p->use_hsts) {
 				http_res.hsts_max_age = conf_p->hsts_max_age;
 			}
-			ret = net_443_res_write((u8*)ssl, &http_res, file.size, &http_req, data_ctx_p->sig_flag_opq_p);
+			ret = net_443_res_write(data_ctx_p, &http_res, file.size, &http_req);
 			if (ret != 0) {
 				ret = -1;
 				goto out;
 			}
-			net_443_file_write((u8*)ssl, file.path, data_ctx_p->sig_flag_opq_p);
+			net_443_file_write(data_ctx_p, file.path);
 			is_end = true;
 		}
 	}

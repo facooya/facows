@@ -159,8 +159,7 @@ void net_http_path_redir(
 	struct fws_http_req *http_req,
 	const struct fws_conf *conf,
 	const struct fws_file *file,
-	u8 *ssl_opq,
-	s32 *sig_flag_opq_p
+	const struct fws_data_ctx *client_ctx
 ) {
 	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\n"
 		"Location: https://%s%s\r\nContent-Length: 0\r\nConnection: keep-alive\r\n"
@@ -171,7 +170,7 @@ void net_http_path_redir(
 	u64 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
 	char *res_buf = calloc(n+1, 1);
 	snprintf(res_buf, n+1, res_301_fmt, host_buf, file->uri_path);
-	net_443_write(ssl_opq, res_buf, n, sig_flag_opq_p);
+	net_443_write(client_ctx, res_buf, n);
 	free(res_buf);
 	res_buf = nullptr;
 }

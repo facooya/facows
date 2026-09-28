@@ -15,17 +15,16 @@ void net_host_build(char *host_buf, const struct fws_http_req *http_req, const s
 s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *config);
 
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config);
-s32 net_443_read(u8 *ssl_opq, char *dst_buf, u64 buf_size, s32 client_fd, s32 *sig_flag_opq_p);
-s32 net_443_write(u8 *ssl_opq, char *src_buf, u64 buf_size, s32 *sig_flag_opq_p);
-s32 net_443_file_write(u8 *ssl_opq, const char *path, s32 *sig_flag_opq_p);
+s32 net_443_read(const struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size);
+s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size);
+s32 net_443_file_write(const struct fws_data_ctx *client_ctx, const char *path);
 s32 net_443_res_write(
-	u8 *ssl_opq,
+	const struct fws_data_ctx *client_ctx,
 	struct fws_http_res *http_res,
 	s64 size,
-	const struct fws_http_req *http_req,
-	s32 *sig_flag_opq_p
+	const struct fws_http_req *http_req
 );
-s32 net_443_err_write(u8 *ssl_opq, s32 code, s32 *sig_flag_opq_p);
+s32 net_443_err_write(const struct fws_data_ctx *client_ctx, s32 code);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
 s32 net_http_res_build(
@@ -38,8 +37,7 @@ void net_http_path_redir(
 	struct fws_http_req *http_req,
 	const struct fws_conf *conf,
 	const struct fws_file *file,
-	u8 *ssl_opq,
-	s32 *sig_flag_opq_p
+	const struct fws_data_ctx *client_ctx
 );
 bool net_http_origin_self_check(const struct fws_http_req *http_req, const struct fws_conf *conf);
 
