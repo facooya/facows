@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <nftables/libnftables.h>
@@ -46,6 +47,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	struct fws_nft *nft_a_arr_p = nullptr;
 	struct fws_nft *nft_b_arr_p = nullptr;
 	s32 fws_epfd = -1;
+	s32 timer_fd = -1;
 	s32 server_http_fd = -1;
 	s32 server_https_fd = -1;
 	s32 client_http_fd = -1;
@@ -114,8 +116,28 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		child_ctx_p->pipe_read_fd = -1;
 	}
 
+	timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK|TFD_CLOEXEC);
+	if (timer_fd < 0) {
+		fprintf(stderr, "fws_child_run(): error: timerfd_create()\n");
+		ret = 1;
+		goto out;
+	}
+
+	struct itimerspec fws_timer = {0};
+	/* TODO: child_ctx_p->conf_p->lim_swap_time */
+	fws_timer.it_interval.tv_sec = 3;
+	fws_timer.it_value.tv_sec = 3;
+
+	ret = timerfd_settime(timer_fd, 0, &fws_timer, nullptr);
+	if (ret < 0) {
+		fprintf(stderr, "fws_child_run(): error: timerfd_settime()\n");
+		ret = 1;
+		goto out;
+	}
+
 	struct fws_data_ctx *http_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
 	struct fws_data_ctx *https_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
+	struct fws_data_ctx *timer_data_ctx_p = calloc(1, sizeof(struct fws_data_ctx));
 	struct epoll_event fws_ctl = {0};
 	struct epoll_event fws_event[maxEvent] = {0};
 	fws_epfd = epoll_create1(0);
@@ -131,6 +153,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 	fws_ctl.events = EPOLLIN;
 	fws_ctl.data.ptr = https_data_ctx_p;
 	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, server_https_fd, &fws_ctl);
+
+	timer_data_ctx_p->fd = timer_fd;
+	fws_ctl.events = EPOLLIN;
+	fws_ctl.data.ptr = timer_data_ctx_p;
+	epoll_ctl(fws_epfd, EPOLL_CTL_ADD, timer_fd, &fws_ctl);
 
 	pthread_mutex_t nft_lock = {0};
 	s32 nft_lock_flag = -1;
@@ -174,6 +201,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			u32 client_addr_len = sizeof(client_addr);
 			struct fws_data_ctx *data_ctx_p = fws_event[i].data.ptr;
 			if (data_ctx_p->fd == server_http_fd) {
+				/* SECTION: Server 80 */
 				client_http_fd = accept4(
 					server_http_fd,
 					(struct sockaddr*)&client_addr,
@@ -205,6 +233,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				continue;
 
 			} else if (data_ctx_p->fd == server_https_fd) {
+				/* SECTION: Server 443 */
 				client_fd = accept4(
 					server_https_fd,
 					(struct sockaddr*)&client_addr,
@@ -247,8 +276,18 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 					continue;
 				}
 				continue;
+			} else if (data_ctx_p->fd == timer_fd) {
+				/* SECTION: Timer */
+				u64 timer_event_free = 0;
+				ret = read(timer_fd, &timer_event_free, sizeof(timer_event_free));
+				if (ret < 0) {
+					fprintf(stderr, "fws_child_run(): warning: timer_event_free fail\n");
+					continue;
+				}
+				continue;
 			}
 
+			/* SECTION: Client */
 			if (data_ctx_p->ssl_ctx_opq_p == nullptr) {
 				ret = _fws_80_run(data_ctx_p);
 				printf("80: %d\n", ret);
@@ -285,6 +324,10 @@ out:
 		client_fd = -1;
 	}
 
+	if (timer_fd >= 0) {
+		close(timer_fd);
+		timer_fd = -1;
+	}
 	if (server_http_fd >= 0) {
 		close(server_http_fd);
 		server_http_fd = -1;
