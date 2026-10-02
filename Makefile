@@ -1,13 +1,10 @@
 # Maintained by Facooya and Fanone Facooya, 2026
 
-SAN_A = address,undefined
-SAN_T = thread,undefined
-
 CC = gcc
-#CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=$(SAN_A) -std=c23 -D_GNU_SOURCE
-#CFLAGS_O2B = -g -fstack-protector-all -fsanitize=$(SAN_A)
-CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -std=c23 -D_GNU_SOURCE
-CFLAGS_O2B = -g
+CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -fstack-protector-all -fsanitize=address,undefined -std=c23 -D_GNU_SOURCE
+CFLAGS_O2B = -g -fstack-protector-all -fsanitize=address,undefined
+#CFLAGS_C2O = -Wall -Wextra -Werror -O0 -g -std=c23 -D_GNU_SOURCE
+#CFLAGS_O2B = -g
 
 SRCS = \
 src/facows.c \
@@ -28,7 +25,7 @@ DEPS = $(OBJS:.o=.d)
 all: build/facows
 
 build/facows: $(OBJS)
-	$(CC) $(CFLAGS_O2B) -pthread -o $@ $^ -lssl -lcrypto -lnftables
+	$(CC) $(CFLAGS_O2B) -o $@ $^ -lssl -lcrypto -lnftables
 
 build/%.o: %.c | build/
 	mkdir -p $(dir $@)

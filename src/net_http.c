@@ -257,7 +257,8 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, '\r', req_value_max);
-	u64 n;
+	s32 ret = 0;
+	u64 n = 0;
 
 	if (p2 == nullptr || *(p2+1) != '\n') {
 		return 1;
@@ -317,8 +318,9 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							return 1;
 						}
 
-						const char *p3;
-						const char *p4;
+						const u64 os_max = sizeof(((struct fws_http_req*)0)->os);
+						const char *p3 = nullptr;
+						const char *p4 = nullptr;
 						s32 flag = 0;
 						for (u64 i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
 							p3 = p1;
@@ -327,8 +329,15 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 								if (p4 == nullptr) {
 									break;
 								}
-								if (memcmp(p4, os_type[i], strnlen(os_type[i], sizeof(os_type[i]))) == 0) {
-									memcpy(http_req->os, os_type[i], sizeof(os_type[i]));
+								u64 os_n = strnlen(os_type[i], os_max);
+								if (os_n == os_max) {
+									fprintf(stderr, "_header_parse(): warning: os_n == os_max\n");
+								} else {
+									os_n++; /* Add null character */
+								}
+								ret = memcmp(p4, os_type[i], os_n);
+								if (ret == 0) {
+									memcpy(http_req->os, os_type[i], os_n);
 									flag = 1;
 									break;
 								} else {
@@ -343,16 +352,24 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							memcpy(http_req->os, "-", sizeof("-"));
 						}
 
+						const u64 browser_max = sizeof(((struct fws_http_req*)0)->browser);
 						flag = 0;
 						for (u64 i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
 							p3 = p1;
-							while (1) {
+							while (true) {
 								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
 								if (p4 == nullptr) {
 									break;
 								}
-								if (memcmp(p4, browser_type[i], strnlen(browser_type[i], sizeof(browser_type[i]))) == 0) {
-									memcpy(http_req->browser, browser_type[i], sizeof(browser_type[i]));
+								u64 browser_n = strnlen(browser_type[i], browser_max);
+								if (browser_n == browser_max) {
+									fprintf(stderr, "_header_parse(): warning: browser_n == browser_max\n");
+								} else {
+									browser_n++; /* Add null character */
+								}
+								ret = memcmp(p4, browser_type[i], browser_n);
+								if (ret == 0) {
+									memcpy(http_req->browser, browser_type[i], browser_n);
 									flag = 1;
 									break;
 								} else {
