@@ -359,28 +359,41 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		}
 
 		if (ep_event.events & (EPOLLIN|EPOLLHUP)) {
-			char read_buf[1024] = {0};
-			ret = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
-			if (ret <= 0) {
-				fprintf(stderr, "fws_parent_run(): error: read(): %d\n", ret);
+			char read_buf[8192] = {0};
+			s32 read_acc = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
+			if (read_acc <= 0) {
+				fprintf(stderr, "fws_parent_run(): error: read(): %d\n", read_acc);
 				if (ep_event.events & EPOLLHUP) {
 					fprintf(stderr, "fws_parent_run(): error: EPOLLHUP\n");
 					break;
 				}
 				continue;
 			}
-			read_buf[ret] = '\0';
+			read_buf[read_acc] = '\0';
 
-			if (*read_buf == '1') {
-				net_nft_dos_ban(nft_ctx, read_buf+1, parent_ctx_p->conf_p->ban_time);
-			} else if (*read_buf == '2') {
-				ret = write(log_fd, read_buf+1, ret-1);
-				if (ret <= 0) {
-					fprintf(stderr, "fws_parent_run(): error: write(): %d\n", ret);
+			u32 flag_continue = 0;
+			const char *p = read_buf;
+			while (read_acc > 0) {
+				u64 n = strnlen(p, read_acc);
+
+				if (*p == '1') {
+					net_nft_dos_ban(nft_ctx, p+1, parent_ctx_p->conf_p->ban_time);
+				} else if (*p == '2') {
+					ret = write(log_fd, p+1, n-1);
+					if (ret <= 0) {
+						fprintf(stderr, "fws_parent_run(): error: write(): %d\n", ret);
+					}
+					fdatasync(log_fd);
+				} else {
+					fprintf(stderr, "fws_parent_run(): warning: unknown header: %s\n", p);
+					flag_continue = 1;
+					break;
 				}
-				fdatasync(log_fd);
-			} else {
-				fprintf(stderr, "fws_parent_run(): warning: unknown header\n");
+
+				p += (n + 1);
+				read_acc -= (n + 1);
+			}
+			if (flag_continue == 1) {
 				continue;
 			}
 
@@ -476,6 +489,8 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	static constexpr u32 logKTLS = 1;
 	static constexpr u32 logRead = 2;
 	static constexpr u32 logReqParse = 3;
+	static constexpr u32 logErrSSL = 4;
+	static constexpr u32 logErrSyscall = 5;
 	static constexpr u8 empty_ip_buf[16] = {0};
 	SSL *ssl = nullptr;
 	bool need_ssl_shutdown = false;
@@ -540,6 +555,11 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			fprintf(stderr, "_fws_443_run(): error: ssl %d\n", ssl_err);
 	
 			log_flag |= (1 << logSSL);
+			if (ssl_err == 1) {
+				log_flag |= (1 << logErrSSL);
+			} else if (ssl_err == 5) {
+				log_flag |= (1 << logErrSyscall);
+			}
 			ret = -1;
 			goto out;
 		}
@@ -706,7 +726,7 @@ out:
 		log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
 
 		log_buf[log_acc] = '\0';
-		write(data_ctx_p->write_fd, log_buf, log_acc);
+		write(data_ctx_p->write_fd, log_buf, log_acc+1);
 	}
 
 	if (ret <= 0) {
