@@ -160,10 +160,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			break;
 		}
 
-		printf("EVENT_N: %d\n", event_n);
 		for (s32 i=0; i<event_n; i++) {
-			printf("EVENT: %u\n", fws_event[i].events);
-
 			struct sockaddr_in6 client_addr = {0};
 			u32 client_addr_len = sizeof(client_addr);
 			struct fws_data_ctx *data_ctx_p = fws_event[i].data.ptr;
@@ -242,6 +239,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 					continue;
 				}
 				continue;
+
 			} else if (data_ctx_p->fd == timer_fd) {
 				/* SECTION: Timer */
 				u64 timer_event_free = 0;
@@ -257,10 +255,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			/* SECTION: Client */
 			if (data_ctx_p->ssl_ctx_opq_p == nullptr) {
 				ret = _fws_80_run(data_ctx_p);
-				printf("80: %d\n", ret);
 			} else {
 				ret = _fws_443_run(data_ctx_p);
-				printf("443: %d\n", ret);
 			}
 			continue;
 		}
@@ -522,7 +518,6 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		ssl = (SSL *) data_ctx_p->ssl_opq_p;
 	}
 
-	printf("STATUS: %d\n", data_ctx_p->ssl_status);
 	if (data_ctx_p->ssl_status != 10) {
 		ERR_clear_error();
 		ret = SSL_accept(ssl);
@@ -533,7 +528,6 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-				printf("WANT_READ\n");
 				return ssl_err;
 	
 			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
@@ -541,10 +535,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-				printf("WANT_WRITE\n");
 				return ssl_err;
 			}
-			printf("ERROR_SSL: %d\n", ssl_err);
+			fprintf(stderr, "_fws_443_run(): error: ssl %d\n", ssl_err);
 	
 			log_flag |= (1 << logSSL);
 			ret = -1;
@@ -611,6 +604,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		s32 status_code = file_parse(&file, &http_req, web_root_buf, sizeof(web_root_buf));
 		if (status_code == 301) {
 			net_http_path_redir(&http_req, conf_p, &file, data_ctx_p);
+			ret = -1;
+			goto out;
+		} else if (status_code < 0) {
 			ret = -1;
 			goto out;
 		}

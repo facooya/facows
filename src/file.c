@@ -97,6 +97,9 @@ static s32 _uri_path_build(struct fws_file *file) {
 	char *p1 = nullptr;
 	s32 ret = 0;
 
+	if (file->uri_path_n == 0) {
+		return -1;
+	}
 	const char last_chr = *(file->uri_path+(file->uri_path_n-1));
 	if (last_chr == '/') {
 		return 1;
