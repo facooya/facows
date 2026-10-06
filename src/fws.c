@@ -544,7 +544,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
 				return ssl_err;
-	
+
 			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
 				ctl.events = EPOLLOUT;
 				data_ctx_p->ssl_status = ssl_err;
@@ -552,14 +552,14 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
 				return ssl_err;
 			}
-			fprintf(stderr, "_fws_443_run(): error: ssl %d\n", ssl_err);
-	
+
 			log_flag |= (1 << logSSL);
-			if (ssl_err == 1) {
+			if (ssl_err == SSL_ERROR_SSL) {
 				log_flag |= (1 << logErrSSL);
-			} else if (ssl_err == 5) {
+			} else if (ssl_err == SSL_ERROR_SYSCALL) {
 				log_flag |= (1 << logErrSyscall);
 			}
+			data_ctx_p->ssl_status = 11;
 			ret = -1;
 			goto out;
 		}
@@ -722,7 +722,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 
 	ret = 0;
 out:
-	if (data_ctx_p->ssl_status == 10) {
+	if (data_ctx_p->ssl_status == 10 || data_ctx_p->ssl_status == 11) {
 		log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
 
 		log_buf[log_acc] = '\0';
