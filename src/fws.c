@@ -339,7 +339,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 	struct epoll_event ep_ctl = {0};
 	struct epoll_event ep_event = {0};
 	ep_fd = epoll_create1(0);
-	ep_ctl.events = EPOLLIN;
+	ep_ctl.events = EPOLLIN | EPOLLET;
 	ep_ctl.data.fd = parent_ctx_p->pipe_read_fd;
 	epoll_ctl(ep_fd, EPOLL_CTL_ADD, parent_ctx_p->pipe_read_fd, &ep_ctl);
 
@@ -360,14 +360,33 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 
 		if (ep_event.events & (EPOLLIN|EPOLLHUP)) {
 			char read_buf[8192] = {0};
-			s32 read_acc = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
-			if (read_acc <= 0) {
-				fprintf(stderr, "fws_parent_run(): error: read(): %d\n", read_acc);
-				if (ep_event.events & EPOLLHUP) {
-					fprintf(stderr, "fws_parent_run(): error: EPOLLHUP\n");
-					break;
+			s32 read_flag = 0;
+			s32 read_acc = 0;
+			while (true) {
+				s32 ret = read(ep_event.data.fd, read_buf, sizeof(read_buf)-1);
+				if (ret <= 0) {
+					if (ret == 0) {
+						read_flag = 2;
+						break;
+					}
+					if (errno == EAGAIN) {
+						break;
+					}
+					fprintf(stderr, "fws_parent_run(): error: read(): %d\n", read_acc);
+					if (ep_event.events & EPOLLHUP) {
+						fprintf(stderr, "fws_parent_run(): error: EPOLLHUP\n");
+						read_flag = 2;
+						break;
+					}
+					read_flag = 1;
+					continue;
 				}
+				read_acc += ret;
+			}
+			if (read_flag == 1) {
 				continue;
+			} else if (read_flag == 2) {
+				break;
 			}
 			read_buf[read_acc] = '\0';
 
