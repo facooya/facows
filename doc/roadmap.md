@@ -7,6 +7,7 @@
 
 ## ETC
 - Kill signal terminate.
+- The nftables separate for test.
 
 ---
 
