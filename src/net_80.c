@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/socket.h>
 
 s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
@@ -30,6 +31,9 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 	while (true) {
 		s32 recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
 		if (recv_size < 0) {
+			if (errno == EAGAIN) {
+				break;
+			}
 			ret = -1;
 			goto out;
 		}

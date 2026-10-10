@@ -1,7 +1,4 @@
 # Roadmap
-## Performance
-- Change EPOLLET.
-
 ## Log
 - Record bad log.
 

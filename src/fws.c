@@ -14,6 +14,7 @@
 #include <string.h>
 #include <signal.h>
 #include <assert.h>
+#include <errno.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <fcntl.h>
@@ -193,7 +194,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 					ctl_data_ctx_p->fd = client_http_fd;
 					ctl_data_ctx_p->ssl_ctx_opq_p = nullptr;
 
-					fws_ctl.events = EPOLLIN;
+					fws_ctl.events = EPOLLIN | EPOLLET;
 					fws_ctl.data.ptr = ctl_data_ctx_p;
 					ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_http_fd, &fws_ctl);
 					if (ret < 0) {
@@ -242,7 +243,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 					ctl_data_ctx_p->epfd = fws_epfd;
 					ctl_data_ctx_p->ctl_opq_p = (u8 *) &fws_ctl;
 
-					fws_ctl.events = EPOLLIN;
+					fws_ctl.events = EPOLLIN | EPOLLET;
 					fws_ctl.data.ptr = ctl_data_ctx_p;
 					ret = epoll_ctl(fws_epfd, EPOLL_CTL_ADD, client_fd, &fws_ctl);
 					if (ret < 0) {
@@ -575,7 +576,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		if (ret <= 0) {
 			s32 ssl_err = SSL_get_error(ssl, ret);
 			if (ssl_err == SSL_ERROR_WANT_READ) {
-				ctl.events = EPOLLIN;
+				ctl.events = EPOLLIN | EPOLLET;
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
@@ -599,7 +600,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			ret = -1;
 			goto out;
 		}
-		ctl.events = EPOLLIN;
+		ctl.events = EPOLLIN | EPOLLET;
 		data_ctx_p->ssl_status = 10;
 		ctl.data.ptr = data_ctx_p;
 		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
