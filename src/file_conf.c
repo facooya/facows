@@ -155,7 +155,6 @@ static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_l
 	};
 	s32 ret = 0;
 
-	memset(conf_p, 0, sizeof(struct fws_conf));
 	const char *p_scan = conf_buf;
 	const char *p_end = nullptr;
 	u64 n = 0;

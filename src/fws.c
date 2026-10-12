@@ -157,10 +157,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 		errno = 0;
 		s32 event_n = epoll_wait(fws_epfd, fws_event, maxEvent, -1);
 		bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
-		if (ret < 0 && sig_cond) {
-			break;
-		}
-		if (event_n < 0) {
+		if (event_n < 0 || sig_cond) {
 			break;
 		}
 

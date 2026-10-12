@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <string.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -20,14 +21,30 @@ _Atomic s32 sig_flag = -1;
 
 static void _fws_exit(s32 sig);
 
-s32 main(void) {
+s32 main(s32 argc, char **argv) {
+	static const char test_str[] = "test";
 	static const char conf_path_str[] = "/etc/facows/facows.conf";
+	static const char conf_test_path_str[] = "/etc/facows/facows_test.conf";
 	struct fws_parent_ctx *parent_ctx_p = nullptr;
 	struct fws_child_ctx *child_ctx_p = nullptr;
 	s32 pipe_fds[2] = {-1, -1};
 	s32 pipe_read_fd = -1;
 	s32 pipe_write_fd = -1;
 	s32 ret = 0;
+	bool test_mode = false;
+
+	const char *conf_path_p = conf_path_str;
+	if (argc == 2) {
+		ret = memcmp(test_str, argv[1], sizeof(test_str));
+		if (ret == 0) {
+			conf_path_p = conf_test_path_str;
+			test_mode = true;
+		}
+	} else if (argc > 2) {
+		fprintf(stderr, "main(): argc: %d\n", argc);
+		ret = 1;
+		goto out;
+	}
 
 	struct sigaction fws_sa = {0};
 	fws_sa.sa_handler = _fws_exit;
@@ -52,7 +69,10 @@ s32 main(void) {
 	}
 
 	struct fws_conf conf = {0};
-	ret = file_conf_read(&conf, conf_path_str);
+	if (test_mode) {
+		conf.test_mode = true;
+	}
+	ret = file_conf_read(&conf, conf_path_p);
 	if (ret < 0) {
 		fprintf(stderr, "main(): file_conf_read(): failed\n");
 		ret = 1;
