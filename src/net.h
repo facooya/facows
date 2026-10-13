@@ -42,8 +42,13 @@ void net_http_path_redir(
 bool net_http_origin_self_check(const struct fws_http_req *http_req, const struct fws_conf *conf);
 
 s32 net_nft_init(const struct fws_conf *conf);
-s32 net_nft_fini(void);
-void net_nft_dos_ban(struct nft_ctx *nft_ctx, const char *ip_buf, u32 ban_time);
+s32 net_nft_fini(const struct fws_conf *conf_p);
+void net_nft_dos_ban(
+	const struct fws_conf *conf_p,
+	struct nft_ctx *nft_ctx,
+	const char *ip_buf,
+	u32 ban_time
+);
 void net_nft_dos_ip_send(const u8 *client_ip, struct fws_nft *nft_list, s32 write_fd, u64 nft_list_n);
 
 #endif

@@ -411,7 +411,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 				u64 n = strnlen(p, read_acc);
 
 				if (*p == '1') {
-					net_nft_dos_ban(nft_ctx, p+1, parent_ctx_p->conf_p->ban_time);
+					net_nft_dos_ban(parent_ctx_p->conf_p, nft_ctx, p+1, parent_ctx_p->conf_p->ban_time);
 				} else if (*p == '2') {
 					ret = write(log_fd, p+1, n-1);
 					if (ret <= 0) {
@@ -457,7 +457,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 		goto out;
 	}
 	if (parent_ctx_p->conf_p->use_nft) {
-		ret = net_nft_fini();
+		ret = net_nft_fini(parent_ctx_p->conf_p);
 		if (ret < 0) {
 			fprintf(stderr, "fws_parent_run(): net_nft_fini(): error\n");
 			ret = -1;
