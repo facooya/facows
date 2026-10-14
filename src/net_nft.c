@@ -35,11 +35,12 @@ static const char nft_init_fmt[] =
 		"}\n"
 	"}\n"
 	"table inet facows {\n"
+		"set facows_ports {type inet_service; flags interval; elements={%4$d, %5$d %6$s};}\n"
 		"chain facows_input {\n"
 			"type filter hook input priority 0; policy drop;\n"
 			"iif \"lo\" accept;\n"
 			"ct state established,related accept;\n"
-			"tcp dport {%4$d, %5$d %6$s} accept;\n"
+			"tcp dport @facows_ports accept;\n"
 		"}\n"
 	"}";
 
@@ -62,23 +63,27 @@ static const char nft_init_test_fmt[] =
 		"}\n"
 	"}\n"
 	"table inet facows_test {\n"
+		"set facows_ports {type inet_service; flags interval; elements={%4$d, %5$d %6$s};}\n"
 		"chain facows_input {\n"
 			"type filter hook input priority 0; policy drop;\n"
 			"iif \"lo\" accept;\n"
 			"ct state established,related accept;\n"
-			"tcp dport {%4$d, %5$d %6$s} accept;\n"
+			"tcp dport @facows_ports accept;\n"
 		"}\n"
 	"}";
 
 static s32 _name_get(char *buf, u64 buf_n);
 
 s32 net_nft_init(const struct fws_conf *conf) {
+	static const char nft_ports_fmt[] = "add element inet facows facows_ports { %d, %d };";
 	s32 ret = 0;
 	struct nft_ctx *nft_ctx = nullptr;
 	char *nft_buf = nullptr;
+	char *nft_ports_buf = nullptr;
 
 	char name_buf[16] = {0};
 	s32 name_cnt = 0;
+
 	while (name_cnt < 5) {
 		memset(name_buf, '\0', sizeof(name_buf));
 		ret = _name_get(name_buf, sizeof(name_buf));
@@ -103,6 +108,13 @@ s32 net_nft_init(const struct fws_conf *conf) {
 	const char *nft_init_p = nft_init_fmt;
 	if (conf->test_mode) {
 		nft_init_p = nft_init_test_fmt;
+
+		s32 nft_ports_n = snprintf(nullptr, 0, nft_ports_fmt, conf->http_port, conf->https_port);
+		nft_ports_buf = calloc(nft_ports_n+1, 1);
+		snprintf(nft_ports_buf, nft_ports_n+1, nft_ports_fmt, conf->http_port, conf->https_port);
+		nft_run_cmd_from_buffer(nft_ctx, nft_ports_buf);
+		free(nft_ports_buf);
+		nft_ports_buf = nullptr;
 	}
 	u64 n = snprintf(nullptr, 0, nft_init_p, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_buf = calloc(n+1, 1);
@@ -115,6 +127,8 @@ out:
 		nft_ctx_free(nft_ctx);
 	}
 	nft_ctx = nullptr;
+	free(nft_ports_buf);
+	nft_ports_buf = nullptr;
 	free(nft_buf);
 	nft_buf = nullptr;
 	return ret;
@@ -123,17 +137,28 @@ out:
 s32 net_nft_fini(const struct fws_conf *conf_p) {
 	static const char nft_fini_str[] = "delete table netdev facows; delete table inet facows;";
 	static const char nft_fini_test_str[] = "delete table netdev facows_test; delete table inet facows_test;";
-	s32 ret = 0;
 	struct nft_ctx *nft_ctx = nullptr;
+	char *nft_ports_buf = nullptr;
+	s32 ret = 0;
+
 	nft_ctx = nft_ctx_new(NFT_CTX_DEFAULT);
 	if (nft_ctx == nullptr) {
 		printf("facows_nft: can not create nft context\n");
 		ret = -1;
 		goto out;
 	}
+
 	const char *nft_fini_p = nft_fini_str;
 	if (conf_p->test_mode) {
+		static const char nft_fini_ports_fmt[] = "delete element inet facows facows_ports {%d, %d};";
 		nft_fini_p = nft_fini_test_str;
+
+		s32 nft_ports_n = snprintf(nullptr, 0, nft_fini_ports_fmt, conf_p->http_port, conf_p->https_port);
+		nft_ports_buf = calloc(nft_ports_n+1, 1);
+		snprintf(nft_ports_buf, nft_ports_n+1, nft_fini_ports_fmt, conf_p->http_port, conf_p->https_port);
+		nft_run_cmd_from_buffer(nft_ctx, nft_ports_buf);
+		free(nft_ports_buf);
+		nft_ports_buf = nullptr;
 	}
 	nft_run_cmd_from_buffer(nft_ctx, nft_fini_p);
 
@@ -141,6 +166,8 @@ s32 net_nft_fini(const struct fws_conf *conf_p) {
 out:
 	nft_ctx_free(nft_ctx);
 	nft_ctx = nullptr;
+	free(nft_ports_buf);
+	nft_ports_buf = nullptr;
 	return ret;
 }
 
