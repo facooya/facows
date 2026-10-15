@@ -580,7 +580,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				return ssl_err;
 
 			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
-				ctl.events = EPOLLOUT;
+				ctl.events = EPOLLOUT | EPOLLET;
 				data_ctx_p->ssl_status = ssl_err;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
@@ -623,12 +623,12 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		char req_buf[8192] = {0};
 		ret = net_443_read(data_ctx_p, req_buf, sizeof(req_buf));
 		if (ret < 0) {
-			fprintf(stderr, "net_443_read(): error: %d\n", ret);
 			log_flag |= (1 << logRead);
 			ret = -1;
 			goto out;
 		} else if (ret == 0) {
-			break;
+			ret = 1;
+			goto out;
 		}
 
 		ret = net_http_req_parse(req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));

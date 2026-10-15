@@ -74,16 +74,16 @@ s32 net_443_read(const struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_s
 				break;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
 				if (total_read_size != 0) {
-					return 400;
+					return -400;
 				}
 				break;
 			}
-			return 500;
+			return -500;
 		}
 
 		total_read_size += read_ret;
 		if (total_read_size >= 4095) {
-			return 431;
+			return -431;
 		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
 			return 1;
 		}
@@ -119,12 +119,12 @@ s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_
 			const s32 err_code = SSL_get_error(ssl, write_ret);
 			struct epoll_event ctl = {0};
 			if (err_code == SSL_ERROR_WANT_WRITE) {
-				ctl.events = EPOLLIN | EPOLLET;
+				ctl.events = EPOLLOUT | EPOLLET;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
 				break;
 			} else if (err_code == SSL_ERROR_WANT_READ) {
-				ctl.events = EPOLLOUT | EPOLLET;
+				ctl.events = EPOLLIN | EPOLLET;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
 				break;
