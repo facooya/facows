@@ -619,6 +619,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	const struct fws_conf *conf_p = data_ctx_p->conf_p;
 	struct fws_http_req http_req = {0};
 	while (true) {
+		if (data_ctx_p->want_write == 1) {
+			goto write;
+		}
 		static const char html_ext_str[] = ".html";
 		char req_buf[8192] = {0};
 		ret = net_443_read(data_ctx_p, req_buf, sizeof(req_buf));
@@ -750,7 +753,18 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				ret = -1;
 				goto out;
 			}
-			net_443_file_write(data_ctx_p, file.path);
+write:
+			data_ctx_p->want_write = 0;
+			if (memcmp(file.path, "\0", 1) == 0) {
+				memcpy(file.path, data_ctx_p->file_path, strnlen(data_ctx_p->file_path, 1024));
+			}
+			ret = net_443_file_write(data_ctx_p, file.path);
+			if (ret == 1) {
+				data_ctx_p->want_write = 1;
+				memcpy(data_ctx_p->file_path, file.path, strnlen(file.path, 1024));
+				ret = 1;
+				goto out;
+			}
 		}
 	}
 

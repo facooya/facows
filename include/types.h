@@ -9,11 +9,15 @@
 #include "factype.h"
 
 struct fws_data_ctx {
+	s32 file_len;
+	char file_buf[4096];
+	s32 want_write;
 	s32 fd;
 	s32 write_fd;
 	s32 ssl_status;
 	s32 epfd;
 	s32 *sig_flag_opq_p;
+	char file_path[1024];
 	u8 client_ip_buf[16];
 	u8 *ssl_ctx_opq_p;
 	u8 *ssl_opq_p;

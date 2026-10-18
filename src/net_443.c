@@ -35,10 +35,11 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 
 	SSL_CTX_set_session_cache_mode(*ssl_ctx, SSL_SESS_CACHE_OFF);
 	SSL_CTX_set_options(*ssl_ctx, SSL_OP_ENABLE_KTLS);
+	SSL_CTX_set_mode(*ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER | SSL_MODE_ENABLE_PARTIAL_WRITE);
 	return 0;
 }
 
-s32 net_443_read(const struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
+s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
 	SSL *ssl = (SSL *) client_ctx->ssl_opq_p;
 	_Atomic s32 *sig_flag_p = (_Atomic s32 *) client_ctx->sig_flag_opq_p;
 	s32 total_read_size = 0;
@@ -91,7 +92,7 @@ s32 net_443_read(const struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_s
 	return 0;
 }
 
-s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) {
+s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) {
 	SSL *ssl = (SSL *) client_ctx->ssl_opq_p;
 	_Atomic s32 *sig_flag_p = (_Atomic s32 *) client_ctx->sig_flag_opq_p;
 	u64 acc_write_size = 0;
@@ -113,9 +114,6 @@ s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_
 
 		/* Error */
 		if (write_ret <= 0) {
-			if (errno == EAGAIN && write_ret < 0) {
-				break;
-			}
 			const s32 err_code = SSL_get_error(ssl, write_ret);
 			struct epoll_event ctl = {0};
 			if (err_code == SSL_ERROR_WANT_WRITE) {
@@ -134,6 +132,9 @@ s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_
 				}
 				break;
 			}
+			if (errno == EAGAIN && write_ret < 0) {
+				break;
+			}
 			return -1;
 		}
 
@@ -148,7 +149,7 @@ s32 net_443_write(const struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_
 	return 0;
 }
 
-s32 net_443_file_write(const struct fws_data_ctx *client_ctx, const char *path) {
+s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	s32 ret = 0;
 
 	s32 fd = open(path, O_RDONLY);
@@ -156,14 +157,25 @@ s32 net_443_file_write(const struct fws_data_ctx *client_ctx, const char *path) 
 		ret = -1;
 		goto out;
 	}
-	char file_buf[4096] = {0};
 	s64 read_size = 0;
-	while ((read_size = read(fd, file_buf, sizeof(file_buf))) > 0) {
-		ret = net_443_write(client_ctx, file_buf, read_size);
+	u64 read_acc_size = 0;
+	if (client_ctx->file_len > 0) {
+		read_acc_size = client_ctx->file_len;
+	}
+	ret = lseek(fd, read_acc_size, SEEK_SET);
+	if (ret < 0) {
+		fprintf(stderr, "net_443_file_write(): lseek(): error\n");
+		ret = -1;
+		goto out;
+	}
+	while ((read_size = read(fd, client_ctx->file_buf, 4096)) > 0) {
+		ret = net_443_write(client_ctx, client_ctx->file_buf, read_size);
 		if (ret <= 0) {
+			client_ctx->file_len = read_acc_size;
 			ret = 1;
 			goto out;
 		}
+		read_acc_size += read_size;
 	}
 
 	ret = 0;
@@ -176,7 +188,7 @@ out:
 }
 
 s32 net_443_res_write(
-	const struct fws_data_ctx *client_ctx,
+	struct fws_data_ctx *client_ctx,
 	struct fws_http_res *http_res,
 	s64 size,
 	const struct fws_http_req *http_req
@@ -256,7 +268,7 @@ out:
 	return ret;
 }
 
-s32 net_443_err_write(const struct fws_data_ctx *client_ctx, s32 code) {
+s32 net_443_err_write(struct fws_data_ctx *client_ctx, s32 code) {
 	struct http_msg { s32 code; char *msg; };
 	static const struct http_msg http_msg[] = {
 		{.code = 500, .msg = "Internal Server Error"}, /* default */

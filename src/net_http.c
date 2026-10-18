@@ -159,7 +159,7 @@ void net_http_path_redir(
 	struct fws_http_req *http_req,
 	const struct fws_conf *conf,
 	const struct fws_file *file,
-	const struct fws_data_ctx *client_ctx
+	struct fws_data_ctx *client_ctx
 ) {
 	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\n"
 		"Location: https://%s%s\r\nContent-Length: 0\r\nConnection: keep-alive\r\n"

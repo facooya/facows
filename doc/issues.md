@@ -1,5 +1,4 @@
 # Issues
-- Fail to load, if access from external network
 
 ---
 
