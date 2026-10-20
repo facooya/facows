@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
 s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	SSL_CTX **ssl_ctx = (SSL_CTX **) ssl_ctx_opq;
@@ -56,28 +57,37 @@ s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
 			}
 		}
 
+		ERR_clear_error();
 		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
+
 		if (read_ret <= 0) {
-			if (errno == EAGAIN && read_ret < 0) {
-				break;
-			}
 			struct epoll_event ctl = {0};
 			const s32 err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
-				ctl.events = EPOLLIN | EPOLLET;
+				ctl.events = EPOLLIN;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
+				//printf("read(): READ ===\n");
 				break;
 			} else if (err_code == SSL_ERROR_WANT_WRITE) {
-				ctl.events = EPOLLOUT | EPOLLET;
+				ctl.events = EPOLLOUT;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
+				//printf("read(): WRITE ===\n");
 				break;
+
+			} else if (err_code == SSL_ERROR_SYSCALL) {
+				//printf("read(): syscall ===\n");
+				return -1;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
+				//printf("read(): zero_return ===\n");
 				if (total_read_size != 0) {
 					return -400;
 				}
-				break;
+				return -1;
+			} else if (err_code == SSL_ERROR_SSL) {
+				//printf("read(): error_ssl ===\n");
+				return -1;
 			}
 			return -500;
 		}
@@ -110,6 +120,7 @@ s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) 
 			break;
 		}
 
+		ERR_clear_error();
 		write_ret = SSL_write(ssl, src_buf+acc_write_size, buf_size-acc_write_size);
 
 		/* Error */
@@ -117,23 +128,29 @@ s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) 
 			const s32 err_code = SSL_get_error(ssl, write_ret);
 			struct epoll_event ctl = {0};
 			if (err_code == SSL_ERROR_WANT_WRITE) {
-				ctl.events = EPOLLOUT | EPOLLET;
+				ctl.events = EPOLLOUT;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
+				//printf("WRITE ===\n");
 				break;
 			} else if (err_code == SSL_ERROR_WANT_READ) {
-				ctl.events = EPOLLIN | EPOLLET;
+				ctl.events = EPOLLIN;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
+				//printf("READ ===\n");
 				break;
+
+			} else if (err_code == SSL_ERROR_SYSCALL) {
+				//printf("SSL_ERROR_SYSCALL ===\n");
+				return -1;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
 				if (acc_write_size != 0) {
 					return -1;
 				}
-				break;
-			}
-			if (errno == EAGAIN && write_ret < 0) {
-				break;
+				return -1;
+			} else if (err_code == SSL_ERROR_SSL) {
+				//printf("SSL_ERROR_SSL ===\n");
+				return -1;
 			}
 			return -1;
 		}

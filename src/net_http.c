@@ -318,7 +318,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							return 1;
 						}
 
-						const u64 os_max = sizeof(((struct fws_http_req*)0)->os);
+						const u64 os_max = sizeof(((struct fws_http_req *) nullptr)->os);
 						const char *p3 = nullptr;
 						const char *p4 = nullptr;
 						s32 flag = 0;
@@ -352,7 +352,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							memcpy(http_req->os, "-", sizeof("-"));
 						}
 
-						const u64 browser_max = sizeof(((struct fws_http_req*)0)->browser);
+						const u64 browser_max = sizeof(((struct fws_http_req *) nullptr)->browser);
 						flag = 0;
 						for (u64 i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
 							p3 = p1;
