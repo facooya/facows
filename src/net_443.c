@@ -59,6 +59,7 @@ s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
 
 		ERR_clear_error();
 		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
+		//printf("=== DST: %s\n", dst_buf);
 
 		if (read_ret <= 0) {
 			struct epoll_event ctl = {0};
@@ -179,6 +180,7 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	if (client_ctx->file_len > 0) {
 		read_acc_size = client_ctx->file_len;
 	}
+	//printf("acc_size: %ld\n", read_acc_size);
 	ret = lseek(fd, read_acc_size, SEEK_SET);
 	if (ret < 0) {
 		fprintf(stderr, "net_443_file_write(): lseek(): error\n");
@@ -195,6 +197,7 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 		read_acc_size += read_size;
 	}
 
+	client_ctx->file_len = 0;
 	ret = 0;
 out:
 	if (fd >= 0) {

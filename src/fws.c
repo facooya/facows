@@ -266,6 +266,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			if (data_ctx_p->ssl_ctx_opq_p == nullptr) {
 				ret = _fws_80_run(data_ctx_p);
 			} else {
+				//printf("EVENT: %d, IDX: %d\n", fws_event[i].events, i);
 				ret = _fws_443_run(data_ctx_p);
 			}
 		}
@@ -622,6 +623,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		if (ret < 0) {
 			log_flag |= (1 << logRead);
 			ret = -1;
+			goto out;
+		} else if (ret == 0) {
+			ret = 1;
 			goto out;
 		}
 
