@@ -266,7 +266,7 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 			if (data_ctx_p->ssl_ctx_opq_p == nullptr) {
 				ret = _fws_80_run(data_ctx_p);
 			} else {
-				//printf("EVENT: %d, IDX: %d\n", fws_event[i].events, i);
+				printf("EVENT: %d, IDX: %d, FD: %d\n", fws_event[i].events, i, data_ctx_p->fd);
 				ret = _fws_443_run(data_ctx_p);
 			}
 		}
@@ -621,6 +621,8 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		char req_buf[8192] = {0};
 		ret = net_443_read(data_ctx_p, req_buf, sizeof(req_buf));
 		if (ret < 0) {
+			data_ctx_p->want_write = 0;
+			data_ctx_p->file_len = 0;
 			log_flag |= (1 << logRead);
 			ret = -1;
 			goto out;
@@ -670,6 +672,9 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		if (ret == 0) {
 			is_html = true;
 		}
+
+		/* TODO: debug */
+		memcpy(data_ctx_p->file_path, file.path, strlen(file.path)+1);
 
 		struct fws_nft *nft_arr = data_ctx_p->nft_arr_p;
 
@@ -737,6 +742,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		} else {
 			struct fws_http_res http_res = {0};
 			net_http_res_build(conf_p, &http_res, file.path, sizeof(file.path));
+
 			if (http_req.origin[0] != '\0') {
 				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);
 			}
@@ -749,16 +755,11 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				goto out;
 			}
 write:
-			u64 file_path_n = sizeof(((struct fws_data_ctx *) nullptr)->file_path);
 			data_ctx_p->want_write = 0;
-			if (memcmp(file.path, "\0", 1) == 0) {
-				memcpy(file.path, data_ctx_p->file_path, strnlen(data_ctx_p->file_path, file_path_n));
-			}
-			//printf("=== FILE: %s\n", file.path);
-			ret = net_443_file_write(data_ctx_p, file.path);
+			printf("=== FILE1: %s\n=== FILE2: %s\n", data_ctx_p->file_path, file.path);
+			ret = net_443_file_write(data_ctx_p, data_ctx_p->file_path);
 			if (ret == 1) {
 				data_ctx_p->want_write = 1;
-				memcpy(data_ctx_p->file_path, file.path, strnlen(file.path, file_path_n));
 				ret = 1;
 				goto out;
 			}
@@ -788,6 +789,9 @@ out:
 			close(data_ctx_p->fd);
 			data_ctx_p->fd = -1;
 		}
+		/* TODO: temporary */
+		printf("ret: %d\n", ret);
+		memset(data_ctx_p, 0, sizeof(struct fws_data_ctx));
 
 		free(data_ctx_p);
 		data_ctx_p = nullptr;

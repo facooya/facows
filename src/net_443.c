@@ -36,7 +36,6 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 
 	SSL_CTX_set_session_cache_mode(*ssl_ctx, SSL_SESS_CACHE_OFF);
 	SSL_CTX_set_options(*ssl_ctx, SSL_OP_ENABLE_KTLS);
-	SSL_CTX_set_mode(*ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER | SSL_MODE_ENABLE_PARTIAL_WRITE);
 	return 0;
 }
 
@@ -59,7 +58,28 @@ s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
 
 		ERR_clear_error();
 		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
-		//printf("=== DST: %s\n", dst_buf);
+		/* TODO: debug */
+		char tmp_buf[512] = {0};
+		if (dst_buf[0] != 0) {
+			char *p_end = memchr(dst_buf, '\r', sizeof(tmp_buf)-1);
+			if (p_end == nullptr) {
+				printf("!!! read(): p_end: null\n");
+				goto skip;
+			}
+			s32 n = p_end - dst_buf;
+			char *p_start = memchr(dst_buf, ' ', n);
+			if (p_start == nullptr) {
+				printf("!!! read(): p_start: null\n");
+				goto skip;
+			}
+			p_start++;
+			n = p_end - p_start;
+			memcpy(tmp_buf, p_start, n);
+			printf("=== DST: %s\n", tmp_buf);
+		} else {
+			printf("=== DST: NULL\n");
+		}
+skip:
 
 		if (read_ret <= 0) {
 			struct epoll_event ctl = {0};
@@ -68,26 +88,26 @@ s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
 				ctl.events = EPOLLIN;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				//printf("read(): READ ===\n");
+				printf("read(): READ ===\n");
 				break;
 			} else if (err_code == SSL_ERROR_WANT_WRITE) {
 				ctl.events = EPOLLOUT;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				//printf("read(): WRITE ===\n");
+				printf("read(): WRITE ===\n");
 				break;
 
 			} else if (err_code == SSL_ERROR_SYSCALL) {
-				//printf("read(): syscall ===\n");
+				printf("read(): syscall ===\n");
 				return -1;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-				//printf("read(): zero_return ===\n");
+				printf("read(): zero_return ===\n");
 				if (total_read_size != 0) {
 					return -400;
 				}
 				return -1;
 			} else if (err_code == SSL_ERROR_SSL) {
-				//printf("read(): error_ssl ===\n");
+				printf("read(): error_ssl ===\n");
 				return -1;
 			}
 			return -500;
@@ -132,17 +152,17 @@ s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) 
 				ctl.events = EPOLLOUT;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				//printf("WRITE ===\n");
+				printf("WRITE ===\n");
 				break;
 			} else if (err_code == SSL_ERROR_WANT_READ) {
 				ctl.events = EPOLLIN;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				//printf("READ ===\n");
+				printf("READ ===\n");
 				break;
 
 			} else if (err_code == SSL_ERROR_SYSCALL) {
-				//printf("SSL_ERROR_SYSCALL ===\n");
+				printf("SSL_ERROR_SYSCALL ===\n");
 				return -1;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
 				if (acc_write_size != 0) {
@@ -150,7 +170,7 @@ s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) 
 				}
 				return -1;
 			} else if (err_code == SSL_ERROR_SSL) {
-				//printf("SSL_ERROR_SSL ===\n");
+				printf("SSL_ERROR_SSL ===\n");
 				return -1;
 			}
 			return -1;
@@ -170,6 +190,7 @@ s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) 
 s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	s32 ret = 0;
 
+	printf("=== OPEN1: %s\n", path);
 	s32 fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		ret = -1;
@@ -180,7 +201,7 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	if (client_ctx->file_len > 0) {
 		read_acc_size = client_ctx->file_len;
 	}
-	//printf("acc_size: %ld\n", read_acc_size);
+	printf("acc_size: %ld, FD: %d\n", read_acc_size, client_ctx->fd);
 	ret = lseek(fd, read_acc_size, SEEK_SET);
 	if (ret < 0) {
 		fprintf(stderr, "net_443_file_write(): lseek(): error\n");
@@ -189,17 +210,25 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	}
 	while ((read_size = read(fd, client_ctx->file_buf, 4096)) > 0) {
 		ret = net_443_write(client_ctx, client_ctx->file_buf, read_size);
-		if (ret <= 0) {
+		if (ret == 0) {
+			printf("file_write(): 0: continue\n");
 			client_ctx->file_len = read_acc_size;
 			ret = 1;
+			goto out;
+		} else if (ret < 0) {
+			printf("file_write(): -1: initial\n");
+			client_ctx->file_len = 0;
+			ret = -1;
 			goto out;
 		}
 		read_acc_size += read_size;
 	}
 
+	printf("file_write(): 0: initial\n");
 	client_ctx->file_len = 0;
 	ret = 0;
 out:
+	printf("acc_size: %d, FD: %d\n", client_ctx->file_len, client_ctx->fd);
 	if (fd >= 0) {
 		close(fd);
 		fd = -1;
