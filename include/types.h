@@ -11,6 +11,8 @@
 struct fws_data_ctx {
 	s32 file_len;
 	char file_buf[4096];
+	char req_buf[8192];
+	s32 acc_read_n;
 	s32 want_write;
 	s32 fd;
 	s32 write_fd;

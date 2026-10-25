@@ -618,8 +618,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			goto write;
 		}
 		static const char html_ext_str[] = ".html";
-		char req_buf[8192] = {0};
-		ret = net_443_read(data_ctx_p, req_buf, sizeof(req_buf));
+		ret = net_443_read(data_ctx_p);
 		if (ret < 0) {
 			data_ctx_p->want_write = 0;
 			data_ctx_p->file_len = 0;
@@ -631,7 +630,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			goto out;
 		}
 
-		ret = net_http_req_parse(req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
+		ret = net_http_req_parse(data_ctx_p->req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
 		if (ret != 0) {
 			log_flag |= (1 << logReqParse);
 			ret = -1;

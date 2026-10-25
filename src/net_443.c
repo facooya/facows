@@ -39,88 +39,77 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config) {
 	return 0;
 }
 
-s32 net_443_read(struct fws_data_ctx *client_ctx, char *dst_buf, u64 buf_size) {
+s32 net_443_read(struct fws_data_ctx *client_ctx) {
+	constexpr u64 buf_n = sizeof(((struct fws_data_ctx*)nullptr)->req_buf);
 	SSL *ssl = (SSL *) client_ctx->ssl_opq_p;
-	_Atomic s32 *sig_flag_p = (_Atomic s32 *) client_ctx->sig_flag_opq_p;
-	s32 total_read_size = 0;
-	s32 read_ret = 0;
 	s32 ret = -1;
+	s32 err_code = 0;
 
+	struct epoll_event ctl = {0};
+	u64 acc_read_n = 0;
+	if (client_ctx->acc_read_n != 0) {
+		acc_read_n = client_ctx->acc_read_n;
+	}
 	while (true) {
-		if (SSL_pending(ssl) > 0) {
-			ret = 1;
-		} else {
-			bool sig_cond = (*sig_flag_p == SIGINT) || (*sig_flag_p == SIGTERM);
-			if (ret < 0 && sig_cond) {
-				break;
-			}
-		}
-
 		ERR_clear_error();
-		read_ret = SSL_read(ssl, dst_buf+total_read_size, buf_size-total_read_size-1);
-		/* TODO: debug */
-		char tmp_buf[512] = {0};
-		if (dst_buf[0] != 0) {
-			char *p_end = memchr(dst_buf, '\r', sizeof(tmp_buf)-1);
-			if (p_end == nullptr) {
-				printf("!!! read(): p_end: null\n");
-				goto skip;
-			}
-			s32 n = p_end - dst_buf;
-			char *p_start = memchr(dst_buf, ' ', n);
-			if (p_start == nullptr) {
-				printf("!!! read(): p_start: null\n");
-				goto skip;
-			}
-			p_start++;
-			n = p_end - p_start;
-			memcpy(tmp_buf, p_start, n);
-			printf("=== DST: %s\n", tmp_buf);
-		} else {
-			printf("=== DST: NULL\n");
-		}
-skip:
+		const s32 read_ret = SSL_read(ssl, client_ctx->req_buf+acc_read_n, buf_n-acc_read_n-1);
 
 		if (read_ret <= 0) {
-			struct epoll_event ctl = {0};
-			const s32 err_code = SSL_get_error(ssl, read_ret);
+			err_code = SSL_get_error(ssl, read_ret);
 			if (err_code == SSL_ERROR_WANT_READ) {
 				ctl.events = EPOLLIN;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				printf("read(): READ ===\n");
+				client_ctx->acc_read_n = acc_read_n;
 				break;
 			} else if (err_code == SSL_ERROR_WANT_WRITE) {
 				ctl.events = EPOLLOUT;
 				ctl.data.ptr = (void *) client_ctx;
 				epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
-				printf("read(): WRITE ===\n");
+				client_ctx->acc_read_n = acc_read_n;
 				break;
 
 			} else if (err_code == SSL_ERROR_SYSCALL) {
-				printf("read(): syscall ===\n");
-				return -1;
+				ret = -1;
+				goto out;
 			} else if (err_code == SSL_ERROR_ZERO_RETURN) {
-				printf("read(): zero_return ===\n");
-				if (total_read_size != 0) {
-					return -400;
-				}
-				return -1;
+				ret = -1;
+				goto out;
 			} else if (err_code == SSL_ERROR_SSL) {
-				printf("read(): error_ssl ===\n");
-				return -1;
+				ret = -1;
+				goto out;
 			}
-			return -500;
+			ret = -1;
+			goto out;
 		}
 
-		total_read_size += read_ret;
-		if (total_read_size >= 4095) {
-			return -431;
-		} else if (memmem(dst_buf, total_read_size, "\r\n\r\n", sizeof("\r\n\r\n")-1) != nullptr) {
-			return 1;
+		acc_read_n += read_ret;
+		if (acc_read_n >= buf_n-1) {
+			ret = -431;
+			goto out;
+		}
+
+		char *end_ret = memmem(client_ctx->req_buf, acc_read_n, "\r\n\r\n", sizeof("\r\n\r\n")-1);
+		if (end_ret != nullptr) {
+			/* TODO: SSL_pending() */
+			client_ctx->req_buf[acc_read_n] = '\0';
+			client_ctx->acc_read_n = 0;
+			ret = 1;
+			goto out;
 		}
 	}
-	return 0;
+
+	ret = 0;
+out:
+	if (err_code != SSL_ERROR_WANT_WRITE) {
+		ctl.events = EPOLLIN;
+		ctl.data.ptr = (void *) client_ctx;
+		epoll_ctl(client_ctx->epfd, EPOLL_CTL_MOD, client_ctx->fd, &ctl);
+	}
+	if (ret < 0) {
+		client_ctx->acc_read_n = 0;
+	}
+	return ret;
 }
 
 s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size) {
