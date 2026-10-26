@@ -196,6 +196,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				if (ret < 0) {
 					close(client_http_fd);
 					client_http_fd = -1;
+					free(ctl_data_ctx_p);
+					ctl_data_ctx_p = nullptr;
 					break;
 				}
 				continue;
@@ -243,6 +245,8 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				if (ret < 0) {
 					close(client_fd);
 					client_fd = -1;
+					free(ctl_data_ctx_p);
+					ctl_data_ctx_p = nullptr;
 					break;
 				}
 				continue;
@@ -264,9 +268,11 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 
 			/* SECTION: Client */
 			if (data_ctx_p->ssl_ctx_opq_p == nullptr) {
+				client_http_fd = -1;
 				ret = _fws_80_run(data_ctx_p);
 			} else {
 				printf("EVENT: %d, IDX: %d, FD: %d\n", fws_event[i].events, i, data_ctx_p->fd);
+				client_fd = -1;
 				ret = _fws_443_run(data_ctx_p);
 			}
 		}
@@ -299,6 +305,10 @@ out:
 	if (server_https_fd >= 0) {
 		close(server_https_fd);
 		server_https_fd = -1;
+	}
+	if (fws_epfd >= 0) {
+		close(fws_epfd);
+		fws_epfd = -1;
 	}
 	if (child_ctx_p->pipe_read_fd >= 0) {
 		close(child_ctx_p->pipe_read_fd);
@@ -755,7 +765,6 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			}
 write:
 			data_ctx_p->want_write = 0;
-			printf("=== FILE1: %s\n=== FILE2: %s\n", data_ctx_p->file_path, file.path);
 			ret = net_443_file_write(data_ctx_p, data_ctx_p->file_path);
 			if (ret == 1) {
 				data_ctx_p->want_write = 1;
@@ -788,9 +797,6 @@ out:
 			close(data_ctx_p->fd);
 			data_ctx_p->fd = -1;
 		}
-		/* TODO: temporary */
-		printf("ret: %d\n", ret);
-		memset(data_ctx_p, 0, sizeof(struct fws_data_ctx));
 
 		free(data_ctx_p);
 		data_ctx_p = nullptr;
