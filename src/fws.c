@@ -524,6 +524,7 @@ out:
 }
 
 static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
+	enum ssl_stat {SSL_STATUS_NEW, SSL_STATUS_INIT, SSL_STATUS_ACCEPT, SSL_STATUS_WANT_READ, SSL_STATUS_WANT_WRITE};
 	static constexpr u32 logSSL = 0;
 	static constexpr u32 logKTLS = 1;
 	static constexpr u32 logRead = 2;
@@ -532,9 +533,8 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	static constexpr u32 logErrSyscall = 5;
 	static constexpr u8 empty_ip_buf[16] = {0};
 	SSL *ssl = nullptr;
-	bool need_ssl_shutdown = false;
 	s32 ret = 0;
-	u32 log_flag = 0; /* ssl, ktls, read, req parse */
+	u32 log_flag = 0;
 
 	struct epoll_event ctl = {0};
 
@@ -553,7 +553,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	memset(log_buf, 0, sizeof(log_buf));
 	u32 log_acc = snprintf(log_buf, sizeof(log_buf), "%d%s %s", 2, ip_buf, time_buf);
 
-	if (data_ctx_p->ssl_status == 0) {
+	if (data_ctx_p->ssl_status == SSL_STATUS_NEW) {
 		SSL_CTX *ssl_ctx_p = (SSL_CTX *) data_ctx_p->ssl_ctx_opq_p;
 		ssl = SSL_new(ssl_ctx_p);
 		if (ssl == nullptr) {
@@ -573,21 +573,21 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		ssl = (SSL *) data_ctx_p->ssl_opq_p;
 	}
 
-	if (data_ctx_p->ssl_status != 10) {
+	if (data_ctx_p->ssl_status != SSL_STATUS_ACCEPT) {
 		ERR_clear_error();
 		ret = SSL_accept(ssl);
 		if (ret <= 0) {
 			s32 ssl_err = SSL_get_error(ssl, ret);
 			if (ssl_err == SSL_ERROR_WANT_READ) {
 				ctl.events = EPOLLIN;
-				data_ctx_p->ssl_status = ssl_err;
+				data_ctx_p->ssl_status = SSL_STATUS_WANT_READ;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
 				return ssl_err;
 
 			} else if (ssl_err == SSL_ERROR_WANT_WRITE) {
 				ctl.events = EPOLLOUT;
-				data_ctx_p->ssl_status = ssl_err;
+				data_ctx_p->ssl_status = SSL_STATUS_WANT_WRITE;
 				ctl.data.ptr = data_ctx_p;
 				epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
 				return ssl_err;
@@ -599,15 +599,14 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			} else if (ssl_err == SSL_ERROR_SYSCALL) {
 				log_flag |= (1 << logErrSyscall);
 			}
-			data_ctx_p->ssl_status = 11;
+			data_ctx_p->ssl_status = SSL_STATUS_INIT;
 			ret = -1;
 			goto out;
 		}
 		ctl.events = EPOLLIN;
-		data_ctx_p->ssl_status = 10;
+		data_ctx_p->ssl_status = SSL_STATUS_ACCEPT;
 		ctl.data.ptr = data_ctx_p;
 		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
-		need_ssl_shutdown = true;
 	}
 
 	/* Check for supporting 'kTLS'. */
@@ -777,7 +776,7 @@ write:
 
 	ret = 0;
 out:
-	if (data_ctx_p->ssl_status == 10 || data_ctx_p->ssl_status == 11) {
+	if (data_ctx_p->ssl_status == SSL_STATUS_ACCEPT) {
 		if (log_acc > sizeof(log_buf)-1) {
 			fprintf(stderr, "_fws_443_run(): error: first log too big, fail to record\n");
 		} else {
@@ -795,7 +794,7 @@ out:
 	if (ret <= 0) {
 		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_DEL, data_ctx_p->fd, nullptr);
 
-		if (need_ssl_shutdown) {
+		if (data_ctx_p->ssl_status == SSL_STATUS_ACCEPT) {
 			SSL_shutdown(ssl);
 		}
 
