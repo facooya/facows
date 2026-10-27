@@ -19,7 +19,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 //static s32 _err_check(const struct fws_http_req *http_req);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
-	constexpr u64 req_max = 8192;
+	constexpr u64 req_max = sizeof(((struct fws_data_ctx*)nullptr)->req_buf);
 	memset(http_req, 0, sizeof(struct fws_http_req));
 	_line_parse(req_buf, http_req);
 	_uri_parse(http_req);

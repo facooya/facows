@@ -550,7 +550,8 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", &tm);
 
 	char log_buf[1024] = {0};
-	s32 log_acc = snprintf(log_buf, sizeof(log_buf), "%d%s %s", 2, ip_buf, time_buf);
+	memset(log_buf, 0, sizeof(log_buf));
+	u32 log_acc = snprintf(log_buf, sizeof(log_buf), "%d%s %s", 2, ip_buf, time_buf);
 
 	if (data_ctx_p->ssl_status == 0) {
 		SSL_CTX *ssl_ctx_p = (SSL_CTX *) data_ctx_p->ssl_ctx_opq_p;
@@ -777,10 +778,18 @@ write:
 	ret = 0;
 out:
 	if (data_ctx_p->ssl_status == 10 || data_ctx_p->ssl_status == 11) {
-		log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, " %02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
+		if (log_acc > sizeof(log_buf)-1) {
+			fprintf(stderr, "_fws_443_run(): error: first log too big, fail to record\n");
+		} else {
+			log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, "%02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
+		}
 
-		log_buf[log_acc] = '\0';
-		write(data_ctx_p->write_fd, log_buf, log_acc+1);
+		if (log_acc > sizeof(log_buf)-1) {
+			fprintf(stderr, "_fws_443_run(): error: log too big, fail to record\n");
+		} else {
+			log_buf[log_acc] = '\0';
+			write(data_ctx_p->write_fd, log_buf, log_acc+1);
+		}
 	}
 
 	if (ret <= 0) {
