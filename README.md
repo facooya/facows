@@ -7,26 +7,24 @@ Site of use `Facows`: `dev.facooya.com`.
 - Only SSL, must have SSL certificate and private key.
 - Not support PHP, only static files.
 - Only HTTP `1.1`.
-- Using `poll`.
-- Only html extendsion for clean url, but forced.
+- Only HTML extendsion for clean URL, but forced.
 - Not support upload/download for large files.
 - If subdomain `abc`, must directory name is `/WEB_ROOT/abc`.
 
 **Features**
 - Support configuration file.
 - Support regist to system daemon.
-- If NFT true in conf file, ip ban of dos or flood attack.
-- URL redirect from http to https.
-- Redirect html extenstion for clean url.
+- If NFT true in configuration file, IP ban by DoS or flood attack.
+- URL redirect from HTTP to HTTPS.
+- Redirect HTML extenstion for clean URL.
 
 **Implementations**
-- The `poll`.
-- - Must upgrade will `epoll`, may upgrade will `io_uring`.
+- The `epoll`, level trigger mode.
 - Kernel TLS, The `kTLS`.
 - - If fail kernel TLS, convert to user-space TLS.
 
 ### Default Path
-- Web root: `/var/www/facows/`
+- Web root: `/srv/facows/`
 - Log: `/var/log/facows/`
 - Configure: `/etc/facows/`
 
@@ -59,6 +57,9 @@ lsmod | grep tls
 
 # Enable
 sudo modprobe tls
+
+# Disable
+sudo modprobe -r tls
 ```
 
 ### Quick Start
@@ -76,7 +77,6 @@ sudo make install
 > Enable `ALLOW_PORTS` and write allow port in `/etc/facows/facows.conf`.
 
 Modifiy `/etc/facows/facows.conf` domain and SSL path.  
-- Log not support yet.
 
 **Execute**
 Manual:
@@ -90,11 +90,18 @@ sudo systemctl enable facows
 sudo systemctl start facows
 ```
 
+Test:  
+Test mode is open ports for test. That means, isolated the main server ports.
+Configuration path for test is `/etc/facows/facows_test.conf`.
+```sh
+sudo ./build/facows test
+```
+
 **Exit**
 Manual:
 Program exit `ctrl + c` or `kill PID`.  
 > [!WARNING]
-> Must not `kill -9 PID`. If already used and `NFT true` in `/etc/facows/facows.conf`, try `sudo nft table delete netdev facows; sudo nft table delete inet facows` for network.
+> Should not `kill -9 PID`. If already used and `NFT true` in `/etc/facows/facows.conf`, try `sudo nft table delete netdev facows; sudo nft table delete inet facows` for network.
 
 System daemon:
 ```sh
@@ -113,7 +120,8 @@ Manual path:
 
 /etc/facows/ # For configuration to 'Facows'.
 /usr/share/facows/ # For error pages.
-/var/www/facows/ # For example pages.
+/srv/facows/ # For example pages.
+/var/log/facows/ # For log.
 ```
 
 **Upgrade**
