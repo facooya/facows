@@ -34,17 +34,13 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 
 s32 net_http_res_build(
 	const struct fws_conf *conf_p,
+	const struct tm *fws_time,
 	struct fws_http_res *http_res,
 	const char *path,
 	u64 path_n
 ) {
 	memset(http_res, 0, sizeof(struct fws_http_res));
-
-	time_t raw_time;
-	time(&raw_time);
-	struct tm tm;
-	gmtime_r(&raw_time, &tm);
-	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", &tm);
+	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", fws_time);
 
 	http_res->code = 200;
 	http_res->connection = 0;

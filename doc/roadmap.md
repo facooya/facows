@@ -5,7 +5,6 @@
 ## ETC
 - Add configuration for kTLS turn on/off.
 - Add header for cache.
-- Optimize time record and get client IP.
 
 ---
 

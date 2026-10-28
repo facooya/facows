@@ -536,18 +536,21 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	s32 ret = 0;
 	u32 log_flag = 0;
 
-	struct epoll_event ctl = {0};
-
 	const u8 *client_ip_buf = data_ctx_p->client_ip_buf;
 	char ip_buf[INET6_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET6, client_ip_buf, ip_buf, INET6_ADDRSTRLEN);
 
 	time_t raw_time = {0};
+	struct tm *fws_time = nullptr;
 	time(&raw_time);
-	struct tm tm = {0};
-	gmtime_r(&raw_time, &tm);
+	fws_time = gmtime(&raw_time);
+	if (fws_time == nullptr) {
+		fprintf(stderr, "_fws_443_run(): gmtime(): return nullptr\n");
+		ret = -1;
+		goto out;
+	}
 	char time_buf[16] = {0};
-	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", &tm);
+	strftime(time_buf, sizeof(time_buf), "%Y%m%d%H%M%S", fws_time);
 
 	char log_buf[1024] = {0};
 	memset(log_buf, 0, sizeof(log_buf));
@@ -574,6 +577,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 	}
 
 	if (data_ctx_p->ssl_status != SSL_STATUS_ACCEPT) {
+		struct epoll_event ctl = {0};
 		ERR_clear_error();
 		ret = SSL_accept(ssl);
 		if (ret <= 0) {
@@ -750,7 +754,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 
 		} else {
 			struct fws_http_res http_res = {0};
-			net_http_res_build(conf_p, &http_res, file.path, sizeof(file.path));
+			net_http_res_build(conf_p, fws_time,  &http_res, file.path, sizeof(file.path));
 
 			if (http_req.origin[0] != '\0') {
 				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);

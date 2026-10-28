@@ -9,6 +9,7 @@
 #include "factype.h"
 
 struct nft_ctx;
+struct tm;
 
 s32 net_server_init(u16 port);
 void net_host_build(char *host_buf, const struct fws_http_req *http_req, const struct fws_conf *conf);
@@ -29,6 +30,7 @@ s32 net_443_err_write(struct fws_data_ctx *client_ctx, s32 code);
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
 s32 net_http_res_build(
 	const struct fws_conf *conf_p,
+	const struct tm *fws_time,
 	struct fws_http_res *http_res,
 	const char *path,
 	u64 path_n
