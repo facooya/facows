@@ -35,6 +35,7 @@ enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T, MIME_T};
 	X(WEB_LOG, web_log, CHAR_T) \
 	X(SSL_CERT, ssl_cert, CHAR_T) \
 	X(SSL_KEY, ssl_key, CHAR_T) \
+	X(KERNEL_TLS, use_ktls, BOOL_T) \
 	X(HSTS, use_hsts, BOOL_T) \
 	X(HSTS_MAX_AGE, hsts_max_age, U32_T) \
 	X(MIME, mime, MIME_T) \

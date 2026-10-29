@@ -3,7 +3,6 @@
 - Record bad log.
 
 ## ETC
-- Add configuration for kTLS turn on/off.
 - Add header for cache.
 
 ---

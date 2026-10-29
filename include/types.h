@@ -49,6 +49,7 @@ struct fws_conf {
 
 	bool use_nft;
 	bool use_hsts;
+	bool use_ktls;
 	bool test_mode;
 
 	char allow_ports[128];

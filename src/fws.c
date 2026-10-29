@@ -613,19 +613,20 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		epoll_ctl(data_ctx_p->epfd, EPOLL_CTL_MOD, data_ctx_p->fd, &ctl);
 	}
 
-	/* Check for supporting 'kTLS'. */
-	BIO *bio = SSL_get_wbio(ssl);
-	bool is_ktls = (bool) (bio != nullptr && BIO_get_ktls_send(bio) == 1);
-	if (!is_ktls) {
-		log_flag |= (1 << logKTLS);
-	}
-	bio = SSL_get_rbio(ssl);
-	is_ktls = (bool) (bio != nullptr && BIO_get_ktls_recv(bio) == 1);
-	if (!is_ktls) {
-		log_flag |= (1 << logKTLS);
+	const struct fws_conf *conf_p = data_ctx_p->conf_p;
+	if (conf_p->use_ktls) {
+		BIO *bio = SSL_get_wbio(ssl);
+		bool is_ktls = (bool) (bio != nullptr && BIO_get_ktls_send(bio) == 1);
+		if (!is_ktls) {
+			log_flag |= (1 << logKTLS);
+		}
+		bio = SSL_get_rbio(ssl);
+		is_ktls = (bool) (bio != nullptr && BIO_get_ktls_recv(bio) == 1);
+		if (!is_ktls) {
+			log_flag |= (1 << logKTLS);
+		}
 	}
 
-	const struct fws_conf *conf_p = data_ctx_p->conf_p;
 	struct fws_http_req http_req = {0};
 	while (true) {
 		if (data_ctx_p->want_write == 1) {
