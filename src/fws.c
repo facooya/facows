@@ -679,19 +679,21 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		}
 
 		bool is_html = false;
-		u64 path_size = strnlen(file.path, sizeof(file.path));
-		char *path_p = file.path + path_size - (sizeof(html_ext_str) - 1);
+		u64 path_n = strnlen(file.path, sizeof(file.path));
+		if (path_n == sizeof(file.path) || path_n+1 > sizeof(file.path)) {
+			fprintf(stderr, "_fws_443_run(): error: file path too long\n");
+			ret = -1;
+			goto out;
+		}
+		char *path_p = file.path + path_n - (sizeof(html_ext_str) - 1);
 		ret = memcmp(path_p, html_ext_str, sizeof(html_ext_str));
 		if (ret == 0) {
 			is_html = true;
 		}
-
-		/* TODO: debug */
-		memcpy(data_ctx_p->file_path, file.path, strlen(file.path)+1);
-
-		struct fws_nft *nft_arr = data_ctx_p->nft_arr_p;
+		memcpy(data_ctx_p->file_path, file.path, path_n+1);
 
 		/* get nft_i */
+		struct fws_nft *nft_arr = data_ctx_p->nft_arr_p;
 		u32 nft_i = 0;
 		for (u64 i=0; i<nft_arr_cap; i++) {
 			s32 ip_cmp = memcmp(nft_arr[i].ip_buf, client_ip_buf, 16);
