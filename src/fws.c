@@ -271,7 +271,6 @@ void fws_child_run(struct fws_child_ctx *child_ctx_p) {
 				client_http_fd = -1;
 				ret = _fws_80_run(data_ctx_p);
 			} else {
-				printf("EVENT: %d, IDX: %d, FD: %d\n", fws_event[i].events, i, data_ctx_p->fd);
 				client_fd = -1;
 				ret = _fws_443_run(data_ctx_p);
 			}

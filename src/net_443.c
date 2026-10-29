@@ -166,10 +166,10 @@ out:
 }
 
 s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
-	s32 ret = 0;
+	s32 fd = -1;
+	s32 ret = -1;
 
-	printf("=== OPEN1: %s\n", path);
-	s32 fd = open(path, O_RDONLY);
+	fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		ret = -1;
 		goto out;
@@ -179,7 +179,6 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	if (client_ctx->file_len > 0) {
 		read_acc_size = client_ctx->file_len;
 	}
-	printf("acc_size: %ld, FD: %d\n", read_acc_size, client_ctx->fd);
 	ret = lseek(fd, read_acc_size, SEEK_SET);
 	if (ret < 0) {
 		fprintf(stderr, "net_443_file_write(): lseek(): error\n");
@@ -189,12 +188,10 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 	while ((read_size = read(fd, client_ctx->file_buf, 4096)) > 0) {
 		ret = net_443_write(client_ctx, client_ctx->file_buf, read_size);
 		if (ret == 0) {
-			printf("file_write(): 0: continue\n");
 			client_ctx->file_len = read_acc_size;
 			ret = 1;
 			goto out;
 		} else if (ret < 0) {
-			printf("file_write(): -1: initial\n");
 			client_ctx->file_len = 0;
 			ret = -1;
 			goto out;
@@ -202,11 +199,9 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 		read_acc_size += read_size;
 	}
 
-	printf("file_write(): 0: initial\n");
 	client_ctx->file_len = 0;
 	ret = 0;
 out:
-	printf("acc_size: %d, FD: %d\n", client_ctx->file_len, client_ctx->fd);
 	if (fd >= 0) {
 		close(fd);
 		fd = -1;
