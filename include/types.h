@@ -43,6 +43,7 @@ struct fws_conf {
 	u32 ban_time;
 	u32 ban_lim;
 	u32 hsts_max_age;
+	u32 cache_max_age;
 	u32 lim_swap_time;
 	u32 lim_page;
 	u32 lim_res;

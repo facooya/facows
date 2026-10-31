@@ -218,11 +218,11 @@ s32 net_443_res_write(
 	static const char http_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
 		"Date: %s\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\n";
+		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\nCache-Control: max-age=%u\r\n";
 	static const char http_hsts_res_fmt[] =
 		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
 		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n\r\n";
+		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\nCache-Control: max-age=%u\r\n\r\n";
 	static const char acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n\r\n";
 
 	u64 n = 0;
@@ -239,7 +239,8 @@ s32 net_443_res_write(
 			http_res->content,
 			size,
 			http_res->date,
-			http_res->hsts_max_age
+			http_res->hsts_max_age,
+			client_ctx->conf_p->cache_max_age
 		);
 	} else {
 		ret = snprintf(
@@ -248,7 +249,8 @@ s32 net_443_res_write(
 			http_res_fmt,
 			http_res->content,
 			size,
-			http_res->date
+			http_res->date,
+			client_ctx->conf_p->cache_max_age
 		);
 	}
 	if (ret < 0) {

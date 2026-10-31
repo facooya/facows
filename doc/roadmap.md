@@ -2,8 +2,9 @@
 ## Log
 - Record bad log.
 
-## ETC
-- Add header for cache.
+## Cache
+- ETag.
+- Separate cache for file type.
 
 ---
 
