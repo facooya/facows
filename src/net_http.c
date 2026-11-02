@@ -52,7 +52,6 @@ s32 net_http_res_build(
 		fprintf(stderr, "net_http_res_build(): _get_etag(): etag: null\n");
 		return -1;
 	}
-	printf("ETAG: %s, %d\n", http_res->etag, etag_ret);
 	if (etag_ret == 304) {
 		http_res->code = 304;
 		return 304;
@@ -424,9 +423,19 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						break;
 
 					case ETAG:
-						memcpy(http_req->etag, p1, n);
-						http_req->etag[n] = '\0';
-						printf("%s\n", http_req->etag);
+						/* TODO: exception catch */
+						const char *p_etag_start = p1;
+						if (*p_etag_start == '"') {
+							p_etag_start++;
+						}
+						const char *p_etag_end = memchr(p_etag_start, '"', n-1);
+						if (p_etag_end == nullptr) {
+							fprintf(stderr, "_header_parse(): ETAG: warning: stop parsing\n");
+							break;
+						}
+						const u64 etag_len = p_etag_end - p_etag_start;
+						memcpy(http_req->etag, p_etag_start, etag_len);
+						http_req->etag[etag_len] = '\0';
 						break;
 				}
 				break;
