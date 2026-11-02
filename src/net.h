@@ -31,6 +31,7 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 s32 net_http_res_build(
 	const struct fws_conf *conf_p,
 	const struct tm *fws_time,
+	const struct fws_http_req *http_req,
 	struct fws_http_res *http_res,
 	const char *path,
 	u64 path_n

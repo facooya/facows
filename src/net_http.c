@@ -11,12 +11,16 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <openssl/ssl.h>
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req);
 static void _uri_parse(struct fws_http_req *http_req);
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
 //static s32 _err_check(const struct fws_http_req *http_req);
+static s32 _get_etag(char *dst, const char *src, const char *path);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
 	constexpr u64 req_max = sizeof(((struct fws_data_ctx*)nullptr)->req_buf);
@@ -35,12 +39,24 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 s32 net_http_res_build(
 	const struct fws_conf *conf_p,
 	const struct tm *fws_time,
+	const struct fws_http_req *http_req,
 	struct fws_http_res *http_res,
 	const char *path,
 	u64 path_n
 ) {
 	memset(http_res, 0, sizeof(struct fws_http_res));
 	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", fws_time);
+
+	const s32 etag_ret = _get_etag(http_res->etag, http_req->etag, path);
+	if (etag_ret < 0) {
+		fprintf(stderr, "net_http_res_build(): _get_etag(): etag: null\n");
+		return -1;
+	}
+	printf("ETAG: %s, %d\n", http_res->etag, etag_ret);
+	if (etag_ret == 304) {
+		http_res->code = 304;
+		return 304;
+	}
 
 	http_res->code = 200;
 	http_res->connection = 0;
@@ -246,10 +262,10 @@ static void _uri_parse(struct fws_http_req *http_req) {
 }
 
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
+	enum key_idx {HOST, UA, AL, ORIGIN, ETAG};
 	constexpr u64 req_key_max = 64;
 	constexpr u64 req_value_max = 1024;
-	enum key_idx {HOST, UA, AL, ORIGIN};
-	static const char *const keyword[] = {"host", "user-agent", "accept-language", "origin"};
+	static const char *const keyword[] = {"host", "user-agent", "accept-language", "origin", "if-none-match"};
 
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, '\r', req_value_max);
@@ -406,6 +422,12 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						memcpy(http_req->origin, p1, n);
 						http_req->origin[n] = '\0';
 						break;
+
+					case ETAG:
+						memcpy(http_req->etag, p1, n);
+						http_req->etag[n] = '\0';
+						printf("%s\n", http_req->etag);
+						break;
 				}
 				break;
 			}
@@ -437,3 +459,46 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	}
 	return 0;
 }*/
+
+static s32 _get_etag(char *dst, const char *src, const char *path) {
+	constexpr u64 etag_n = sizeof(((struct fws_http_res*)nullptr)->etag);
+	s32 etag_fd = -1;
+	s32 ret = -1;
+
+	const u64 etag_len = strnlen(src, etag_n);
+	if (etag_len == etag_n) {
+		fprintf(stderr, "_get_etag(): strnlen(): failure\n");
+		ret = -1;
+		goto out;
+	}
+	etag_fd = open(path, O_RDONLY);
+	if (etag_fd < 0) {
+		fprintf(stderr, "_get_etag(): open(): failure\n");
+		ret = -1;
+		goto out;
+	}
+
+	struct stat etag_stat = {0};
+	const s32 stat_ret = fstat(etag_fd, &etag_stat);
+	if (stat_ret < 0) {
+		fprintf(stderr, "_get_etag(): fstat(): failure\n");
+		ret = -1;
+		goto out;
+	}
+	snprintf(dst, etag_n, "%lu_%lu", etag_stat.st_mtime, etag_stat.st_size);
+
+	const s32 cmp_ret = memcmp(dst, src, etag_len+1);
+	if (cmp_ret == 0) {
+		memcpy(dst, src, etag_len+1);
+		ret = 304;
+		goto out;
+	}
+
+	ret = 0;
+out:
+	if (etag_fd >= 0) {
+		close(etag_fd);
+		etag_fd = -1;
+	}
+	return ret;
+}

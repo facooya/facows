@@ -643,6 +643,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			ret = 1;
 			goto out;
 		}
+		printf("REQ: %s\n", data_ctx_p->req_buf);
 
 		ret = net_http_req_parse(data_ctx_p->req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
 		if (ret != 0) {
@@ -756,7 +757,7 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 
 		} else {
 			struct fws_http_res http_res = {0};
-			net_http_res_build(conf_p, fws_time,  &http_res, file.path, sizeof(file.path));
+			s32 res_ret = net_http_res_build(conf_p, fws_time,  &http_req, &http_res, file.path, sizeof(file.path));
 
 			if (http_req.origin[0] != '\0') {
 				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);
@@ -767,6 +768,11 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			ret = net_443_res_write(data_ctx_p, &http_res, file.size, &http_req);
 			if (ret != 0) {
 				ret = -1;
+				goto out;
+			}
+			/* TODO: test */
+			if (res_ret == 304) {
+				ret = 0;
 				goto out;
 			}
 write:

@@ -77,6 +77,7 @@ struct fws_http_res {
 	bool is_origin_self;
 	char content[64];
 	char date[32];
+	char etag[32];
 };
 
 struct fws_http_req {
@@ -86,6 +87,7 @@ struct fws_http_req {
 	char method[16];
 	char os[16];
 	char browser[16];
+	char etag[32];
 	char subdomain[64];
 	char origin[512];
 	char uri[4096];
