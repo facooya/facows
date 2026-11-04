@@ -770,7 +770,6 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 				ret = -1;
 				goto out;
 			}
-			/* TODO: test */
 			if (res_ret == 304) {
 				ret = 0;
 				goto out;

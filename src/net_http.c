@@ -423,10 +423,13 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						break;
 
 					case ETAG:
-						/* TODO: exception catch */
+						constexpr u64 etag_max = sizeof(((struct fws_http_req*)nullptr)->etag);
 						const char *p_etag_start = p1;
 						if (*p_etag_start == '"') {
 							p_etag_start++;
+						} else {
+							fprintf(stderr, "_header_parse(): ETAG: warning: not started by double quote\n");
+							break;
 						}
 						const char *p_etag_end = memchr(p_etag_start, '"', n-1);
 						if (p_etag_end == nullptr) {
@@ -434,6 +437,10 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							break;
 						}
 						const u64 etag_len = p_etag_end - p_etag_start;
+						if (etag_len >= etag_max) {
+							fprintf(stderr, "_header_parse(): ETAG: error: over the maximum length\n");
+							break;
+						}
 						memcpy(http_req->etag, p_etag_start, etag_len);
 						http_req->etag[etag_len] = '\0';
 						break;
