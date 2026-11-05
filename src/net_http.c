@@ -4,6 +4,7 @@
  */
 
 #include "factype.h"
+#include "facerr.h"
 #include "types.h"
 #include "net.h"
 
@@ -428,17 +429,17 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						if (*p_etag_start == '"') {
 							p_etag_start++;
 						} else {
-							fprintf(stderr, "_header_parse(): ETAG: warning: not started by double quote\n");
+							FAC_ERR(FAC_ERR_FORMAT);
 							break;
 						}
 						const char *p_etag_end = memchr(p_etag_start, '"', n-1);
 						if (p_etag_end == nullptr) {
-							fprintf(stderr, "_header_parse(): ETAG: warning: stop parsing\n");
+							FAC_ERR(FAC_ERR_NULL);
 							break;
 						}
 						const u64 etag_len = p_etag_end - p_etag_start;
 						if (etag_len >= etag_max) {
-							fprintf(stderr, "_header_parse(): ETAG: error: over the maximum length\n");
+							FAC_ERR(FAC_ERR_LIMIT);
 							break;
 						}
 						memcpy(http_req->etag, p_etag_start, etag_len);
