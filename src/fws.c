@@ -643,7 +643,6 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			ret = 1;
 			goto out;
 		}
-		printf("REQ: %s\n", data_ctx_p->req_buf);
 
 		ret = net_http_req_parse(data_ctx_p->req_buf, &http_req, conf_p->domain, sizeof(conf_p->domain));
 		if (ret != 0) {

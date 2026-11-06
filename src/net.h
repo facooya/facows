@@ -19,12 +19,8 @@ s32 net_443_init(u8 **ssl_ctx_opq, const struct fws_conf *config);
 s32 net_443_read(struct fws_data_ctx *client_ctx);
 s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size);
 s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path);
-s32 net_443_res_write(
-	struct fws_data_ctx *client_ctx,
-	struct fws_http_res *http_res,
-	s64 size,
-	const struct fws_http_req *http_req
-);
+s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http_res,
+	s64 file_size, const struct fws_http_req *http_req);
 s32 net_443_err_write(struct fws_data_ctx *client_ctx, s32 code);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);

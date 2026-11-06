@@ -4,6 +4,7 @@
  */
 
 #include "factype.h"
+#include "facerr.h"
 #include "types.h"
 #include "net.h"
 
@@ -209,120 +210,121 @@ out:
 	return ret;
 }
 
-s32 net_443_res_write(
-	struct fws_data_ctx *client_ctx,
-	struct fws_http_res *http_res,
-	s64 size,
-	const struct fws_http_req *http_req
-) {
-	/* TODO: improve string format */
-	static const char http_res_fmt[] =
-		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
-		"Date: %s\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n"
-		"Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n\r\n";
-	static const char http_304_res_fmt[] =
-		"HTTP/1.1 304 Not Modified\r\n"
-		"Date: %s\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n"
-		"Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n\r\n";
-	static const char http_hsts_res_fmt[] =
-		"HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n"
-		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n"
-		"Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n\r\n";
-	static const char http_hsts_304_res_fmt[] =
-		"HTTP/1.1 304 Not Modified\r\n"
-		"Date: %s\r\nStrict-Transport-Security: max-age=%u;\r\nServer: Facooya-Web-Server\r\n"
-		"Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n"
-		"Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n\r\n";
-	static const char acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n\r\n";
-
-	u64 n = 0;
-	s32 ret = 0;
+s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http_res, s64 file_size,
+		const struct fws_http_req *http_req) {
+	enum {CODE_200, CODE_304};
+	struct res_status {s32 code; const char *msg;};
+	static const struct res_status res_status[] = {
+		[CODE_200] = {.code = 200, .msg = "OK"}, /* default */
+		[CODE_304] = {.code = 304, .msg = "Not Modified"}
+	};
+	static constexpr char res_status_fmt[] = "HTTP/1.1 %d %s\r\n";
+	static constexpr char res_content_fmt[] = "Content-Type: %s\r\nContent-Length: %lu\r\n";
+	static constexpr char res_date_fmt[] = "Date: %s\r\n";
+	static constexpr char res_cache_fmt[] = "Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n";
+	static constexpr char res_hsts_fmt[] = "Strict-Transport-Security: max-age=%u;\r\n";
+	static constexpr char res_acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n";
+	static constexpr char res_server_str[] = "Server: Facooya-Web-Server\r\n";
+	static constexpr char res_connection_str[] = "Connection: keep-alive\r\nKeep-Alive: timeout=3\r\n";
+	static constexpr char res_last_str[] = "\r\n";
+	s32 ret = -1;
 
 	constexpr u64 res_buf_cap = 8192;
 	char res_buf[res_buf_cap] = {0};
-
-	constexpr u64 etag_n = sizeof(((struct fws_http_res*)nullptr)->etag);
-	const s32 cmp_ret = memcmp(http_res->etag, http_req->etag, etag_n);
-	printf("ETAG: %s, %s\n\n", http_res->etag, http_req->etag);
-	if (http_res->hsts_max_age != 0) {
-		if (cmp_ret == 0) {
-			ret = snprintf(
-				res_buf,
-				res_buf_cap,
-				http_hsts_304_res_fmt,
-				http_res->date,
-				http_res->hsts_max_age,
-				client_ctx->conf_p->cache_max_age,
-				http_res->etag
-			);
-		} else {
-			ret = snprintf(
-				res_buf,
-				res_buf_cap,
-				http_hsts_res_fmt,
-				http_res->content,
-				size,
-				http_res->date,
-				http_res->hsts_max_age,
-				client_ctx->conf_p->cache_max_age,
-				http_res->etag
-			);
-		}
-	} else {
-		if (cmp_ret == 0) {
-			ret = snprintf(
-				res_buf,
-				res_buf_cap,
-				http_304_res_fmt,
-				http_res->date,
-				client_ctx->conf_p->cache_max_age,
-				http_res->etag
-			);
-		} else {
-			ret = snprintf(
-				res_buf,
-				res_buf_cap,
-				http_res_fmt,
-				http_res->content,
-				size,
-				http_res->date,
-				client_ctx->conf_p->cache_max_age,
-				http_res->etag
-			);
-		}
-	}
-	if (ret < 0) {
-		ret = -1;
-		goto out;
-	}
-
-	n = strnlen(res_buf, res_buf_cap);
-	if (n == res_buf_cap) {
-		ret = -1;
-		goto out;
-	}
-
 	char *res_buf_p = res_buf;
-	res_buf_p += n;
-	res_buf_p -= 2;
-	if (http_res->is_origin_self) {
-		char acao_buf[512] = {0};
-		n = snprintf(acao_buf, sizeof(acao_buf), acao_fmt, http_req->origin);
-		memcpy(res_buf_p, acao_buf, n);
-		res_buf_p += n;
-		*res_buf_p = '\0';
+
+	/* Status */
+	constexpr u64 etag_n = sizeof(((struct fws_http_res*)nullptr)->etag);
+	const s32 etag_cmp_ret = memcmp(http_res->etag, http_req->etag, etag_n);
+	s32 status_code = CODE_200;
+	if (etag_cmp_ret == 0) {
+		status_code = CODE_304;
+	}
+	const s32 res_status_len = snprintf(res_buf_p, res_buf_cap, res_status_fmt,
+			res_status[status_code].code, res_status[status_code].msg);
+	if (res_status_len < 0) {
+		FAC_ERR(strerror(errno));
+		ret = -1;
+		goto out;
+	}
+	res_buf_p += res_status_len;
+
+	/* Server and Connection */
+	const s32 res_str_len = snprintf(res_buf_p, res_buf_cap, "%s%s", res_server_str,
+			res_connection_str);
+	if (res_str_len < 0) {
+		FAC_ERR(strerror(errno));
+		ret = -1;
+		goto out;
+	}
+	res_buf_p += res_str_len;
+
+	/* Date */
+	const s32 res_date_len = snprintf(res_buf_p, res_buf_cap, res_date_fmt, http_res->date);
+	if (res_date_len < 0) {
+		FAC_ERR(strerror(errno));
+		ret = -1;
+		goto out;
+	}
+	res_buf_p += res_date_len;
+
+	/* Cache */
+	const s32 res_cache_len = snprintf(res_buf_p, res_buf_cap, res_cache_fmt,
+			client_ctx->conf_p->cache_max_age, http_res->etag);
+	if (res_cache_len < 0) {
+		FAC_ERR(strerror(errno));
+		ret = -1;
+		goto out;
+	}
+	res_buf_p += res_cache_len;
+
+	/* Content */
+	if (status_code == CODE_200) {
+		const s32 res_content_len = snprintf(res_buf_p, res_buf_cap, res_content_fmt,
+				http_res->content, file_size);
+		if (res_content_len < 0) {
+			FAC_ERR(strerror(errno));
+			ret = -1;
+			goto out;
+		}
+		res_buf_p += res_content_len;
 	}
 
-	n = strnlen(res_buf, res_buf_cap);
-	if (n == res_buf_cap) {
+	/* HSTS */
+	if (http_res->hsts_max_age != 0) {
+		const s32 res_hsts_len = snprintf(res_buf_p, res_buf_cap, res_hsts_fmt, http_res->hsts_max_age);
+		if (res_hsts_len < 0) {
+			FAC_ERR(strerror(errno));
+			ret = -1;
+			goto out;
+		}
+		res_buf_p += res_hsts_len;
+	}
+
+	/* ACAO */
+	if (http_res->is_origin_self) {
+		const s32 res_acao_len = snprintf(res_buf_p, res_buf_cap, res_acao_fmt, http_req->origin);
+		if (res_acao_len < 0) {
+			FAC_ERR(strerror(errno));
+			ret = -1;
+			goto out;
+		}
+		res_buf_p += res_acao_len;
+	}
+
+	/* Finally */
+	memcpy(res_buf_p, res_last_str, sizeof(res_last_str)-1);
+	res_buf_p += sizeof(res_last_str)-1;
+	res_buf_p = '\0';
+
+	const u32 res_len = strnlen(res_buf, res_buf_cap);
+	if (res_len == res_buf_cap) {
+		FAC_ERR(FAC_ERR_LIMIT);
 		ret = -1;
 		goto out;
 	}
 
-	ret = net_443_write(client_ctx, res_buf, n);
+	ret = net_443_write(client_ctx, res_buf, res_len);
 	if (ret <= 0) {
 		ret = -1;
 		goto out;
