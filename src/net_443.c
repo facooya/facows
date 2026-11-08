@@ -221,7 +221,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	static constexpr char res_status_fmt[] = "HTTP/1.1 %d %s\r\n";
 	static constexpr char res_content_fmt[] = "Content-Type: %s\r\nContent-Length: %lu\r\n";
 	static constexpr char res_date_fmt[] = "Date: %s\r\n";
-	static constexpr char res_cache_fmt[] = "Cache-Control: max-age=%u\r\nETag: \"%s\"\r\n";
+	static constexpr char res_cache_fmt[] = "Cache-Control: %s\r\nETag: \"%s\"\r\n";
 	static constexpr char res_hsts_fmt[] = "Strict-Transport-Security: max-age=%u;\r\n";
 	static constexpr char res_acao_fmt[] = "Access-Control-Allow-Origin: %s\r\n";
 	static constexpr char res_server_str[] = "Server: Facooya-Web-Server\r\n";
@@ -234,10 +234,12 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	char *res_buf_p = res_buf;
 
 	/* Status */
+	constexpr char html_str[] = "text/html";
+	const s32 html_cmp_ret = memcmp(http_res->content, html_str, sizeof(html_str));
 	constexpr u64 etag_n = sizeof(((struct fws_http_res*)nullptr)->etag);
 	const s32 etag_cmp_ret = memcmp(http_res->etag, http_req->etag, etag_n);
 	s32 status_code = CODE_200;
-	if (etag_cmp_ret == 0) {
+	if (etag_cmp_ret == 0 && html_cmp_ret != 0) {
 		status_code = CODE_304;
 	}
 	const s32 res_status_len = snprintf(res_buf_p, res_buf_cap, res_status_fmt,
@@ -269,8 +271,19 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	res_buf_p += res_date_len;
 
 	/* Cache */
+	char cache_buf[32] = {0};
+	s32 cache_buf_len = -1;
+	if (html_cmp_ret == 0) {
+		cache_buf_len = snprintf(cache_buf, sizeof(cache_buf), "no-cache");
+	} else {
+		cache_buf_len = snprintf(cache_buf, sizeof(cache_buf), "max-age=%u",
+				client_ctx->conf_p->cache_max_age);
+	}
+	if (cache_buf_len < 0) {
+		FAC_ERR(strerror(errno));
+	}
 	const s32 res_cache_len = snprintf(res_buf_p, res_buf_cap, res_cache_fmt,
-			client_ctx->conf_p->cache_max_age, http_res->etag);
+			cache_buf, http_res->etag);
 	if (res_cache_len < 0) {
 		FAC_ERR(strerror(errno));
 		ret = -1;

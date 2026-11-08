@@ -55,10 +55,9 @@ s32 net_http_res_build(
 	}
 	if (etag_ret == 304) {
 		http_res->code = 304;
-		return 304;
+	} else {
+		http_res->code = 200;
 	}
-
-	http_res->code = 200;
 	http_res->connection = 0;
 
 	const char *p1 = path;
