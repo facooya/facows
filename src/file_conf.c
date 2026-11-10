@@ -4,6 +4,7 @@
  */
 
 #include "factype.h"
+#include "facerr.h"
 #include "types.h"
 #include "file.h"
 
@@ -17,7 +18,7 @@
 #include <sys/stat.h>
 
 /* Macros for 'facows.conf'. */
-enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T, MIME_T};
+enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T, MAP_T};
 #define CONF_LIST(X) \
 	X(HTTP_PORT, http_port, U16_T) \
 	X(HTTPS_PORT, https_port, U16_T) \
@@ -36,11 +37,12 @@ enum {U32_T, U16_T, BOOL_T, CHAR_T, AP_T, MIME_T};
 	X(SSL_CERT, ssl_cert, CHAR_T) \
 	X(SSL_KEY, ssl_key, CHAR_T) \
 	X(KERNEL_TLS, use_ktls, BOOL_T) \
-	X(CACHE_MAX_AGE, cache_max_age, U32_T) \
 	X(HSTS, use_hsts, BOOL_T) \
 	X(HSTS_MAX_AGE, hsts_max_age, U32_T) \
-	X(MIME, mime, MIME_T) \
-	X(MIME_DEFAULT, mime_default, CHAR_T)
+	X(MIME, mime, MAP_T) \
+	X(MIME_DEFAULT, mime_default, CHAR_T) \
+	X(CACHE, cache, MAP_T) \
+	X(CACHE_DEFAULT, cache_default, CHAR_T)
 #define CONF_LIST_ENUM(x_key, x_member, x_type) x_key,
 #define CONF_LIST_LOOKUP(x_key, x_member, x_type) [x_key] = { \
 	.offset = offsetof(struct fws_conf, x_member), \
@@ -80,7 +82,7 @@ static s32 _type_ap_parse(
 	struct fws_conf *conf_p,
 	const struct fws_lookup *conf_lookup_arr
 );
-static s32 _type_mime_parse(
+static s32 _type_map_norm(
 	u64 conf_idx,
 	const char *p_base,
 	struct fws_conf *conf_p,
@@ -153,7 +155,7 @@ static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_l
 		[BOOL_T] = _type_bool_parse,
 		[CHAR_T] = _type_char_parse,
 		[AP_T] = _type_ap_parse,
-		[MIME_T] = _type_mime_parse
+		[MAP_T] = _type_map_norm
 	};
 	s32 ret = 0;
 
@@ -324,7 +326,7 @@ static s32 _type_ap_parse(u64 conf_idx, const char *p_base, struct fws_conf *con
 	return 0;
 }
 
-static s32 _type_mime_parse(
+static s32 _type_map_norm(
 	u64 conf_idx,
 	const char *p_base,
 	struct fws_conf *conf_p,
@@ -332,99 +334,100 @@ static s32 _type_mime_parse(
 ) {
 	const char *p_start = memchr(p_base, '{', conf_lookup_arr[conf_idx].size-1);
 	if (p_start == nullptr) {
-		fprintf(stderr, "facows.conf: error: missing '{' at MIME\n");
+		FAC_ERR("missing '{'\n");
 		return -1;
 	}
-	if (p_base < p_start) {
-		fprintf(stderr, "_type_mime_parse(): p_base-p_start: invalid range\n");
+	s32 map_skip = p_base - p_start;
+	if (map_skip < 0) {
+		FAC_ERR(FAC_ERR_RANGE);
 		return -1;
 	}
-	s32 mime_skip = p_base - p_start;
-	p_start += mime_skip;
+	p_start += map_skip;
 	p_start++; /* skip '{' */
 
-	const char *p_end = memchr(p_start, '}', (conf_lookup_arr[conf_idx].size-1)-mime_skip);
+	const char *p_end = memchr(p_start, '}', (conf_lookup_arr[conf_idx].size-1)-map_skip);
 	if (p_end == nullptr) {
-		fprintf(stderr, "facows.conf: error: missing '}' at MIME or too long lower than %lu\n", conf_lookup_arr[conf_idx].size-1);
+		FAC_ERR("missing '}', or" FAC_ERR_LIM_N, conf_lookup_arr[conf_idx].size);
 		return -1;
 	}
-	if (p_end < p_start) {
-		fprintf(stderr, "_type_mime_parse(): p_end-p_start: invalid range\n");
+	s32 map_n = p_end - p_start;
+	if (map_n < 0) {
+		FAC_ERR(FAC_ERR_RANGE);
 		return -1;
 	}
-	s32 mime_n = p_end - p_start;
-	if ((u32) mime_n >= conf_lookup_arr[conf_idx].size) {
-		fprintf(stderr, "_type_mime_parse(): mime_n: invalid size\n");
+	if ((u32) map_n >= conf_lookup_arr[conf_idx].size) {
+		FAC_ERR(FAC_ERR_LIM_N, conf_lookup_arr[conf_idx].size);
 		return -1;
 	}
 	const char *p_scan = p_start;
-	char *p_dst = conf_p->mime;
+	char *member = (char *) ((u8 *) conf_p + conf_lookup_arr[conf_idx].offset);
+	char *p_dst = member;
 
 	/* [info]
 	p_start == p_scan
 	*(p_start-1) == '{'
 	*p_end == '}'
-	mime_n = p_end - p_start;
+	map_n = p_end - p_start;
 	*/
-	while (mime_n > 0) {
-		/* get mime type string */
-		p_start = memchr(p_scan, '"', mime_n);
+	while (map_n > 0) {
+		/* get map key */
+		p_start = memchr(p_scan, '"', map_n);
 		if (p_start == nullptr) {
 			if (*(p_dst-1) == ']') {
 				break;
 			}
-			fprintf(stderr, "facows.conf: error: missing '\"' at string start\n");
+			FAC_ERR("missing '\"' at string start\n");
 			return -1;
 		}
 		p_start++; /* skip start '"' */
-		if (p_start < p_scan) {
-			fprintf(stderr, "_type_mime_parse(): p_scan-p_start: invalid range\n");
+		s32 map_skip = p_start - p_scan;
+		if (map_skip < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		s32 mime_skip = p_start - p_scan;
-		mime_n -= mime_skip;
-		s32 mime_len = _tool_get_str_n(p_start, mime_n);
-		if (mime_len < 0) {
+		map_n -= map_skip;
+		s32 map_len = _tool_get_str_n(p_start, map_n);
+		if (map_len < 0) {
 			return -1;
 		}
-		mime_n -= mime_len;
+		map_n -= map_len;
 		p_scan = p_start;
-		p_scan += mime_len;
+		p_scan += map_len;
 		p_scan++; /* skip end '"' */
 	
-		memcpy(p_dst, p_start, mime_len);
-		p_dst += mime_len;
+		memcpy(p_dst, p_start, map_len);
+		p_dst += map_len;
 
-		/* get mime file extension */
-		const char *p_ext_start = memchr(p_scan, '[', mime_n);
+		/* get map values */
+		const char *p_ext_start = memchr(p_scan, '[', map_n);
 		if (p_ext_start == nullptr) {
-			fprintf(stderr, "facows.conf: error: array not found\n");
+			FAC_ERR("array not found\n");
 			return -1;
 		}
 		p_ext_start++; /* skip '[' */
-		if (p_ext_start < p_scan) {
-			fprintf(stderr, "_type_mime_parse(): p_ext_start-p_scan: invalid range\n");
+		map_skip = p_ext_start - p_scan;
+		if (map_skip < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		mime_skip = p_ext_start - p_scan;
-		p_scan += mime_skip;
-		mime_n -= mime_skip;
+		p_scan += map_skip;
+		map_n -= map_skip;
 
 		const char *p_ext_scan = p_ext_start;
-		const char *p_ext_end = memchr(p_ext_scan, ']', mime_n);
+		const char *p_ext_end = memchr(p_ext_scan, ']', map_n);
 		if (p_ext_end == nullptr) {
-			fprintf(stderr, "facows.conf: error: missing ']' at array end\n");
-			return -1;
-		}
-		if (p_ext_end < p_ext_start) {
-			fprintf(stderr, "_type_mime_parse(): p_ext_end-p_ext_start: invalid range\n");
+			FAC_ERR("missing ']' at array end\n");
 			return -1;
 		}
 		s32 ext_n = p_ext_end - p_ext_start;
+		if (ext_n < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
+			return -1;
+		}
 		memcpy(p_dst, "[", sizeof("["));
 		p_dst++;
 		p_scan += ext_n;
-		mime_n -= ext_n;
+		map_n -= ext_n;
 		bool has_ext_norm = false;
 
 		/* [info]
@@ -436,14 +439,14 @@ static s32 _type_mime_parse(
 		while (ext_n > 0) {
 			p_ext_start = memchr(p_ext_scan, '"', ext_n);
 			if (p_ext_start == nullptr) {
-				fprintf(stderr, "facows.conf: error: missing '\"' at string start\n");
-				return -1;
-			}
-			if (p_ext_start < p_ext_scan) {
-				fprintf(stderr, "_type_mime_parse(): error: invalid range\n");
+				FAC_ERR("missing '\"' at string start\n");
 				return -1;
 			}
 			s32 ext_skip = p_ext_start - p_ext_scan;
+			if (ext_skip < 0) {
+				FAC_ERR(FAC_ERR_RANGE);
+				return -1;
+			}
 			ext_n -= ext_skip;
 			p_ext_scan = p_ext_start;
 
@@ -453,7 +456,7 @@ static s32 _type_mime_parse(
 			ext_n--;
 
 			if (ext_n <= 0) {
-				fprintf(stderr, "facows.conf: error: missing '\"' at string end\n");
+				FAC_ERR("missing '\"' at string start\n");
 				return -1;
 			}
 
@@ -475,11 +478,11 @@ static s32 _type_mime_parse(
 			memcpy(p_dst, ",", sizeof(","));
 			p_dst++;
 
-			if (p_ext_start < p_ext_scan) {
-				fprintf(stderr, "_type_mime_parse(): p_ext_start-p_ext_scan: invalid range\n");
+			ext_skip = p_ext_start - p_ext_scan;
+			if (ext_skip < 0) {
+				FAC_ERR(FAC_ERR_RANGE);
 				return -1;
 			}
-			ext_skip = p_ext_start - p_ext_scan;
 			ext_n -= ext_skip;
 			p_ext_scan = p_ext_start;
 		}

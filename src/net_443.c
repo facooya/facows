@@ -245,7 +245,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	const s32 res_status_len = snprintf(res_buf_p, res_buf_cap, res_status_fmt,
 			res_status[status_code].code, res_status[status_code].msg);
 	if (res_status_len < 0) {
-		FAC_ERR(strerror(errno));
+		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
 		goto out;
 	}
@@ -255,7 +255,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	const s32 res_str_len = snprintf(res_buf_p, res_buf_cap, "%s%s", res_server_str,
 			res_connection_str);
 	if (res_str_len < 0) {
-		FAC_ERR(strerror(errno));
+		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
 		goto out;
 	}
@@ -264,7 +264,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	/* Date */
 	const s32 res_date_len = snprintf(res_buf_p, res_buf_cap, res_date_fmt, http_res->date);
 	if (res_date_len < 0) {
-		FAC_ERR(strerror(errno));
+		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
 		goto out;
 	}
@@ -276,16 +276,17 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	if (html_cmp_ret == 0) {
 		cache_buf_len = snprintf(cache_buf, sizeof(cache_buf), "no-cache");
 	} else {
-		cache_buf_len = snprintf(cache_buf, sizeof(cache_buf), "max-age=%u",
-				client_ctx->conf_p->cache_max_age);
+		/* TODO: debug */
+		//cache_buf_len = snprintf(cache_buf, sizeof(cache_buf), "max-age=%u",
+				//client_ctx->conf_p->cache_max_age);
 	}
 	if (cache_buf_len < 0) {
-		FAC_ERR(strerror(errno));
+		FAC_ERR("%s\n", strerror(errno));
 	}
 	const s32 res_cache_len = snprintf(res_buf_p, res_buf_cap, res_cache_fmt,
 			cache_buf, http_res->etag);
 	if (res_cache_len < 0) {
-		FAC_ERR(strerror(errno));
+		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
 		goto out;
 	}
@@ -296,7 +297,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 		const s32 res_content_len = snprintf(res_buf_p, res_buf_cap, res_content_fmt,
 				http_res->content, file_size);
 		if (res_content_len < 0) {
-			FAC_ERR(strerror(errno));
+			FAC_ERR("%s\n", strerror(errno));
 			ret = -1;
 			goto out;
 		}
@@ -307,7 +308,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	if (http_res->hsts_max_age != 0) {
 		const s32 res_hsts_len = snprintf(res_buf_p, res_buf_cap, res_hsts_fmt, http_res->hsts_max_age);
 		if (res_hsts_len < 0) {
-			FAC_ERR(strerror(errno));
+			FAC_ERR("%s\n", strerror(errno));
 			ret = -1;
 			goto out;
 		}
@@ -318,7 +319,7 @@ s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http
 	if (http_res->is_origin_self) {
 		const s32 res_acao_len = snprintf(res_buf_p, res_buf_cap, res_acao_fmt, http_req->origin);
 		if (res_acao_len < 0) {
-			FAC_ERR(strerror(errno));
+			FAC_ERR("%s\n", strerror(errno));
 			ret = -1;
 			goto out;
 		}

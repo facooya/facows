@@ -43,7 +43,6 @@ struct fws_conf {
 	u32 ban_time;
 	u32 ban_lim;
 	u32 hsts_max_age;
-	u32 cache_max_age;
 	u32 lim_swap_time;
 	u32 lim_page;
 	u32 lim_res;
@@ -53,6 +52,7 @@ struct fws_conf {
 	bool use_ktls;
 	bool test_mode;
 
+	char cache_default[32];
 	char allow_ports[128];
 	char domain[128];
 	char web_root[128];
@@ -61,6 +61,7 @@ struct fws_conf {
 	char ssl_key[128];
 	char mime_default[128];
 	char mime[1024];
+	char cache[1024];
 };
 
 struct fws_nft {
