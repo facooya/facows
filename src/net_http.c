@@ -19,9 +19,12 @@
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req);
 static void _uri_parse(struct fws_http_req *http_req);
-static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
+static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req,
+		const char *domain, u64 domain_n);
 //static s32 _err_check(const struct fws_http_req *http_req);
-static s32 _get_etag(char *dst, const char *src, const char *path);
+static s32 _etag_get(char *dst, const char *src, const char *path);
+static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cache_len,
+		const char *src_ext);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
 	constexpr u64 req_max = sizeof(((struct fws_data_ctx*)nullptr)->req_buf);
@@ -37,20 +40,15 @@ s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char 
 	return 0;
 }
 
-s32 net_http_res_build(
-	const struct fws_conf *conf_p,
-	const struct tm *fws_time,
-	const struct fws_http_req *http_req,
-	struct fws_http_res *http_res,
-	const char *path,
-	u64 path_n
-) {
+s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
+		const struct fws_http_req *http_req, struct fws_http_res *http_res, const char *path,
+		u64 path_n) {
 	memset(http_res, 0, sizeof(struct fws_http_res));
 	strftime(http_res->date, sizeof(http_res->date), "%a, %d %b %Y %H:%M:%S GMT", fws_time);
 
-	const s32 etag_ret = _get_etag(http_res->etag, http_req->etag, path);
+	const s32 etag_ret = _etag_get(http_res->etag, http_req->etag, path);
 	if (etag_ret < 0) {
-		fprintf(stderr, "net_http_res_build(): _get_etag(): etag: null\n");
+		fprintf(stderr, "net_http_res_build(): _etag_get(): etag: null\n");
 		return -1;
 	}
 	if (etag_ret == 304) {
@@ -86,22 +84,22 @@ s32 net_http_res_build(
 			fprintf(stderr, "net_http_res_build(): error: invalid missing '['\n");
 			return -1;
 		}
-		if (p_ext_start < p_start) {
-			fprintf(stderr, "net_http_res_build(): p_ext_start-p_start: invalid\n");
+		const s64 mime_len = p_ext_start - p_start;
+		if (mime_len < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		s32 mime_len = p_ext_start - p_start;
 		const char *p_ext_end = memchr(p_ext_start, ']', mime_n-mime_len);
 		if (p_ext_end == nullptr) {
 			fprintf(stderr, "net_http_res_build(): error: invalid missing ']'\n");
 			return -1;
 		}
-		if (p_ext_end < p_ext_start) {
-			fprintf(stderr, "net_http_res_build(): p_ext_start-p_start: invalid\n");
+		s64 ext_n = p_ext_end - p_ext_start;
+		if (ext_n < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		s32 ext_n = p_ext_end - p_ext_start;
-		s32 mime_next_off = (p_ext_end + 1) - p_start;
+		s64 mime_next_off = (p_ext_end + 1) - p_start;
 		p_ext_start++; /* skip '[' */
 
 		/* [info]
@@ -121,8 +119,8 @@ s32 net_http_res_build(
 				fprintf(stderr, "net_http_res_build(): p_ext_end-p_ext_start: invalid\n");
 				return -1;
 			}
-			s32 ext_len = p_ext_end - p_ext_start;
-			if ((u32)ext_len >= sizeof(ext_buf)) {
+			s64 ext_len = p_ext_end - p_ext_start;
+			if ((u64)ext_len >= sizeof(ext_buf)) {
 				fprintf(stderr, "net_http_res_build(): error: invalid extension size\n");
 				return -1;
 			}
@@ -132,12 +130,19 @@ s32 net_http_res_build(
 
 			ret = memcmp(p1, ext_buf, ext_len+1);
 			if (ret == 0) {
-				if ((u32)mime_len >= sizeof(http_res->content)) {
+				if ((u64)mime_len >= sizeof(http_res->content)) {
 					fprintf(stderr, "net_http_res_build(): error: invalid mime size");
 					return -1;
 				}
 				memset(http_res->content, '\0', sizeof(http_res->content));
 				memcpy(http_res->content, p_start, mime_len);
+
+				u64 cache_len = strnlen(conf_p->cache, sizeof(conf_p->cache));
+				const s32 cache_ret = _cache_get(http_res->cache, sizeof(http_res->cache),
+						conf_p->cache, cache_len, ext_buf);
+				if (cache_ret < 0) {
+					return -1;
+				}
 
 				has_find = true;
 				break;
@@ -166,12 +171,8 @@ s32 net_http_res_build(
 	return 0;
 }
 
-void net_http_path_redir(
-	struct fws_http_req *http_req,
-	const struct fws_conf *conf,
-	const struct fws_file *file,
-	struct fws_data_ctx *client_ctx
-) {
+void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf,
+		const struct fws_file *file, struct fws_data_ctx *client_ctx) {
 	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\n"
 		"Location: https://%s%s\r\nContent-Length: 0\r\nConnection: keep-alive\r\n"
 		"Keep-Alive: timeout=3\r\n\r\n";
@@ -476,20 +477,20 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	return 0;
 }*/
 
-static s32 _get_etag(char *dst, const char *src, const char *path) {
+static s32 _etag_get(char *dst, const char *src, const char *path) {
 	constexpr u64 etag_n = sizeof(((struct fws_http_res*)nullptr)->etag);
 	s32 etag_fd = -1;
 	s32 ret = -1;
 
 	const u64 etag_len = strnlen(src, etag_n);
 	if (etag_len == etag_n) {
-		fprintf(stderr, "_get_etag(): strnlen(): failure\n");
+		fprintf(stderr, "_etag_get(): strnlen(): failure\n");
 		ret = -1;
 		goto out;
 	}
 	etag_fd = open(path, O_RDONLY);
 	if (etag_fd < 0) {
-		fprintf(stderr, "_get_etag(): open(): failure\n");
+		fprintf(stderr, "_etag_get(): open(): failure\n");
 		ret = -1;
 		goto out;
 	}
@@ -497,7 +498,7 @@ static s32 _get_etag(char *dst, const char *src, const char *path) {
 	struct stat etag_stat = {0};
 	const s32 stat_ret = fstat(etag_fd, &etag_stat);
 	if (stat_ret < 0) {
-		fprintf(stderr, "_get_etag(): fstat(): failure\n");
+		fprintf(stderr, "_etag_get(): fstat(): failure\n");
 		ret = -1;
 		goto out;
 	}
@@ -517,4 +518,110 @@ out:
 		etag_fd = -1;
 	}
 	return ret;
+}
+
+static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cache_len,
+		const char *src_ext) {
+	constexpr char no_cache_str[] = "no-cache";
+	constexpr u64 no_cache_len = sizeof(no_cache_str)-1;
+	char cache_buf[dst_max];
+	memset(cache_buf, '\0', dst_max);
+
+	s32 cache_cnt = 0;
+	s32 cache_acc = 0;
+	const char *p1 = src_cache;
+	while (true) {
+		if ((src_cache_len-cache_acc) <= 0) {
+			break;
+		}
+		const char *p2 = memchr(p1, '[', src_cache_len-cache_acc);
+		if (p2 == nullptr) {
+			break;
+		}
+		s64 cache_n = p2 - p1;
+		if (cache_n < 0) {
+			break;
+		}
+		cache_cnt++;
+		cache_acc += cache_n + 1;
+		p1 = p2 + 1;
+	}
+
+	bool is_find = false;
+	const char *p_start = src_cache;
+	cache_acc = 0;
+	while (cache_cnt > 0) {
+		const char *p_end = memchr(p_start, '[', src_cache_len-cache_acc);
+		if (p_end == nullptr) {
+			FAC_ERR(FAC_ERR_NULL);
+			return -1;
+		}
+		s64 cache_len = p_end - p_start;
+		if (cache_len < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
+			return -1;
+		}
+		memcpy(cache_buf, p_start, cache_len);
+		cache_buf[cache_len] = '\0';
+		p_start = p_end + 1;
+		cache_acc += cache_len + 1;
+
+		p_end = memchr(p_start, ']', src_cache_len-cache_acc);
+		if (p_end == nullptr) {
+			FAC_ERR(FAC_ERR_NULL);
+			return -1;
+		}
+
+		s64 arr_len = p_end - p_start;
+		if (arr_len < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
+			return -1;
+		}
+		arr_len++;
+		const char *p_arr_start = p_start;
+		s32 arr_acc = 0;
+		while (true) {
+			const char *p_arr_end = memchr(p_arr_start, ',', arr_len-arr_acc);
+			if (p_arr_end == nullptr) {
+				p_arr_end = memchr(p_arr_start, ']', arr_len);
+				if (p_arr_end == nullptr) {
+					break;
+				}
+			}
+			s64 ext_len = p_arr_end - p_arr_start;
+			if (ext_len < 0) {
+				FAC_ERR(FAC_ERR_RANGE);
+				return -1;
+			}
+			char ext_buf[32] = {0};
+			memcpy(ext_buf, p_arr_start, ext_len);
+			ext_buf[ext_len] = '\0';
+
+			s32 ext_cmp_ret = memcmp(ext_buf, src_ext, ext_len+1);
+			if (ext_cmp_ret == 0) {
+				is_find = true;
+				break;
+			}
+
+			p_arr_start = p_arr_end + 1;
+			arr_acc += ext_len + 1;
+		}
+		if (is_find) {
+			memcpy(dst, cache_buf, cache_len);
+			dst[cache_len] = '\0';
+			break;
+		}
+
+		s64 cache_arr_len = p_end - p_start;
+		p_start = p_end + 1;
+		cache_acc += cache_arr_len + 1;
+		cache_cnt--;
+	}
+
+	if (!is_find) {
+		memcpy(dst, no_cache_str, no_cache_len);
+		dst[no_cache_len] = '\0';
+	}
+
+	return 0;
 }

@@ -78,9 +78,6 @@ s32 main(s32 argc, char **argv) {
 		ret = 1;
 		goto out;
 	}
-	/* TODO: debug */
-	printf("cache: %s\n", conf.cache);
-	printf("mime: %s\n", conf.mime);
 
 	if (conf.use_nft) {
 		ret = net_nft_init(&conf);

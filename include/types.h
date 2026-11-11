@@ -78,6 +78,7 @@ struct fws_http_res {
 	bool is_origin_self;
 	char content[64];
 	char date[32];
+	char cache[32];
 	char etag[32];
 };
 
