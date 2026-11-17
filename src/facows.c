@@ -4,6 +4,7 @@
  */
 
 #include "factype.h"
+#include "facerr.h"
 #include "types.h"
 #include "net.h"
 #include "file.h"
@@ -12,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <errno.h>
 #include <string.h>
 #include <assert.h>
 #include <fcntl.h>
@@ -22,18 +24,20 @@ _Atomic s32 sig_flag = -1;
 static void _fws_exit(s32 sig);
 
 s32 main(s32 argc, char **argv) {
-	static const char test_str[] = "test";
-	static const char conf_path_str[] = "/etc/facows/facows.conf";
-	static const char conf_test_path_str[] = "/etc/facows/facows_test.conf";
 	struct fws_parent_ctx *parent_ctx_p = nullptr;
 	struct fws_child_ctx *child_ctx_p = nullptr;
 	s32 pipe_fds[2] = {-1, -1};
 	s32 pipe_read_fd = -1;
 	s32 pipe_write_fd = -1;
-	s32 ret = 0;
-	bool test_mode = false;
+	s32 ret = -1;
 
+	static constexpr char test_str[] = "test";
+	/* Configuration file path */
+	static constexpr char conf_path_str[] = "/etc/facows/facows.conf";
+	/* Configuration file path for test */
+	static constexpr char conf_test_path_str[] = "/etc/facows/facows_test.conf";
 	const char *conf_path_p = conf_path_str;
+	bool test_mode = false;
 	if (argc == 2) {
 		ret = memcmp(test_str, argv[1], sizeof(test_str));
 		if (ret == 0) {
@@ -41,40 +45,39 @@ s32 main(s32 argc, char **argv) {
 			test_mode = true;
 		}
 	} else if (argc > 2) {
-		fprintf(stderr, "main(): argc: %d\n", argc);
+		FAC_ERR("too many argc: %d\n", argc);
 		ret = 1;
 		goto out;
 	}
 
-	struct sigaction fws_sa = {0};
+	struct sigaction fws_sa = {};
 	fws_sa.sa_handler = _fws_exit;
 	ret = sigaction(SIGINT, &fws_sa, nullptr);
 	if (ret < 0) {
-		fprintf(stderr, "main(): sigaction(): failed\n");
+		FAC_ERR("%s\n", strerror(errno));
 		ret = 1;
 		goto out;
 	}
 	ret = sigaction(SIGTERM, &fws_sa, nullptr);
 	if (ret < 0) {
-		fprintf(stderr, "main(): sigaction(): failed\n");
+		FAC_ERR("%s\n", strerror(errno));
 		ret = 1;
 		goto out;
 	}
 	fws_sa.sa_handler = SIG_IGN;
 	ret = sigaction(SIGPIPE, &fws_sa, nullptr);
 	if (ret < 0) {
-		fprintf(stderr, "main(): sigaction(): SIGPIPE failed\n");
+		FAC_ERR("%s\n", strerror(errno));
 		ret = 1;
 		goto out;
 	}
 
-	struct fws_conf conf = {0};
+	struct fws_conf conf = {};
 	if (test_mode) {
 		conf.test_mode = true;
 	}
 	ret = file_conf_read(&conf, conf_path_p);
 	if (ret < 0) {
-		fprintf(stderr, "main(): file_conf_read(): failed\n");
 		ret = 1;
 		goto out;
 	}
@@ -82,14 +85,13 @@ s32 main(s32 argc, char **argv) {
 	if (conf.use_nft) {
 		ret = net_nft_init(&conf);
 		if (ret < 0) {
-			fprintf(stderr, "main(): net_nft_init(): failed\n");
 			return 1;
 		}
 	}
 
 	ret = pipe2(pipe_fds, O_NONBLOCK|O_CLOEXEC);
 	if (ret < 0) {
-		fprintf(stderr, "main(): pipe(): pipe failed\n");
+		FAC_ERR("%s\n", strerror(errno));
 		ret = 1;
 		goto out;
 	}
@@ -98,7 +100,7 @@ s32 main(s32 argc, char **argv) {
 
 	const s32 pid = fork();
 	if (pid < 0) {
-		fprintf(stderr, "main(): fork(): fork failed\n");
+		FAC_ERR("%s\n", strerror(errno));
 		ret = 1;
 		goto out;
 	}
@@ -106,7 +108,7 @@ s32 main(s32 argc, char **argv) {
 	if (pid == 0) {
 		child_ctx_p = calloc(sizeof(struct fws_child_ctx), sizeof(struct fws_child_ctx));
 		if (child_ctx_p == nullptr) {
-			fprintf(stderr, "main(): calloc(): failed\n");
+			FAC_ERR("%s\n", strerror(errno));
 			ret = 1;
 			goto out;
 		}
@@ -122,7 +124,7 @@ s32 main(s32 argc, char **argv) {
 	} else {
 		parent_ctx_p = calloc(sizeof(struct fws_parent_ctx), sizeof(struct fws_parent_ctx));
 		if (parent_ctx_p == nullptr) {
-			fprintf(stderr, "main(): calloc(): failed\n");
+			FAC_ERR("%s\n", strerror(errno));
 			ret = 1;
 			goto out;
 		}
@@ -136,7 +138,6 @@ s32 main(s32 argc, char **argv) {
 		pipe_write_fd = -1;
 		ret = fws_parent_run(parent_ctx_p);
 		if (ret < 0) {
-			fprintf(stderr, "main(): fws_parent_run(): error\n");
 			ret = 1;
 			goto out;
 		}

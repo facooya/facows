@@ -12,6 +12,7 @@
 #define FAC_ERR_LIM_N "limit exceeded: %lu\n"
 #define FAC_ERR_RANGE "invalid range\n"
 #define FAC_ERR_NULL "null pointer\n"
+#define FAC_ERR_LEN "invalid length\n"
 #define FAC_ERR_FORMAT "invalid format\n"
 
 #endif
