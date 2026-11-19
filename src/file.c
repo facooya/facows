@@ -4,6 +4,7 @@
  */
 
 #include "factype.h"
+#include "facerr.h"
 #include "types.h"
 #include "file.h"
 
@@ -13,28 +14,16 @@
 #include <ctype.h>
 #include <sys/stat.h>
 
-static const char index_str[] = "index";
-static const char index_html_str[] = "index.html";
-static const char html_ext_str[] = ".html";
-
 static s32 _chr_to_hex(u8 c);
-static s32 _raw_path_build(
-	char *path_buf,
-	const char *uri_path,
-	const char *web_root,
-	u64 web_root_len
-);
+static void _raw_path_build(char *path_buf, const char *uri_path,
+		const char *web_root, u64 web_root_len);
 static s32 _uri_path_build(struct fws_file *file);
 static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir);
 
-s32 file_parse(
-	struct fws_file *file,
-	const struct fws_http_req *http_req,
-	const char *web_root,
-	u64 web_root_n
-) {
+s32 file_parse(struct fws_file *file, const struct fws_http_req *http_req,
+		const char *web_root, u64 web_root_n) {
 	char *path_rp = nullptr;
-	s32 ret = 0;
+	s32 ret = -1;
 
 	memset(file, 0, sizeof(struct fws_file));
 	memcpy(file->uri_path, http_req->path, http_req->path_n);
@@ -43,11 +32,12 @@ s32 file_parse(
 
 	u64 web_root_len = strnlen(web_root, web_root_n);
 	if (web_root_len == web_root_n) {
+		FAC_ERR(FAC_ERR_LEN);
 		ret = -1;
 		goto out;
 	}
 
-	char path_buf[4096] = {0};
+	char path_buf[4096] = {};
 	_raw_path_build(path_buf, file->uri_path, web_root, web_root_len);
 
 	s32 code = _uri_path_build(file);
@@ -67,18 +57,18 @@ s32 file_parse(
 
 	path_rp = realpath(path_buf, nullptr);
 	if (path_rp == nullptr) {
+		FAC_ERR(FAC_ERR_NULL);
 		ret = 404;
 		goto out;
 	}
 
 	u64 path_rp_n = strnlen(path_rp, sizeof(file->path));
-	if (path_rp_n >= sizeof(file->path)) {
+	if (path_rp_n == sizeof(file->path)) {
+		FAC_ERR(FAC_ERR_LEN);
 		ret = -1;
 		goto out;
 	}
 	memcpy(file->path, path_rp, path_rp_n+1);
-	free(path_rp);
-	path_rp = nullptr;
 
 	ret = memcmp(file->path, web_root, web_root_len);
 	if (ret != 0) {
@@ -98,6 +88,7 @@ static s32 _uri_path_build(struct fws_file *file) {
 	s32 ret = 0;
 
 	if (file->uri_path_n == 0) {
+		FAC_ERR("uri_path_n: 0\n");
 		return -1;
 	}
 	const char last_chr = *(file->uri_path+(file->uri_path_n-1));
@@ -107,17 +98,20 @@ static s32 _uri_path_build(struct fws_file *file) {
 
 	p1 = memrchr(file->uri_path, '/', file->uri_path_n);
 	if (p1 == nullptr) {
+		FAC_ERR(FAC_ERR_RANGE);
 		return -1;
 	}
 
 	p1++;
+	static constexpr char index_str[] = "index";
 	ret = memcmp(p1, index_str, sizeof(index_str));
 	if (ret == 0) {
 		file->uri_path_n -= (sizeof(index_str) - 1);
 		file->uri_path[file->uri_path_n] = '\0';
 		return 301;
-
 	}
+
+	static constexpr char index_html_str[] = "index.html";
 	ret = memcmp(p1, index_html_str, sizeof(index_html_str));
 	if (ret == 0) {
 		file->uri_path_n -= (sizeof(index_html_str) - 1);
@@ -125,13 +119,16 @@ static s32 _uri_path_build(struct fws_file *file) {
 		return 301;
 	}
 
-	s32 size = file->uri_path_n - (sizeof(html_ext_str) - 1);
+	static constexpr char html_ext_str[] = ".html";
+	constexpr u64 html_ext_str_len = sizeof(html_ext_str) - 1;
+	s32 size = file->uri_path_n - html_ext_str_len;
 	if (size <= 0) {
 		return 0;
 	}
-	p1 = file->uri_path + file->uri_path_n - (sizeof(html_ext_str) - 1);
-	if (memcmp(p1, html_ext_str, sizeof(html_ext_str)-1) == 0) {
-		file->uri_path_n -= (sizeof(html_ext_str) - 1);
+	p1 = file->uri_path + file->uri_path_n - html_ext_str_len;
+	ret = memcmp(p1, html_ext_str, html_ext_str_len); 
+	if (ret == 0) {
+		file->uri_path_n -= html_ext_str_len;
 		file->uri_path[file->uri_path_n] = '\0';
 		return 301;
 	}
@@ -140,19 +137,21 @@ static s32 _uri_path_build(struct fws_file *file) {
 }
 
 static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir) {
-	s32 ret = 0;
+	s32 ret = -1;
 
 	char *p = memchr(path_buf, '\0', sizeof(file->path));
 	if (p == nullptr) {
+		FAC_ERR(FAC_ERR_RANGE);
 		return -1;
 	}
 
-	struct stat file_stat = {0};
+	struct stat file_stat = {};
 	if (dir == 1) {
 		ret = stat(path_buf, &file_stat);
 		if (ret != 0) {
 			return 404;
 		} else {
+			static constexpr char index_html_str[] = "index.html";
 			memcpy(p, index_html_str, sizeof(index_html_str));
 
 			ret = stat(path_buf, &file_stat);
@@ -166,6 +165,7 @@ static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir) {
 	} else {
 		ret = stat(path_buf, &file_stat);
 		if (ret != 0) {
+			static constexpr char html_ext_str[] = ".html";
 			memcpy(p, html_ext_str, sizeof(html_ext_str));
 			ret = stat(path_buf, &file_stat);
 			if (ret != 0) {
@@ -182,24 +182,22 @@ static s32 _path_build(struct fws_file *file, char *path_buf, s32 dir) {
 }
 
 static s32 _chr_to_hex(u8 c) {
+	/* 0x30 = '0', 0x41 = 'A', 0x61 = 'a' */
 	if (c >= 0x30 && c <= 0x39) {
 		return c - 0x30;
 	} else if (c >= 0x41 && c <= 0x46) {
+		/* 0x41 - 0x37 = 0x0A */
 		return c - 0x37;
 	} else if (c >= 0x61 && c <= 0x66) {
+		/* 0x61 - 0x57 = 0x0A */
 		return c - 0x57;
 	}
 
 	return -1;
 }
 
-static s32 _raw_path_build(
-	char *path_buf,
-	const char *uri_path,
-	const char *web_root,
-	u64 web_root_len
-) {
-	s32 ret = 0;
+static void _raw_path_build(char *path_buf, const char *uri_path,
+		const char *web_root, u64 web_root_len) {
 	char *path_buf_p = path_buf;
 	memcpy(path_buf_p, web_root, web_root_len);
 	path_buf_p += web_root_len;
@@ -209,7 +207,7 @@ static s32 _raw_path_build(
 
 	const char *p1 = uri_path;
 	char *p2 = path_buf_p;
-	while (1) {
+	while (true) {
 		if (*p1 == '\0') {
 			*p2 = '\0';
 			break;
@@ -229,22 +227,22 @@ static s32 _raw_path_build(
 				break;
 			}
 
-			ret = _chr_to_hex((u8)*(p1+1));
-			if (ret < 0) {
+			const s32 x1_ret = _chr_to_hex((u8)*(p1+1));
+			if (x1_ret < 0) {
 				*p2 = *p1;
 				p1++;
 				p2++;
 				continue;
 			}
-			u8 x1 = (u8) ret;
-			ret = _chr_to_hex((u8)*(p1+2));
-			if (ret < 0) {
+			const u8 x1 = (u8)x1_ret;
+			const s32 x2_ret = _chr_to_hex((u8)*(p1+2));
+			if (x2_ret < 0) {
 				*p2 = *p1;
 				p1++;
 				p2++;
 				continue;
 			}
-			u8 x2 = (u8) ret;
+			const u8 x2 = (u8)x2_ret;
 
 			u8 hex = (x1 << 4);
 			hex |= x2;
@@ -258,6 +256,4 @@ static s32 _raw_path_build(
 			p2++;
 		}
 	}
-
-	return 0;
 }

@@ -865,7 +865,8 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 
 		} else {
 			struct fws_http_res http_res = {};
-			s32 res_ret = net_http_res_build(conf_p, fws_time,  &http_req, &http_res, file.path, sizeof(file.path));
+			s32 res_ret = net_http_res_build(conf_p, fws_time,  &http_req, &http_res,
+					file.path, sizeof(file.path));
 
 			if (http_req.origin[0] != '\0') {
 				http_res.is_origin_self = net_http_origin_self_check(&http_req, conf_p);
@@ -899,7 +900,9 @@ out:
 		if ((u64)log_acc > sizeof(log_buf)-1) {
 			FAC_ERR("log fail to record\n");
 		} else {
-			log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, "%02u %s %s %s %s %s %s %s\n", log_flag, http_req.version, http_req.method, http_req.subdomain, http_req.uri, http_req.lang, http_req.os, http_req.browser);
+			log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, "%02u %s %s %s %s %s %s %s\n",
+					log_flag, http_req.version, http_req.method, http_req.subdomain,
+					http_req.uri, http_req.lang, http_req.os, http_req.browser);
 		}
 
 		if ((u64)log_acc > sizeof(log_buf)-1) {

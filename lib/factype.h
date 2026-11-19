@@ -6,6 +6,19 @@
 #ifndef FAC_TYPE_H
 #define FAC_TYPE_H
 
+#define FAC_S8_MAX 127
+#define FAC_S8_MIN (-FAC_S8_MAX - 1)
+#define FAC_U8_MAX 255
+#define FAC_S16_MAX 32767
+#define FAC_S16_MIN (-FAC_S16_MAX - 1)
+#define FAC_U16_MAX 65535
+#define FAC_S32_MAX 2147483647
+#define FAC_S32_MIN (-FAC_S32_MAX - 1)
+#define FAC_U32_MAX 4294967295U
+#define FAC_S64_MAX 9223372036854775807L
+#define FAC_S64_MIN (-FAC_S64_MAX - 1L)
+#define FAC_U64_MAX 18446744073709551615UL
+
 typedef signed char s8;
 typedef unsigned char u8;
 typedef signed short int s16;
