@@ -68,7 +68,7 @@ static s32 _type_ap_parse(u64 conf_idx, const char *p_base, struct fws_conf *con
 		const struct fws_lookup *conf_lookup_arr);
 static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *conf_p,
 		const struct fws_lookup *conf_lookup_arr);
-static s32 _tool_get_str_n(const char *p_start, s32 max_n);
+static s32 _tool_get_str_n(const char *p_start, u64 max_n);
 
 s32 file_conf_read(struct fws_conf *conf_p, const char *path) {
 	char *conf_buf = nullptr;
@@ -90,15 +90,20 @@ s32 file_conf_read(struct fws_conf *conf_p, const char *path) {
 		goto out;
 	}
 
-	u64 conf_len = conf_stat.st_size + 1;
-	conf_buf = calloc(conf_len+1, 1);
+	s64 conf_len = conf_stat.st_size + 1;
+	if (conf_len-1 < 0) {
+		FAC_ERR(FAC_ERR_RANGE);
+		ret = -1;
+		goto out;
+	}
+	conf_buf = calloc((u64)(conf_len+1), 1);
 	if (conf_buf == nullptr) {
 		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
 		goto out;
 	}
 
-	s64 read_ret = read(conf_fd, conf_buf, conf_len-1);
+	s64 read_ret = read(conf_fd, conf_buf, (u64)(conf_len-1));
 	if (read_ret < 0) {
 		FAC_ERR("%s\n", strerror(errno));
 		ret = -1;
@@ -108,7 +113,7 @@ s32 file_conf_read(struct fws_conf *conf_p, const char *path) {
 	conf_buf[conf_len-1] = '\n';
 	conf_buf[conf_len] = '\0';
 
-	ret = _conf_parse(conf_p, conf_buf, conf_len);
+	ret = _conf_parse(conf_p, conf_buf, (u64)conf_len);
 	if (ret < 0) {
 		ret = -1;
 		goto out;
@@ -172,13 +177,13 @@ static s32 _conf_parse(struct fws_conf *conf_p, const char *conf_buf, u64 conf_l
 			if (key_len == conf_key_max || key_len != conf_key_len) {
 				continue;
 			}
-			ret = memcmp(p_scan, conf_lookup_arr[i].key, key_len);
+			ret = memcmp(p_scan, conf_lookup_arr[i].key, (u64)key_len);
 			if (ret != 0) {
 				continue;
 			}
 
-			p_scan += conf_key_len;
-			total_n += conf_key_len;
+			p_scan += (u64)conf_key_len;
+			total_n += (u64)conf_key_len;
 			while (*p_scan == ' ') {
 				total_n++;
 				p_scan++;
@@ -207,7 +212,12 @@ static s32 _conf_parse__line_next(const char **p_scan, const char **p_end,
 		return -1;
 	}
 
-	*n = *p_end - *p_scan;
+	s64 delta = *p_end - *p_scan;
+	if (delta < 0) {
+		return -1;
+	}
+	*n = (u64)delta;
+
 	*total_n += *n + 1;
 	*p_scan += *n + 1;
 	while (**p_scan == '\n') {
@@ -377,7 +387,7 @@ static s32 _type_ap_parse(u64 conf_idx, const char *p_base, struct fws_conf *con
 	char *member = (char*)((u8*)conf_p + conf_lookup_arr[conf_idx].offset);
 	memcpy(member, comma_str, comma_str_len);
 	memcpy(member+comma_str_len, p_base, (u64)n);
-	member[n+comma_str_len] = '\0';
+	member[(u64)n+comma_str_len] = '\0';
 	return 0;
 }
 
@@ -396,7 +406,12 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 	p_start += map_skip2scan_n;
 	p_start++; /* skip '{' */
 
-	const char *p_end = memchr(p_start, '}', (conf_lookup_arr[conf_idx].size-1)-map_skip2scan_n);
+	const s64 map_end_n = (s64)(conf_lookup_arr[conf_idx].size - 1) - map_skip2scan_n;
+	if (map_end_n < 0) {
+		FAC_ERR(FAC_ERR_LIMIT);
+		return -1;
+	}
+	const char *p_end = memchr(p_start, '}', (u64)map_end_n);
 	if (p_end == nullptr) {
 		FAC_ERR("missing '}', or" FAC_ERR_LIM_N, conf_lookup_arr[conf_idx].size);
 		return -1;
@@ -418,7 +433,7 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 	*/
 	while (map_rem_n > 0) {
 		/* get map key */
-		p_start = memchr(p_scan, '"', map_rem_n);
+		p_start = memchr(p_scan, '"', (u64)map_rem_n);
 		if (p_start == nullptr) {
 			if (*(p_dst-1) == ']') {
 				break;
@@ -437,7 +452,7 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		const s32 map_str_len = _tool_get_str_n(p_start, map_rem_n);
+		const s32 map_str_len = _tool_get_str_n(p_start, (u64)map_rem_n);
 		if (map_str_len < 0) {
 			return -1;
 		}
@@ -450,11 +465,11 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 		p_scan += map_str_len;
 		p_scan++; /* skip end '"' */
 	
-		memcpy(p_dst, p_start, map_str_len);
+		memcpy(p_dst, p_start, (u32)map_str_len);
 		p_dst += map_str_len;
 
 		/* get map values */
-		const char *p_ext_start = memchr(p_scan, '[', map_rem_n);
+		const char *p_ext_start = memchr(p_scan, '[', (u64)map_rem_n);
 		if (p_ext_start == nullptr) {
 			FAC_ERR("array not found\n");
 			return -1;
@@ -473,7 +488,7 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 		}
 
 		const char *p_ext_scan = p_ext_start;
-		const char *p_ext_end = memchr(p_ext_scan, ']', map_rem_n);
+		const char *p_ext_end = memchr(p_ext_scan, ']', (u64)map_rem_n);
 		if (p_ext_end == nullptr) {
 			FAC_ERR("missing ']' at array end\n");
 			return -1;
@@ -500,7 +515,7 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 		ext_rem_n == p_ext_end - p_ext_start
 		*/
 		while (ext_rem_n > 0) {
-			p_ext_start = memchr(p_ext_scan, '"', ext_rem_n);
+			p_ext_start = memchr(p_ext_scan, '"', (u64)ext_rem_n);
 			if (p_ext_start == nullptr) {
 				FAC_ERR("missing '\"' at string start\n");
 				return -1;
@@ -523,15 +538,15 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 				return -1;
 			}
 
-			const s32 ext_len = _tool_get_str_n(p_ext_start, ext_rem_n);
+			const s32 ext_len = _tool_get_str_n(p_ext_start, (u64)ext_rem_n);
 			if (ext_len < 0) {
 				return -1;
 			}
-			memcpy(p_dst, p_ext_start, ext_len);
+			memcpy(p_dst, p_ext_start, (u32)ext_len);
 			p_dst += ext_len;
 
 			/* next */
-			p_ext_start = memchr(p_ext_scan, ',', ext_rem_n);
+			p_ext_start = memchr(p_ext_scan, ',', (u64)ext_rem_n);
 			if (p_ext_start == nullptr) {
 				memcpy(p_dst, "]", sizeof("]"));
 				p_dst++;
@@ -563,7 +578,7 @@ static s32 _type_map_norm(u64 conf_idx, const char *p_base, struct fws_conf *con
 	return 0;
 }
 
-static s32 _tool_get_str_n(const char *p_start, s32 max_n) {
+static s32 _tool_get_str_n(const char *p_start, u64 max_n) {
 	const char *p_end = memchr(p_start, '"', max_n);
 	if (p_end == nullptr) {
 		FAC_ERR("missing '\"' at string end\n");

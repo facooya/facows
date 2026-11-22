@@ -9,10 +9,10 @@
 #include "factype.h"
 
 struct fws_data_ctx {
-	s32 file_len;
+	s64 file_len;
+	u64 acc_read_n;
 	char file_buf[4096];
 	char req_buf[8192];
-	s32 acc_read_n;
 	s32 want_write;
 	s32 fd;
 	s32 write_fd;
@@ -94,14 +94,14 @@ struct fws_http_req {
 	char origin[512];
 	char uri[4096];
 	char *path;
-	s64 path_n;
+	u64 path_n;
 	char *query;
-	s64 query_n;
+	u64 query_n;
 };
 
 struct fws_file {
 	char uri_path[4096];
-	s64 uri_path_n;
+	u64 uri_path_n;
 	char path[4096];
 	s64 size;
 };

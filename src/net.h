@@ -20,34 +20,21 @@ s32 net_443_read(struct fws_data_ctx *client_ctx);
 s32 net_443_write(struct fws_data_ctx *client_ctx, char *src_buf, u64 buf_size);
 s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path);
 s32 net_443_res_write(struct fws_data_ctx *client_ctx, struct fws_http_res *http_res,
-	s64 file_size, const struct fws_http_req *http_req);
+		s64 file_size, const struct fws_http_req *http_req);
 s32 net_443_err_write(struct fws_data_ctx *client_ctx, s32 code);
 
 s32 net_http_req_parse(char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n);
-s32 net_http_res_build(
-	const struct fws_conf *conf_p,
-	const struct tm *fws_time,
-	const struct fws_http_req *http_req,
-	struct fws_http_res *http_res,
-	const char *path,
-	u64 path_n
-);
-void net_http_path_redir(
-	struct fws_http_req *http_req,
-	const struct fws_conf *conf,
-	const struct fws_file *file,
-	struct fws_data_ctx *client_ctx
-);
+s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
+		const struct fws_http_req *http_req, struct fws_http_res *http_res,
+		const char *path, u64 path_n);
+s32 net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf,
+		const struct fws_file *file, struct fws_data_ctx *client_ctx);
 bool net_http_origin_self_check(const struct fws_http_req *http_req, const struct fws_conf *conf);
 
 s32 net_nft_init(const struct fws_conf *conf);
 s32 net_nft_fini(const struct fws_conf *conf_p);
-void net_nft_dos_ban(
-	const struct fws_conf *conf_p,
-	struct nft_ctx *nft_ctx,
-	const char *ip_buf,
-	u32 ban_time
-);
+void net_nft_dos_ban(const struct fws_conf *conf_p, struct nft_ctx *nft_ctx, const char *ip_buf,
+		u32 ban_time);
 void net_nft_dos_ip_send(const u8 *client_ip, struct fws_nft *nft_list, s32 write_fd, u64 nft_list_n);
 
 #endif

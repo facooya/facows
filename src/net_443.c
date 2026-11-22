@@ -84,7 +84,7 @@ s32 net_443_read(struct fws_data_ctx *client_ctx) {
 			goto out;
 		}
 
-		acc_read_n += read_ret;
+		acc_read_n += (u32)read_ret;
 		if (acc_read_n >= buf_n-1) {
 			ret = -431;
 			goto out;
@@ -176,7 +176,7 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 		goto out;
 	}
 	s64 read_size = 0;
-	u64 read_acc_size = 0;
+	s64 read_acc_size = 0;
 	if (client_ctx->file_len > 0) {
 		read_acc_size = client_ctx->file_len;
 	}
@@ -187,7 +187,7 @@ s32 net_443_file_write(struct fws_data_ctx *client_ctx, const char *path) {
 		goto out;
 	}
 	while ((read_size = read(fd, client_ctx->file_buf, 4096)) > 0) {
-		ret = net_443_write(client_ctx, client_ctx->file_buf, read_size);
+		ret = net_443_write(client_ctx, client_ctx->file_buf, (u64)read_size);
 		if (ret == 0) {
 			client_ctx->file_len = read_acc_size;
 			ret = 1;
@@ -379,12 +379,12 @@ s32 net_443_err_write(struct fws_data_ctx *client_ctx, s32 code) {
 		ret = -1;
 		goto out;
 	}
-	html_fmt = calloc(html_stat.st_size+1, 1);
+	html_fmt = calloc((u64)html_stat.st_size+1, 1);
 	if (html_fmt == nullptr) {
 		ret = -1;
 		goto out;
 	}
-	if (read(html_fd, html_fmt, html_stat.st_size) <= 0) {
+	if (read(html_fd, html_fmt, (u64)html_stat.st_size) <= 0) {
 		ret = -1;
 		goto out;
 	}

@@ -110,15 +110,25 @@ s32 net_nft_init(const struct fws_conf *conf) {
 		nft_init_p = nft_init_test_fmt;
 
 		s32 nft_ports_n = snprintf(nullptr, 0, nft_ports_fmt, conf->http_port, conf->https_port);
-		nft_ports_buf = calloc(nft_ports_n+1, 1);
-		snprintf(nft_ports_buf, nft_ports_n+1, nft_ports_fmt, conf->http_port, conf->https_port);
+		if (nft_ports_n < 0) {
+			ret = -1;
+			goto out;
+		}
+		nft_ports_buf = calloc((u32)(nft_ports_n+1), 1);
+		snprintf(nft_ports_buf, (u32)(nft_ports_n+1), nft_ports_fmt, conf->http_port, conf->https_port);
 		nft_run_cmd_from_buffer(nft_ctx, nft_ports_buf);
 		free(nft_ports_buf);
 		nft_ports_buf = nullptr;
 	}
-	u64 n = snprintf(nullptr, 0, nft_init_p, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
-	nft_buf = calloc(n+1, 1);
-	snprintf(nft_buf, n+1, nft_init_p, conf->pps_limit, conf->pps_burst, conf->ban_time, conf->http_port, conf->https_port, conf->allow_ports, name_buf);
+	s32 n = snprintf(nullptr, 0, nft_init_p, conf->pps_limit, conf->pps_burst, conf->ban_time,
+			conf->http_port, conf->https_port, conf->allow_ports, name_buf);
+	if (n <= 0) {
+		ret = -1;
+		goto out;
+	}
+	nft_buf = calloc((u32)(n+1), 1);
+	snprintf(nft_buf, (u32)(n+1), nft_init_p, conf->pps_limit, conf->pps_burst, conf->ban_time,
+			conf->http_port, conf->https_port, conf->allow_ports, name_buf);
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);
 
 	ret = 0;
@@ -154,8 +164,13 @@ s32 net_nft_fini(const struct fws_conf *conf_p) {
 		nft_fini_p = nft_fini_test_str;
 
 		s32 nft_ports_n = snprintf(nullptr, 0, nft_fini_ports_fmt, conf_p->http_port, conf_p->https_port);
-		nft_ports_buf = calloc(nft_ports_n+1, 1);
-		snprintf(nft_ports_buf, nft_ports_n+1, nft_fini_ports_fmt, conf_p->http_port, conf_p->https_port);
+		if (nft_ports_n <= 0) {
+			ret = -1;
+			goto out;
+		}
+		nft_ports_buf = calloc((u32)(nft_ports_n+1), 1);
+		snprintf(nft_ports_buf, (u32)(nft_ports_n+1), nft_fini_ports_fmt, conf_p->http_port,
+				conf_p->https_port);
 		nft_run_cmd_from_buffer(nft_ctx, nft_ports_buf);
 		free(nft_ports_buf);
 		nft_ports_buf = nullptr;
@@ -171,12 +186,8 @@ out:
 	return ret;
 }
 
-void net_nft_dos_ban(
-	const struct fws_conf *conf_p,
-	struct nft_ctx *nft_ctx,
-	const char *ip_buf,
-	u32 ban_time
-) {
+void net_nft_dos_ban(const struct fws_conf *conf_p, struct nft_ctx *nft_ctx, const char *ip_buf,
+		u32 ban_time) {
 	static const char ipv4_map_str[] = "::ffff:";
 	static const char nft_ban4_fmt[] = "add element netdev facows facows_ban4 {%s timeout %dm}";
 	static const char nft_ban6_fmt[] = "add element netdev facows facows_ban6 {%s timeout %dm}";
@@ -185,7 +196,7 @@ void net_nft_dos_ban(
 	constexpr u64 ipv4_map_str_len = sizeof(ipv4_map_str) - 1;
 	const char *ip_p = ip_buf;
 	char *nft_buf = nullptr;
-	u64 cmd_n = 0;
+	s32 cmd_n = 0;
 
 	const char *nft_ban4_p = nft_ban4_fmt;
 	const char *nft_ban6_p = nft_ban6_fmt;
@@ -196,19 +207,25 @@ void net_nft_dos_ban(
 	if (memcmp(ip_buf, ipv4_map_str, ipv4_map_str_len) == 0) {
 		ip_p += ipv4_map_str_len;
 		cmd_n = snprintf(nullptr, 0, nft_ban4_p, ip_p, ban_time);
-		nft_buf = calloc(cmd_n+1, 1);
+		if (cmd_n <= 0){ 
+			goto out;
+		}
+		nft_buf = calloc((u32)(cmd_n+1), 1);
 		if (nft_buf == nullptr) {
 			goto out;
 		}
-		snprintf(nft_buf, cmd_n+1, nft_ban4_p, ip_p, ban_time);
+		snprintf(nft_buf, (u32)(cmd_n+1), nft_ban4_p, ip_p, ban_time);
 
 	} else {
 		cmd_n = snprintf(nullptr, 0, nft_ban6_p, ip_p, ban_time);
-		nft_buf = calloc(cmd_n+1, 1);
+		if (cmd_n <= 0) {
+			goto out;
+		}
+		nft_buf = calloc((u32)(cmd_n+1), 1);
 		if (nft_buf == nullptr) {
 			goto out;
 		}
-		snprintf(nft_buf, cmd_n+1, nft_ban6_p, ip_p, ban_time);
+		snprintf(nft_buf, (u32)(cmd_n+1), nft_ban6_p, ip_p, ban_time);
 	}
 
 	nft_run_cmd_from_buffer(nft_ctx, nft_buf);

@@ -18,7 +18,7 @@
 #include <openssl/ssl.h>
 
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req);
-static void _uri_parse(struct fws_http_req *http_req);
+static s32 _uri_parse(struct fws_http_req *http_req);
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req,
 		const char *domain, u64 domain_n);
 //static s32 _err_check(const struct fws_http_req *http_req);
@@ -60,26 +60,29 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 
 	const char *p1 = path;
 	const char *p2;
-	u64 n = strnlen(p1, path_n);
+	s64 n = (s64)strnlen(p1, path_n);
 	s32 ret = 0;
 
 	while (true) {
-		p2 = memchr(p1, '.', n);
+		p2 = memchr(p1, '.', (u64)n);
 		if (p2 == nullptr) {
 			break;
 		}
 
-		n -= p2 - p1 + 1;
+		n -= p2 - (p1 + 1);
+		if (n < 0) {
+			break;
+		}
 		p1 = p2 + 1;
 	}
 
 	char ext_buf[32] = {0};
 	bool has_find = false;
 	const char *p_start = conf_p->mime;
-	s32 mime_n = strnlen(conf_p->mime, sizeof(conf_p->mime));
+	s64 mime_n = (s64)strnlen(conf_p->mime, sizeof(conf_p->mime));
 
 	while (mime_n > 0) {
-		const char *p_ext_start = memchr(p_start, '[', mime_n);
+		const char *p_ext_start = memchr(p_start, '[', (u64)mime_n);
 		if (p_ext_start == nullptr) {
 			fprintf(stderr, "net_http_res_build(): error: invalid missing '['\n");
 			return -1;
@@ -89,7 +92,7 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		const char *p_ext_end = memchr(p_ext_start, ']', mime_n-mime_len);
+		const char *p_ext_end = memchr(p_ext_start, ']', (u64)mime_n-(u64)mime_len);
 		if (p_ext_end == nullptr) {
 			fprintf(stderr, "net_http_res_build(): error: invalid missing ']'\n");
 			return -1;
@@ -107,9 +110,9 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 		*p_ext_end == ']'
 		*/
 		while (ext_n > 0) {
-			const char *p_ext_end = memchr(p_ext_start, ',', ext_n);
+			const char *p_ext_end = memchr(p_ext_start, ',', (u64)ext_n);
 			if (p_ext_end == nullptr) {
-				p_ext_end = memchr(p_ext_start, ']', ext_n);
+				p_ext_end = memchr(p_ext_start, ']', (u64)ext_n);
 				if (p_ext_end == nullptr) {
 					fprintf(stderr, "net_http_res_build(): error: invalid\n");
 					return -1;
@@ -125,17 +128,17 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 				return -1;
 			}
 			memset(ext_buf, '\0', sizeof(ext_buf));
-			memcpy(ext_buf, p_ext_start, ext_len);
+			memcpy(ext_buf, p_ext_start, (u64)ext_len);
 			ext_buf[ext_len] = '\0';
 
-			ret = memcmp(p1, ext_buf, ext_len+1);
+			ret = memcmp(p1, ext_buf, (u64)ext_len+1);
 			if (ret == 0) {
 				if ((u64)mime_len >= sizeof(http_res->content)) {
 					fprintf(stderr, "net_http_res_build(): error: invalid mime size");
 					return -1;
 				}
 				memset(http_res->content, '\0', sizeof(http_res->content));
-				memcpy(http_res->content, p_start, mime_len);
+				memcpy(http_res->content, p_start, (u64)mime_len);
 
 				u64 cache_len = strnlen(conf_p->cache, sizeof(conf_p->cache));
 				const s32 cache_ret = _cache_get(http_res->cache, sizeof(http_res->cache),
@@ -161,6 +164,9 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 
 		p_start += mime_next_off;
 		mime_n -= mime_next_off;
+		if (mime_n < 0) {
+			break;
+		}
 	}
 
 	if (!has_find) {
@@ -171,20 +177,34 @@ s32 net_http_res_build(const struct fws_conf *conf_p, const struct tm *fws_time,
 	return 0;
 }
 
-void net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf,
+s32 net_http_path_redir(struct fws_http_req *http_req, const struct fws_conf *conf,
 		const struct fws_file *file, struct fws_data_ctx *client_ctx) {
+	char *res_buf = nullptr;
+	s32 ret = -1;
 	static const char res_301_fmt[] = "HTTP/1.1 301 Moved permanently\r\n"
 		"Location: https://%s%s\r\nContent-Length: 0\r\nConnection: keep-alive\r\n"
 		"Keep-Alive: timeout=3\r\n\r\n";
 	char host_buf[512];
 	net_host_build(host_buf, http_req, conf);
 
-	u64 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
-	char *res_buf = calloc(n+1, 1);
-	snprintf(res_buf, n+1, res_301_fmt, host_buf, file->uri_path);
-	net_443_write(client_ctx, res_buf, n);
+	s32 n = snprintf(nullptr, 0, res_301_fmt, host_buf, file->uri_path);
+	if (n < 0) {
+		ret = -1;
+		goto out;
+	}
+	res_buf = calloc((u32)n+1, 1);
+	if (res_buf == nullptr) {
+		ret = -1;
+		goto out;
+	}
+	snprintf(res_buf, (u32)n+1, res_301_fmt, host_buf, file->uri_path);
+	net_443_write(client_ctx, res_buf, (u32)n);
+
+	ret = 0;
+out:
 	free(res_buf);
 	res_buf = nullptr;
+	return ret;
 }
 
 bool net_http_origin_self_check(const struct fws_http_req *http_req, const struct fws_conf *conf_p) {
@@ -208,57 +228,69 @@ bool net_http_origin_self_check(const struct fws_http_req *http_req, const struc
 static s32 _line_parse(const char *req_buf, struct fws_http_req *http_req) {
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, ' ', sizeof(http_req->method));
-	u64 n;
 	if (p2 == nullptr) {
-		return 1;
+		return -1;
 	}
-	n = p2 - p1;
-	if (n >= sizeof(http_req->method)) {
-		return 1;
+	s64 n = p2 - p1;
+	if (n < 0 || (u64)n >= sizeof(http_req->method)) {
+		return -1;
 	}
-	memcpy(http_req->method, p1, n);
+	memcpy(http_req->method, p1, (u64)n);
 	http_req->method[n] = '\0';
 
 	p1 += n + 1;
 	p2 = memchr(p1, ' ', sizeof(http_req->uri));
 	if (p2 == nullptr) {
-		return 1;
+		return -1;
 	}
 	n = p2 - p1;
-	if (n >= sizeof(http_req->uri)) {
-		return 1;
+	if (n < 0 || (u64)n >= sizeof(http_req->uri)) {
+		return -1;
 	}
-	memcpy(http_req->uri, p1, n);
+	memcpy(http_req->uri, p1, (u64)n);
 	http_req->uri[n] = '\0';
 
 	p1 += n + 1;
 	p2 = memchr(p1, '\r', sizeof(http_req->version));
 	if (p2 == nullptr) {
-		return 1;
+		return -1;
 	}
 	n = p2 - p1;
-	if (n >= sizeof(http_req->version)) {
-		return 1;
+	if (n < 0 || (u64)n >= sizeof(http_req->version)) {
+		return -1;
 	}
-	memcpy(http_req->version, p1, n);
+	memcpy(http_req->version, p1, (u64)n);
 	http_req->version[n] = '\0';
 	return 0;
 }
 
-static void _uri_parse(struct fws_http_req *http_req) {
+static s32 _uri_parse(struct fws_http_req *http_req) {
 	char *p1 = http_req->uri;
 	char *p2;
 	u64 uri_len = strnlen(http_req->uri, sizeof(http_req->uri));
+	if (uri_len == sizeof(http_req->uri)) {
+		return -1;
+	}
 
 	http_req->path = p1;
 	p2 = memchr(http_req->uri, '?', uri_len);
 	if (p2 == nullptr) {
 		http_req->path_n = uri_len;
 	} else {
-		http_req->path_n = p2 - p1;
+		s64 path_n = p2 - p1;
+		if (path_n < 0) {
+			return -1;
+		}
+		http_req->path_n = (u64)path_n;
 		http_req->query = p2 + 1;
-		http_req->query_n = uri_len - (http_req->path_n + 1);
+		s64 query_n = (s64)uri_len - (s64)(http_req->path_n + 1);
+		if (query_n < 0) {
+			return -1;
+		}
+		http_req->query_n = (u64)query_n;
 	}
+
+	return 0;
 }
 
 static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, const char *domain, u64 domain_n) {
@@ -270,7 +302,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 	const char *p1 = req_buf;
 	const char *p2 = memchr(p1, '\r', req_value_max);
 	s32 ret = 0;
-	u64 n = 0;
+	s64 n = 0;
 
 	if (p2 == nullptr || *(p2+1) != '\n') {
 		return 1;
@@ -318,7 +350,7 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 								}
 							}
 							n = p2 - p1;
-							memcpy(http_req->subdomain, p1, n);
+							memcpy(http_req->subdomain, p1, (u64)n);
 							http_req->subdomain[n] = '\0';
 						}
 						break;
@@ -336,8 +368,12 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						s32 flag = 0;
 						for (u64 i=0; i<sizeof(os_type)/sizeof(os_type[0]); i++) {
 							p3 = p1;
-							while (1) {
-								p4 = memchr(p3, os_type[i][0], p2-p3+1);
+							while (true) {
+								s64 os_pn = p2 - p3 + 1;
+								if (os_pn < 0) {
+									return -1;
+								}
+								p4 = memchr(p3, os_type[i][0], (u64)os_pn);
 								if (p4 == nullptr) {
 									break;
 								}
@@ -369,7 +405,11 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 						for (u64 i=0; i<sizeof(browser_type)/sizeof(browser_type[0]); i++) {
 							p3 = p1;
 							while (true) {
-								p4 = memchr(p3, browser_type[i][0], p2-p3+1);
+								s64 browser_pn = p2 - (p3 + 1);
+								if (browser_pn < 0) {
+									return -1;
+								}
+								p4 = memchr(p3, browser_type[i][0], (u64)browser_pn);
 								if (p4 == nullptr) {
 									break;
 								}
@@ -414,12 +454,12 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							p2++;
 						}
 						n = p2 - p1;
-						memcpy(http_req->lang, p1, n);
+						memcpy(http_req->lang, p1, (u64)n);
 						http_req->lang[n] = '\0';
 						break;
 
 					case ORIGIN:
-						memcpy(http_req->origin, p1, n);
+						memcpy(http_req->origin, p1, (u64)n);
 						http_req->origin[n] = '\0';
 						break;
 
@@ -432,17 +472,17 @@ static s32 _header_parse(const char *req_buf, struct fws_http_req *http_req, con
 							FAC_ERR(FAC_ERR_FORMAT);
 							break;
 						}
-						const char *p_etag_end = memchr(p_etag_start, '"', n-1);
+						const char *p_etag_end = memchr(p_etag_start, '"', (u64)(n-1));
 						if (p_etag_end == nullptr) {
 							FAC_ERR(FAC_ERR_NULL);
 							break;
 						}
-						const u64 etag_len = p_etag_end - p_etag_start;
-						if (etag_len >= etag_max) {
+						const s64 etag_len = p_etag_end - p_etag_start;
+						if (etag_len < 0 || (u64)etag_len >= etag_max) {
 							FAC_ERR(FAC_ERR_LIMIT);
 							break;
 						}
-						memcpy(http_req->etag, p_etag_start, etag_len);
+						memcpy(http_req->etag, p_etag_start, (u64)etag_len);
 						http_req->etag[etag_len] = '\0';
 						break;
 				}
@@ -524,17 +564,15 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 		const char *src_ext) {
 	constexpr char no_cache_str[] = "no-cache";
 	constexpr u64 no_cache_len = sizeof(no_cache_str)-1;
-	char cache_buf[dst_max];
-	memset(cache_buf, '\0', dst_max);
+	char cache_buf[dst_max] = {};
 
 	s32 cache_cnt = 0;
-	s32 cache_acc = 0;
+	u32 cache_acc = 0;
+	s32 cache_rem = src_cache_len;
 	const char *p1 = src_cache;
+	/* Get cache_cnt */
 	while (true) {
-		if ((src_cache_len-cache_acc) <= 0) {
-			break;
-		}
-		const char *p2 = memchr(p1, '[', src_cache_len-cache_acc);
+		const char *p2 = memchr(p1, '[', (u32)cache_rem);
 		if (p2 == nullptr) {
 			break;
 		}
@@ -544,14 +582,19 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 		}
 		cache_cnt++;
 		cache_acc += cache_n + 1;
+		cache_rem -= (cache_n - 1);
+		if (cache_rem <= 0) {
+			break;
+		}
 		p1 = p2 + 1;
 	}
 
 	bool is_find = false;
 	const char *p_start = src_cache;
 	cache_acc = 0;
+	cache_rem = src_cache_len;
 	while (cache_cnt > 0) {
-		const char *p_end = memchr(p_start, '[', src_cache_len-cache_acc);
+		const char *p_end = memchr(p_start, '[', (u32)cache_rem);
 		if (p_end == nullptr) {
 			FAC_ERR(FAC_ERR_NULL);
 			return -1;
@@ -561,12 +604,17 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 			FAC_ERR(FAC_ERR_RANGE);
 			return -1;
 		}
-		memcpy(cache_buf, p_start, cache_len);
+		memcpy(cache_buf, p_start, (u64)cache_len);
 		cache_buf[cache_len] = '\0';
 		p_start = p_end + 1;
 		cache_acc += cache_len + 1;
+		cache_rem -= (cache_len - 1);
+		if (cache_rem < 0) {
+			FAC_ERR(FAC_ERR_RANGE);
+			return -1;
+		}
 
-		p_end = memchr(p_start, ']', src_cache_len-cache_acc);
+		p_end = memchr(p_start, ']', (u32)cache_rem);
 		if (p_end == nullptr) {
 			FAC_ERR(FAC_ERR_NULL);
 			return -1;
@@ -580,10 +628,11 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 		arr_len++;
 		const char *p_arr_start = p_start;
 		s32 arr_acc = 0;
+		s32 arr_rem = arr_len;
 		while (true) {
-			const char *p_arr_end = memchr(p_arr_start, ',', arr_len-arr_acc);
+			const char *p_arr_end = memchr(p_arr_start, ',', (u32)arr_rem);
 			if (p_arr_end == nullptr) {
-				p_arr_end = memchr(p_arr_start, ']', arr_len);
+				p_arr_end = memchr(p_arr_start, ']', (u32)arr_rem);
 				if (p_arr_end == nullptr) {
 					break;
 				}
@@ -594,10 +643,10 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 				return -1;
 			}
 			char ext_buf[32] = {0};
-			memcpy(ext_buf, p_arr_start, ext_len);
+			memcpy(ext_buf, p_arr_start, (u64)ext_len);
 			ext_buf[ext_len] = '\0';
 
-			s32 ext_cmp_ret = memcmp(ext_buf, src_ext, ext_len+1);
+			s32 ext_cmp_ret = memcmp(ext_buf, src_ext, (u64)(ext_len+1));
 			if (ext_cmp_ret == 0) {
 				is_find = true;
 				break;
@@ -605,9 +654,13 @@ static s32 _cache_get(char *dst, u64 dst_max, const char *src_cache, u64 src_cac
 
 			p_arr_start = p_arr_end + 1;
 			arr_acc += ext_len + 1;
+			arr_rem -= (ext_len - 1);
+			if (arr_rem <= 0) {
+				break;
+			}
 		}
 		if (is_find) {
-			memcpy(dst, cache_buf, cache_len);
+			memcpy(dst, cache_buf, (u64)cache_len);
 			dst[cache_len] = '\0';
 			break;
 		}

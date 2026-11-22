@@ -24,12 +24,12 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 	const char *ret_p = nullptr;
 
 	/* Receive request header */
-	constexpr u64 recv_buf_cap = 8192;
-	constexpr u64 recv_max = recv_buf_cap - 1;
+	constexpr u32 recv_buf_cap = 8192;
+	constexpr u32 recv_max = recv_buf_cap - 1;
 	char recv_buf[recv_buf_cap] = {0};
-	u32 recv_acc = 0;
+	u64 recv_acc = 0;
 	while (true) {
-		s32 recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
+		s64 recv_size = recv(client_80_fd, recv_buf, sizeof(recv_buf)-1, 0);
 		if (recv_size < 0) {
 			if (errno == EAGAIN) {
 				break;
@@ -41,7 +41,7 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 			break;
 		}
 
-		recv_acc += recv_size;
+		recv_acc += (u64)recv_size;
 		recv_buf[recv_acc] = '\0';
 
 		if (recv_acc >= recv_max) {
@@ -49,7 +49,7 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 			goto out;
 		}
 
-		ret_p = memmem(recv_buf, recv_acc, nl2_str, sizeof(nl2_str)-1);
+		ret_p = memmem(recv_buf, (u64)recv_acc, nl2_str, sizeof(nl2_str)-1);
 		if (ret_p != nullptr) {
 			break;
 		}
@@ -65,8 +65,8 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 		ret = -1;
 		goto out;
 	}
-	u64 n = p_end - p_start;
-	if (n >= sizeof(http_req.method)) {
+	s64 n = p_end - p_start;
+	if (n < 0 || (u64)n >= sizeof(http_req.method)) {
 		ret = -1;
 		goto out;
 	}
@@ -77,11 +77,11 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 		goto out;
 	}
 	n = p_end - p_start;
-	if (n >= sizeof(http_req.uri)) {
+	if (n < 0 || (u64)n >= sizeof(http_req.uri)) {
 		ret = -1;
 		goto out;
 	}
-	memcpy(http_req.uri, p_start, n);
+	memcpy(http_req.uri, p_start, (u64)n);
 	http_req.uri[n] = '\0';
 
 	p_start = recv_buf;
@@ -93,12 +93,11 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 	p_start = p_end + 2;
 
 	/* Parsing subdomain */
-	ret = strnlen(conf_p->domain, sizeof(conf_p->domain));
-	if (ret == sizeof(conf_p->domain)) {
+	const u64 domain_len = strnlen(conf_p->domain, sizeof(conf_p->domain));
+	if (domain_len == sizeof(conf_p->domain)) {
 		ret = -1;
 		goto out;
 	}
-	u64 domain_len = (u64) ret;
 	while (true) {
 		ret = memcmp(p_start, nl_str, sizeof(nl_str)-1);
 		if (ret == 0) {
@@ -135,7 +134,11 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 				}
 
 				n = p_end - p_start;
-				memcpy(http_req.subdomain, p_start, n);
+				if (n < 0) {
+					ret = -1;
+					goto out;
+				}
+				memcpy(http_req.subdomain, p_start, (u64)n);
 				http_req.subdomain[n] = '\0';
 			}
 			break;
@@ -153,14 +156,20 @@ s32 net_80_443_redir(s32 client_80_fd, const struct fws_conf *conf_p) {
 	char host_buf[512] = {0};
 	net_host_build(host_buf, &http_req, conf_p);
 
-	u64 res_n = snprintf(nullptr, 0, res_301_fmt, host_buf, http_req.uri);
-	res_buf = calloc(res_n+1, 1);
+	ret = snprintf(nullptr, 0, res_301_fmt, host_buf, http_req.uri);
+	if (ret < 0 || ret+1 > FAC_S32_MAX) {
+		ret = -1;
+		goto out;
+	}
+	const u32 res_n = (u32)ret + 1;
+
+	res_buf = calloc(res_n, 1);
 	if (res_buf == nullptr) {
 		ret = -1;
 		goto out;
 	}
-	snprintf(res_buf, res_n+1, res_301_fmt, host_buf, http_req.uri);
-	ret = send(client_80_fd, res_buf, strnlen(res_buf, res_n+1), 0);
+	snprintf(res_buf, res_n, res_301_fmt, host_buf, http_req.uri);
+	ret = send(client_80_fd, res_buf, strnlen(res_buf, res_n), 0);
 	if (ret < 0) {
 		ret = -1;
 		goto out;

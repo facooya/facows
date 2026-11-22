@@ -484,7 +484,7 @@ s32 fws_parent_run(struct fws_parent_ctx *parent_ctx_p) {
 				}
 
 				p += (n + 1);
-				read_acc -= (n + 1);
+				read_acc -= ((s64)n + 1);
 			}
 			if (is_continue) {
 				continue;
@@ -774,8 +774,12 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 		struct fws_file file = {};
 		s32 status_code = file_parse(&file, &http_req, web_root_buf, sizeof(web_root_buf));
 		if (status_code == 301) {
-			net_http_path_redir(&http_req, conf_p, &file, data_ctx_p);
-			ret = -1;
+			ret = net_http_path_redir(&http_req, conf_p, &file, data_ctx_p);
+			if (ret < 0) {
+				ret = -1;
+				goto out;
+			}
+			ret = 0;
 			goto out;
 		} else if (status_code < 0) {
 			ret = -1;
@@ -824,13 +828,18 @@ static s32 _fws_443_run(struct fws_data_ctx *data_ctx_p) {
 			if (conf_p->use_nft && nft_arr[nft_i].dos_cnt > conf_p->ban_lim) {
 				char nft_buf[INET6_ADDRSTRLEN+1] = {};
 				s32 nft_n = snprintf(nft_buf, sizeof(nft_buf)-1, "%d%s", 1, ip_buf);
-				if ((u32)nft_n >= sizeof(nft_buf)) {
+				if (nft_n < 0) {
+					FAC_ERR(FAC_ERR_RANGE);
+					ret = -1;
+					goto out;
+				}
+				if (nft_n >= (s32)sizeof(nft_buf)) {
 					FAC_ERR(FAC_ERR_LEN);
 					ret = -1;
 					goto out;
 				}
 				nft_buf[nft_n] = '\0';
-				ret = write(data_ctx_p->write_fd, nft_buf, nft_n+1);
+				ret = write(data_ctx_p->write_fd, nft_buf, (u64)(nft_n+1));
 				if (ret < 0) {
 					FAC_ERR("%s\n", strerror(errno));
 				}
@@ -900,7 +909,7 @@ out:
 		if ((u64)log_acc > sizeof(log_buf)-1) {
 			FAC_ERR("log fail to record\n");
 		} else {
-			log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-log_acc, "%02u %s %s %s %s %s %s %s\n",
+			log_acc += snprintf(log_buf+log_acc, sizeof(log_buf)-(u64)log_acc, "%02u %s %s %s %s %s %s %s\n",
 					log_flag, http_req.version, http_req.method, http_req.subdomain,
 					http_req.uri, http_req.lang, http_req.os, http_req.browser);
 		}
@@ -909,7 +918,7 @@ out:
 			FAC_ERR("log fail to record\n");
 		} else {
 			log_buf[log_acc] = '\0';
-			const s32 write_ret = write(data_ctx_p->write_fd, log_buf, log_acc+1);
+			const s32 write_ret = write(data_ctx_p->write_fd, log_buf, (u64)(log_acc+1));
 			if (write_ret < 0) {
 				FAC_ERR("%s\n", strerror(errno));
 			}
